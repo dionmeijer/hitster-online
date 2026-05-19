@@ -1,0 +1,177 @@
+# CLAUDE.md — Hitster Online
+
+This file is read by Claude Code at the start of every session. Read it fully before touching any code.
+
+---
+
+## What this project is
+
+A browser-based multiplayer implementation of the **Hitster** card game. Players build a chronological timeline of songs by listening to 30-second audio previews and guessing whether each song belongs before or after the ones already on their timeline. First to correctly place 10 cards wins.
+
+The full functional requirements, architecture, and game rules are in `REQUIREMENTS.md` in the root of this repo. Read that file if you need detail on game mechanics.
+
+---
+
+## Repo structure
+
+```
+/
+├── CLAUDE.md              ← you are here
+├── REQUIREMENTS.md        ← full spec, read before building features
+├── LICENSE                ← Apache 2.0
+├── shared/
+│   └── types.ts           ← ALL shared TypeScript types. Define types here first.
+├── server/
+│   ├── src/
+│   │   ├── index.ts       ← entry point, Express + Socket.io setup
+│   │   ├── game/          ← game state engine (pure logic, no I/O)
+│   │   ├── rooms/         ← room and session management
+│   │   └── spotify/       ← Spotify API client (playlist fetch, metadata)
+│   ├── package.json
+│   └── tsconfig.json
+└── client/
+    ├── src/
+    │   ├── components/    ← React UI components
+    │   ├── game/          ← game state hooks and context
+    │   └── socket/        ← Socket.io client setup and event handlers
+    ├── package.json
+    ├── tsconfig.json
+    └── vite.config.ts
+```
+
+---
+
+## Tech stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | React 18 + TypeScript, Vite, Tailwind CSS |
+| Drag & drop | @dnd-kit/core (timeline card placement) |
+| Real-time | Socket.io v4 (client + server) |
+| Backend | Node.js + TypeScript, Express |
+| External API | Spotify Web API (Client Credentials Flow) |
+| State | In-memory only — no database |
+| Hosting | Railway |
+
+---
+
+## How to run locally
+
+```bash
+# Install all dependencies
+cd server && npm install
+cd ../client && npm install
+
+# Set environment variables (create server/.env)
+SPOTIFY_CLIENT_ID=your_client_id
+SPOTIFY_CLIENT_SECRET=your_client_secret
+PORT=3000
+
+# Run server (from /server)
+npm run dev
+
+# Run client (from /client, in a separate terminal)
+npm run dev
+
+# To simulate multiplayer: open multiple browser tabs at http://localhost:5173
+```
+
+---
+
+## Architecture rules — read before writing code
+
+### 1. Game state lives on the server only
+All game logic (turn order, placement validation, token accounting, win detection) runs in `server/src/game/`. Clients are dumb renderers — they display what the server tells them. **Never put game logic in the client.**
+
+### 2. Define types before writing logic
+Before adding a new feature or event, define its TypeScript type in `shared/types.ts`. Both server and client import from there. This prevents event shape mismatches.
+
+### 3. Socket.io event naming convention
+All events use `domain:action` format:
+
+```
+room:created        room:joined         room:updated
+round:started       round:ended
+turn:started        turn:placed         turn:flipped       turn:challenged
+player:joined       player:left
+error:*
+```
+
+Server emits to rooms using `io.to(roomCode).emit(...)`. Never emit to individual sockets for game events.
+
+### 4. No database
+State is a `Map<string, Room>` held in memory. Do not introduce a database, Redis, or any persistence layer. Rooms are lost on server restart — this is acceptable.
+
+### 5. No user authentication
+Players are identified by a `sessionId` (UUID generated client-side on first visit, stored in `sessionStorage`). No login, no JWT, no cookies. The room owner is simply the player whose `sessionId` created the room.
+
+### 6. Spotify integration
+- Use **Client Credentials Flow** only. Never use Authorization Code Flow.
+- The token is fetched server-side and refreshed automatically before expiry.
+- Fetch preview URLs from `track.preview_url` on the Spotify track object.
+- Tracks with `preview_url === null` must be flagged — do not silently include them in the deck.
+- Never expose `SPOTIFY_CLIENT_ID` or `SPOTIFY_CLIENT_SECRET` to the client.
+
+### 7. Audio playback sync
+When a turn starts, the server emits:
+```ts
+{ event: 'turn:started', previewUrl: string, playAt: number } // playAt = Date.now() + 600
+```
+Each client uses `setTimeout` to start `<audio>.play()` at exactly `playAt`. Do not stream audio from the server.
+
+---
+
+## Game mechanics cheat sheet
+
+| Mechanic | Rule |
+|---|---|
+| Starting cards | Each player/team gets 1 card face-up to anchor their timeline |
+| First turn | Player/team with the oldest starting song goes first |
+| Turn | Song plays → active player places card on their timeline → card flips |
+| Correct | Card stays on timeline |
+| Incorrect | Card discarded |
+| Same year | Placing before or after a card with the same year counts as correct |
+| HITSTER! challenge | Any non-placing player can challenge during 10s window after placement. If opponent was wrong → challenger steals the card. If opponent was right → challenger loses a token. |
+| Token: skip | Spend 1 to discard current card, draw new one |
+| Token: buy | Spend 3 to place a card directly (before hearing song). Skip next turn. |
+| Token: earn | Name song title + artist correctly = +1 token (max 5) |
+| Win | First to 10 correct cards on timeline |
+| Deck empty | Player/team with most cards wins. Tiebreaker: highest avg release year. |
+| Disconnect | Skip turn after 15s timeout. Remove from rotation after 2 missed turns. |
+
+Game modes (Original / Pro / Expert / Cooperative) are defined in `REQUIREMENTS.md` Part 1.
+
+---
+
+## Working approach for this project
+
+### Before implementing any feature
+1. Read the relevant section of `REQUIREMENTS.md` to understand the expected behaviour.
+2. Check `shared/types.ts` to see if the types you need already exist.
+3. Plan the server-side state change first, then the Socket.io event, then the client handler.
+
+### When something is ambiguous
+Stop and ask rather than guessing. Game logic bugs are hard to find later. A 30-second check is worth it.
+
+### Testing multiplayer locally
+Open 2–3 browser tabs at `localhost:5173`. Each tab acts as a separate player. Create a room in one tab, join it in the others.
+
+### Commit discipline
+Small, working commits. Each commit should leave the game in a playable state if possible. Use conventional commits:
+```
+feat: add HITSTER! challenge window
+fix: correct turn order after team placement
+chore: add shared types for token events
+```
+
+---
+
+## What not to do
+
+- Do not add a database or any persistent storage
+- Do not add user accounts or login flows
+- Do not stream audio from the server
+- Do not put game logic in the client
+- Do not use Spotify Authorization Code Flow or expose Spotify secrets to the client
+- Do not add features not in REQUIREMENTS.md without confirming first
+- Do not use `any` in TypeScript — define the proper type in `shared/types.ts`
