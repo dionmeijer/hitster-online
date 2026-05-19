@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hitster — v2 Clean Minimal</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Inter',sans-serif;background:#f8f9fa;color:#1a1a2e;min-height:100vh;}
+
+  header{background:#fff;border-bottom:1px solid #e9ecef;padding:0 32px;height:64px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;}
+  .logo{font-size:22px;font-weight:800;letter-spacing:-0.5px;color:#1a1a2e;}
+  .logo span{color:#6366f1;}
+  .header-right{display:flex;align-items:center;gap:24px;}
+  .room-pill{background:#f3f4f6;border-radius:20px;padding:6px 14px;font-size:13px;font-weight:600;color:#6b7280;}
+  .token-display{display:flex;align-items:center;gap:6px;}
+  .token-pip{width:10px;height:10px;border-radius:50%;background:#fbbf24;}
+  .token-pip.empty{background:#e5e7eb;}
+  .token-label{font-size:13px;font-weight:600;color:#374151;}
+
+  .layout{display:grid;grid-template-columns:260px 1fr 220px;gap:1px;background:#e9ecef;height:calc(100vh - 64px);}
+  .pane{background:#fff;overflow-y:auto;}
+
+  /* Players */
+  .players-pane{padding:24px;}
+  .pane-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#9ca3af;margin-bottom:16px;}
+  .player-row{display:flex;align-items:center;gap:12px;padding:12px;border-radius:12px;margin-bottom:6px;cursor:default;transition:background 0.15s;}
+  .player-row.active{background:#eef2ff;}
+  .player-row:hover{background:#f9fafb;}
+  .avatar{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0;}
+  .player-details{flex:1;}
+  .p-name{font-weight:600;font-size:14px;}
+  .p-score{font-size:12px;color:#6b7280;margin-top:1px;}
+  .p-tokens{display:flex;gap:3px;margin-top:5px;}
+  .p-pip{width:8px;height:8px;border-radius:50%;background:#fbbf24;}
+  .p-pip.e{background:#e5e7eb;}
+  .active-badge{background:#6366f1;color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;white-space:nowrap;}
+
+  .divider{height:1px;background:#f3f4f6;margin:20px 0;}
+  .round-info{font-size:13px;color:#6b7280;line-height:2;}
+  .round-info strong{color:#374151;}
+
+  /* Center */
+  .center-pane{display:flex;flex-direction:column;}
+
+  .now-playing-bar{padding:20px 32px;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;gap:20px;}
+  .album-box{width:72px;height:72px;border-radius:12px;background:#f3f4f6;overflow:hidden;flex-shrink:0;position:relative;display:flex;align-items:center;justify-content:center;font-size:28px;}
+  .album-blur{position:absolute;inset:0;backdrop-filter:blur(12px);background:rgba(99,102,241,0.15);border-radius:12px;display:flex;align-items:center;justify-content:center;}
+  .np-meta{flex:1;}
+  .np-eyebrow{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6366f1;margin-bottom:4px;}
+  .np-title{font-size:20px;font-weight:700;display:none;}
+  .np-artist{font-size:14px;color:#6b7280;display:none;}
+  .np-hint{font-size:14px;color:#9ca3af;font-style:italic;}
+  .np-year{font-size:36px;font-weight:800;color:#6366f1;display:none;}
+  .timer-circle{width:64px;height:64px;flex-shrink:0;}
+  .timer-svg{width:64px;height:64px;transform:rotate(-90deg);}
+  .timer-bg{fill:none;stroke:#f3f4f6;stroke-width:5;}
+  .timer-arc{fill:none;stroke:#6366f1;stroke-width:5;stroke-linecap:round;stroke-dasharray:163;stroke-dashoffset:0;transition:stroke-dashoffset 0.1s linear;}
+  .timer-text{font-size:14px;font-weight:700;fill:#1a1a2e;dominant-baseline:middle;text-anchor:middle;}
+
+  .audio-vis{height:48px;padding:0 32px;background:#fafafa;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;gap:3px;}
+  .vis-bar{flex:1;background:#c7d2fe;border-radius:4px;transition:height 0.15s;}
+
+  .tl-area{flex:1;padding:28px 32px;overflow-y:auto;}
+  .tl-hint{font-size:13px;color:#9ca3af;margin-bottom:20px;}
+  .timeline{display:flex;align-items:center;gap:0;overflow-x:auto;padding-bottom:8px;}
+
+  .card{width:96px;min-width:96px;height:132px;border-radius:12px;border:2px solid #e5e7eb;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px;text-align:center;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,0.05);transition:all 0.2s;}
+  .card:hover{border-color:#6366f1;box-shadow:0 4px 16px rgba(99,102,241,0.15);transform:translateY(-3px);}
+  .card.correct{border-color:#10b981;box-shadow:0 2px 8px rgba(16,185,129,0.15);}
+  .card.wrong{border-color:#ef4444;box-shadow:0 2px 8px rgba(239,68,68,0.15);}
+  .c-year{font-size:20px;font-weight:800;color:#1a1a2e;line-height:1;}
+  .c-title{font-size:10px;font-weight:600;color:#374151;margin-top:6px;line-height:1.3;}
+  .c-artist{font-size:9px;color:#9ca3af;margin-top:3px;}
+  .c-face-down{font-size:36px;}
+
+  .gap{width:20px;min-width:20px;height:132px;display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:8px;transition:all 0.2s;}
+  .gap-line{width:2px;height:60px;background:#e5e7eb;border-radius:2px;transition:all 0.2s;}
+  .gap:hover .gap-line{background:#6366f1;height:100px;box-shadow:0 0 8px rgba(99,102,241,0.4);}
+  .gap.selected .gap-line{background:#10b981;height:100px;}
+
+  .action-bar{padding:16px 32px;background:#fff;border-top:1px solid #f3f4f6;display:flex;align-items:center;gap:10px;}
+  .btn{padding:9px 18px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;border:none;transition:all 0.15s;}
+  .btn-primary{background:#6366f1;color:#fff;}
+  .btn-primary:hover{background:#4f46e5;box-shadow:0 4px 12px rgba(99,102,241,0.3);}
+  .btn-primary:disabled{background:#c7d2fe;cursor:not-allowed;box-shadow:none;}
+  .btn-secondary{background:#f3f4f6;color:#374151;}
+  .btn-secondary:hover{background:#e5e7eb;}
+  .btn-danger{background:#fee2e2;color:#dc2626;}
+  .btn-danger:hover{background:#fecaca;}
+  .btn-hitster{background:#dc2626;color:#fff;font-weight:800;display:none;animation:pop 1.5s infinite;}
+  .btn-hitster.show{display:block;}
+  @keyframes pop{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
+  .spacer{flex:1;}
+  .turn-label{font-size:13px;color:#6b7280;}
+
+  /* Log pane */
+  .log-pane{padding:20px;}
+  .log-entry{font-size:12px;color:#6b7280;padding:8px 0;border-bottom:1px solid #f9fafb;line-height:1.5;}
+  .log-entry .hi{color:#6366f1;font-weight:600;}
+  .log-entry .ok{color:#10b981;font-weight:600;}
+  .log-entry .no{color:#ef4444;font-weight:600;}
+
+  .challenge-box{background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px;margin-bottom:16px;text-align:center;display:none;}
+  .challenge-box.show{display:block;}
+  .cbox-label{font-size:11px;font-weight:700;color:#dc2626;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;}
+  .cbox-count{font-size:32px;font-weight:800;color:#dc2626;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">hit<span>ster</span></div>
+  <div class="header-right">
+    <div class="round-info" style="font-size:13px;color:#9ca3af;">Your turn</div>
+    <div class="room-pill">Room XK7P</div>
+    <div class="token-display">
+      <div class="token-pip"></div><div class="token-pip"></div><div class="token-pip empty"></div><div class="token-pip empty"></div><div class="token-pip empty"></div>
+      <div class="token-label">2 tokens</div>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+  <div class="pane players-pane">
+    <div class="pane-title">Players</div>
+
+    <div class="player-row active">
+      <div class="avatar" style="background:#eef2ff;color:#6366f1;">Y</div>
+      <div class="player-details">
+        <div class="p-name">You</div>
+        <div class="p-score">4 cards on timeline</div>
+        <div class="p-tokens"><div class="p-pip"></div><div class="p-pip"></div><div class="p-pip e"></div><div class="p-pip e"></div><div class="p-pip e"></div></div>
+      </div>
+      <div class="active-badge">Your turn</div>
+    </div>
+
+    <div class="player-row">
+      <div class="avatar" style="background:#f0fdf4;color:#16a34a;">S</div>
+      <div class="player-details">
+        <div class="p-name">Sarah</div>
+        <div class="p-score">3 cards on timeline</div>
+        <div class="p-tokens"><div class="p-pip"></div><div class="p-pip"></div><div class="p-pip"></div><div class="p-pip e"></div><div class="p-pip e"></div></div>
+      </div>
+    </div>
+
+    <div class="player-row">
+      <div class="avatar" style="background:#fffbeb;color:#d97706;">M</div>
+      <div class="player-details">
+        <div class="p-name">Mike</div>
+        <div class="p-score">5 cards on timeline</div>
+        <div class="p-tokens"><div class="p-pip"></div><div class="p-pip e"></div><div class="p-pip e"></div><div class="p-pip e"></div><div class="p-pip e"></div></div>
+      </div>
+    </div>
+
+    <div class="player-row">
+      <div class="avatar" style="background:#fff1f2;color:#e11d48;">J</div>
+      <div class="player-details">
+        <div class="p-name">Jess</div>
+        <div class="p-score">3 cards on timeline</div>
+        <div class="p-tokens"><div class="p-pip"></div><div class="p-pip"></div><div class="p-pip"></div><div class="p-pip"></div><div class="p-pip e"></div></div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+    <div class="pane-title">Round settings</div>
+    <div class="round-info">
+      Mode: <strong>Original</strong><br>
+      Deck: <strong>42 remaining</strong><br>
+      Win at: <strong>10 cards</strong><br>
+      Tokens: <strong>enabled</strong>
+    </div>
+  </div>
+
+  <div class="pane center-pane">
+    <div class="now-playing-bar">
+      <div class="album-box">
+        🎵
+        <div class="album-blur" id="blur">🎵</div>
+      </div>
+      <div class="np-meta">
+        <div class="np-eyebrow" id="npEyebrow">Now playing — where does this belong?</div>
+        <div class="np-title" id="npTitle">Mr. Brightside</div>
+        <div class="np-artist" id="npArtist">The Killers</div>
+        <div class="np-hint" id="npHint">Song identity hidden — place it first</div>
+        <div class="np-year" id="npYear">2003</div>
+      </div>
+      <div class="timer-circle">
+        <svg class="timer-svg" viewBox="0 0 64 64">
+          <circle class="timer-bg" cx="32" cy="32" r="26"/>
+          <circle class="timer-arc" id="timerArc" cx="32" cy="32" r="26"/>
+          <text class="timer-text" id="timerText" x="32" y="32">0:28</text>
+        </svg>
+      </div>
+    </div>
+
+    <div class="audio-vis" id="audioVis"></div>
+
+    <div class="tl-area">
+      <div class="tl-hint">Your timeline — click between cards to place</div>
+      <div class="timeline" id="timeline">
+        <div class="gap" onclick="selectGap(0)" id="gap0"><div class="gap-line"></div></div>
+        <div class="card">
+          <div class="c-year">1979</div>
+          <div class="c-title">Don't Stop Me Now</div>
+          <div class="c-artist">Queen</div>
+        </div>
+        <div class="gap" onclick="selectGap(1)" id="gap1"><div class="gap-line"></div></div>
+        <div class="card">
+          <div class="c-year">1991</div>
+          <div class="c-title">Smells Like Teen Spirit</div>
+          <div class="c-artist">Nirvana</div>
+        </div>
+        <div class="gap" onclick="selectGap(2)" id="gap2"><div class="gap-line"></div></div>
+        <div class="card">
+          <div class="c-year">1999</div>
+          <div class="c-title">...Baby One More Time</div>
+          <div class="c-artist">Britney Spears</div>
+        </div>
+        <div class="gap" onclick="selectGap(3)" id="gap3"><div class="gap-line"></div></div>
+        <div class="card">
+          <div class="c-year">2007</div>
+          <div class="c-title">Umbrella</div>
+          <div class="c-artist">Rihanna</div>
+        </div>
+        <div class="gap" onclick="selectGap(4)" id="gap4"><div class="gap-line"></div></div>
+      </div>
+    </div>
+
+    <div class="action-bar">
+      <button class="btn btn-primary" id="confirmBtn" disabled onclick="confirm()">Confirm placement</button>
+      <button class="btn btn-secondary" onclick="skip()">Skip card <span style="color:#9ca3af;">(1 token)</span></button>
+      <button class="btn btn-hitster" id="hitsterBtn" onclick="challenge()">HITSTER! 🎯</button>
+      <div class="spacer"></div>
+      <div class="turn-label">Turn 12 of ∞</div>
+    </div>
+  </div>
+
+  <div class="pane log-pane">
+    <div class="pane-title">Activity</div>
+
+    <div class="challenge-box" id="challengeBox">
+      <div class="cbox-label">Challenge window</div>
+      <div class="cbox-count" id="challengeCount">10</div>
+      <div style="font-size:11px;color:#dc2626;margin-top:4px;">seconds to challenge</div>
+    </div>
+
+    <div id="activityLog">
+      <div class="log-entry">Mike placed <span class="hi">Bohemian Rhapsody</span> → <span class="ok">Correct ✓</span></div>
+      <div class="log-entry">Jess placed <span class="hi">Shape of You</span> → <span class="no">Wrong ✗</span></div>
+      <div class="log-entry">Sarah named the song → <span class="ok">+1 token 🪙</span></div>
+      <div class="log-entry">You placed <span class="hi">Purple Rain</span> → <span class="ok">Correct ✓</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Audio vis bars
+  const vis = document.getElementById('audioVis');
+  for(let i=0;i<50;i++){
+    const b=document.createElement('div');
+    b.className='vis-bar';
+    b.style.height=Math.random()*24+4+'px';
+    vis.appendChild(b);
+  }
+  setInterval(()=>{ document.querySelectorAll('.vis-bar').forEach(b=>b.style.height=Math.random()*24+4+'px'); },150);
+
+  // Timer
+  const totalTime=28; let elapsed=0;
+  const arc=document.getElementById('timerArc');
+  const txt=document.getElementById('timerText');
+  const circ=163;
+  const intv=setInterval(()=>{
+    elapsed+=0.1;
+    const r=Math.max(totalTime-elapsed,0);
+    arc.style.strokeDashoffset=(elapsed/totalTime)*circ;
+    txt.textContent='0:'+String(Math.ceil(r)).padStart(2,'0');
+    if(elapsed>=totalTime){clearInterval(intv);reveal();}
+  },100);
+
+  let selGap=null, placed=false;
+  function selectGap(i){
+    if(placed)return;
+    selGap=i;
+    document.querySelectorAll('.gap').forEach((g,idx)=>{
+      g.classList.toggle('selected',idx===i);
+    });
+    document.getElementById('confirmBtn').disabled=false;
+  }
+
+  function confirm(){
+    if(selGap===null||placed)return;
+    placed=true;
+    const tl=document.getElementById('timeline');
+    const gaps=tl.querySelectorAll('.gap');
+    const target=gaps[selGap];
+    const nc=document.createElement('div');
+    nc.className='card';
+    nc.style.border='2px dashed #fbbf24';
+    nc.style.background='#fffbeb';
+    nc.innerHTML='<div class="c-face-down">🎵</div><div style="font-size:10px;color:#d97706;margin-top:6px;">Placed!</div>';
+    tl.insertBefore(nc, target.nextSibling);
+    document.getElementById('confirmBtn').disabled=true;
+    document.getElementById('hitsterBtn').classList.add('show');
+    document.getElementById('challengeBox').classList.add('show');
+    let ct=10;
+    document.getElementById('challengeCount').textContent=ct;
+    const ci=setInterval(()=>{
+      ct--;
+      document.getElementById('challengeCount').textContent=ct;
+      if(ct<=0){clearInterval(ci);flipIt(nc);}
+    },1000);
+  }
+
+  function flipIt(card){
+    document.getElementById('hitsterBtn').classList.remove('show');
+    document.getElementById('challengeBox').classList.remove('show');
+    const correct=(selGap===3);
+    card.innerHTML='<div class="c-year">2003</div><div class="c-title">Mr. Brightside</div><div class="c-artist">The Killers</div>';
+    card.className='card '+(correct?'correct':'wrong');
+    addActivity('You placed <span class="hi">Mr. Brightside</span> → '+(correct?'<span class="ok">Correct ✓</span>':'<span class="no">Wrong ✗</span>'));
+    reveal();
+  }
+
+  function reveal(){
+    document.getElementById('blur').style.display='none';
+    document.getElementById('npHint').style.display='none';
+    document.getElementById('npTitle').style.display='block';
+    document.getElementById('npArtist').style.display='block';
+    document.getElementById('npYear').style.display='block';
+    document.getElementById('npEyebrow').textContent='Revealed';
+  }
+
+  function skip(){addActivity('You skipped — spent <span class="hi">1 token</span>');}
+  function challenge(){
+    document.getElementById('hitsterBtn').classList.remove('show');
+    addActivity('You challenged — <span class="hi">HITSTER!</span>');
+  }
+  function addActivity(html){
+    const log=document.getElementById('activityLog');
+    const e=document.createElement('div');
+    e.className='log-entry';e.innerHTML=html;
+    log.insertBefore(e,log.firstChild);
+  }
+</script>
+</body>
+</html>

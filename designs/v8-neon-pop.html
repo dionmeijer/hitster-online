@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hitster — v8 Neon Pop</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Space Grotesk',sans-serif;background:#fff;color:#0a0a0a;min-height:100vh;}
+
+  /* Bold color blocks */
+  :root{--accent:#ff2d55;--accent2:#ff9500;--accent3:#30d158;--accent4:#0a84ff;--accent5:#bf5af2;}
+
+  header{background:#0a0a0a;height:60px;display:flex;align-items:center;padding:0 24px;gap:16px;}
+  .logo{font-family:'Space Mono',monospace;font-size:18px;font-weight:700;color:#fff;letter-spacing:-1px;}
+  .logo span{color:var(--accent);}
+  .hdr-mid{flex:1;display:flex;align-items:center;justify-content:center;}
+  .pill-tag{background:#1c1c1c;color:#fff;font-size:11px;font-weight:700;padding:5px 12px;border-radius:4px;font-family:'Space Mono',monospace;}
+  .hdr-right{display:flex;align-items:center;gap:12px;}
+  .tok-badges{display:flex;gap:4px;}
+  .tb{width:12px;height:12px;border-radius:50%;background:var(--accent2);}
+  .tb.e{background:#2a2a2a;}
+
+  .main{display:grid;grid-template-columns:200px 1fr 180px;height:calc(100vh - 60px);}
+
+  /* Bold left sidebar */
+  .left-bar{background:#f5f5f5;border-right:3px solid #0a0a0a;display:flex;flex-direction:column;}
+  .lb-header{background:var(--accent4);padding:16px;color:#fff;}
+  .lb-title{font-family:'Space Mono',monospace;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;opacity:0.8;margin-bottom:4px;}
+  .lb-subtitle{font-size:13px;font-weight:700;}
+  .player-list{flex:1;padding:12px;overflow-y:auto;}
+
+  .pcard{border:2px solid transparent;border-radius:8px;padding:10px;margin-bottom:8px;transition:all 0.15s;background:#fff;}
+  .pcard.active-p{border-color:#0a0a0a;background:#fff;box-shadow:4px 4px 0 #0a0a0a;}
+  .pc-top{display:flex;align-items:center;gap:8px;}
+  .pc-ava{width:28px;height:28px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-family:'Space Mono',monospace;font-size:12px;font-weight:700;color:#fff;flex-shrink:0;}
+  .pc-name{font-weight:700;font-size:13px;}
+  .pc-score{font-size:10px;color:#666;margin-top:2px;}
+  .pc-toks{display:flex;gap:3px;margin-top:5px;}
+  .pct{width:7px;height:7px;border-radius:50%;background:var(--accent2);}
+  .pct.e{background:#ddd;}
+  .you-tag{background:#0a0a0a;color:#fff;font-size:9px;font-weight:700;font-family:'Space Mono',monospace;padding:1px 5px;border-radius:3px;margin-left:auto;}
+
+  .round-info-block{padding:12px;border-top:2px solid #e5e5e5;font-size:11px;color:#555;line-height:2;}
+  .round-info-block strong{color:#0a0a0a;}
+
+  /* Center */
+  .center{display:flex;flex-direction:column;background:#fff;}
+
+  /* Bold song card */
+  .song-hero{border-bottom:3px solid #0a0a0a;display:flex;gap:0;background:#fff;}
+  .song-color-block{width:100px;min-width:100px;background:var(--accent5);display:flex;align-items:center;justify-content:center;font-size:40px;position:relative;}
+  .sc-cover{position:absolute;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;font-size:30px;}
+  .song-details{flex:1;padding:18px 20px;display:flex;flex-direction:column;justify-content:space-between;}
+  .sd-eyebrow{font-family:'Space Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:2px;color:#999;margin-bottom:8px;}
+  .sd-title{font-size:24px;font-weight:700;display:none;line-height:1.1;}
+  .sd-artist{font-size:15px;color:#666;display:none;margin-top:3px;}
+  .sd-mystery{font-size:15px;color:#ccc;font-style:italic;}
+  .sd-year{font-size:48px;font-weight:700;color:#0a0a0a;display:none;line-height:1;}
+  .timer-block{width:80px;min-width:80px;border-left:3px solid #0a0a0a;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#f5f5f5;}
+  .tb-num{font-family:'Space Mono',monospace;font-size:22px;font-weight:700;}
+  .tb-lbl{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:#999;margin-top:2px;}
+
+  /* Waveform */
+  .wave-row{height:36px;border-bottom:2px solid #e5e5e5;display:flex;align-items:center;gap:2px;padding:0 24px;background:#fafafa;}
+  .wb{flex:1;border-radius:2px;background:#0a0a0a;opacity:0.15;transition:height 0.12s;}
+  .prog-row{height:4px;background:#e5e5e5;}
+  .prog-row-fill{height:100%;background:#0a0a0a;width:0%;transition:width 0.1s linear;}
+
+  /* Timeline */
+  .tl-section{flex:1;padding:20px 24px;overflow-y:auto;}
+  .tl-label{font-family:'Space Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#999;margin-bottom:14px;}
+  .tl{display:flex;align-items:center;overflow-x:auto;padding-bottom:8px;}
+
+  .np-card{width:90px;min-width:90px;height:120px;border:2px solid #e5e5e5;border-radius:6px;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px;text-align:center;cursor:pointer;transition:all 0.15s;box-shadow:2px 2px 0 transparent;}
+  .np-card:hover{border-color:#0a0a0a;box-shadow:4px 4px 0 #0a0a0a;transform:translate(-2px,-2px);}
+  .np-card.ok-c{border-color:var(--accent3);box-shadow:4px 4px 0 var(--accent3);}
+  .np-card.bad-c{border-color:var(--accent);box-shadow:4px 4px 0 var(--accent);}
+  .nc-yr{font-family:'Space Mono',monospace;font-size:16px;font-weight:700;}
+  .nc-title{font-size:9px;font-weight:600;color:#555;margin-top:5px;line-height:1.3;}
+  .nc-artist{font-size:8px;color:#aaa;margin-top:3px;}
+  .nc-fd{font-size:28px;}
+
+  .np-gap{width:20px;min-width:20px;height:120px;display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:4px;transition:background 0.15s;}
+  .np-gap:hover,.np-gap.sel-g{background:#f0f0f0;}
+  .ng-line{width:2px;height:50px;background:#e5e5e5;transition:all 0.2s;border-radius:1px;}
+  .np-gap:hover .ng-line,.np-gap.sel-g .ng-line{height:100px;background:#0a0a0a;}
+
+  /* Actions */
+  .actions{padding:14px 24px;background:#0a0a0a;display:flex;gap:10px;align-items:center;}
+  .ab{padding:10px 20px;border-radius:6px;font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:all 0.15s;border:2px solid transparent;}
+  .ab.confirm{background:var(--accent3);color:#000;border-color:var(--accent3);}
+  .ab.confirm:hover:not(:disabled){background:#28c14c;}
+  .ab.confirm:disabled{opacity:0.3;cursor:not-allowed;}
+  .ab.skip{background:transparent;color:#fff;border-color:#333;}
+  .ab.skip:hover{border-color:#fff;}
+  .ab.hitster{background:var(--accent);color:#fff;border-color:var(--accent);display:none;font-family:'Space Mono',monospace;font-size:12px;animation:blip 1s infinite;}
+  .ab.hitster.on{display:block;}
+  @keyframes blip{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+  .spacer{flex:1;}
+  .turn-t{font-family:'Space Mono',monospace;font-size:10px;color:#555;}
+
+  /* Right */
+  .right-bar{background:#f5f5f5;border-left:3px solid #0a0a0a;padding:0;overflow:hidden;display:flex;flex-direction:column;}
+  .rb-header{background:var(--accent);padding:14px 16px;color:#fff;}
+  .rb-body{flex:1;padding:14px;overflow-y:auto;}
+  .ch-np{display:none;background:#fff;border:2px solid var(--accent);border-radius:6px;padding:12px;text-align:center;margin-bottom:12px;box-shadow:3px 3px 0 var(--accent);}
+  .ch-np.on{display:block;}
+  .cn-lbl{font-family:'Space Mono',monospace;font-size:8px;color:var(--accent);text-transform:uppercase;letter-spacing:2px;margin-bottom:4px;}
+  .cn-num{font-family:'Space Mono',monospace;font-size:30px;font-weight:700;color:var(--accent);}
+  .log-np{font-size:11px;color:#555;padding:7px 0;border-bottom:1px solid #e5e5e5;line-height:1.5;}
+  .log-np .hi4{color:#0a0a0a;font-weight:700;}
+  .log-np .ok4{color:var(--accent3);font-weight:700;}
+  .log-np .bad4{color:var(--accent);font-weight:700;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">HIT<span>STER</span></div>
+  <div class="hdr-mid">
+    <div class="pill-tag">YOUR TURN</div>
+  </div>
+  <div class="hdr-right">
+    <span style="font-family:'Space Mono',monospace;font-size:10px;color:#888;">ROOM XK7P</span>
+    <div class="tok-badges">
+      <div class="tb"></div><div class="tb"></div><div class="tb e"></div><div class="tb e"></div><div class="tb e"></div>
+    </div>
+  </div>
+</header>
+
+<div class="main">
+  <div class="left-bar">
+    <div class="lb-header">
+      <div class="lb-title">Players</div>
+      <div class="lb-subtitle">4 in this room</div>
+    </div>
+    <div class="player-list">
+      <div class="pcard active-p">
+        <div class="pc-top">
+          <div class="pc-ava" style="background:var(--accent5);">Y</div>
+          <div style="flex:1;"><div class="pc-name">You</div><div class="pc-score">4 cards</div></div>
+          <div class="you-tag">YOU</div>
+        </div>
+        <div class="pc-toks"><div class="pct"></div><div class="pct"></div><div class="pct e"></div><div class="pct e"></div><div class="pct e"></div></div>
+      </div>
+      <div class="pcard">
+        <div class="pc-top">
+          <div class="pc-ava" style="background:var(--accent3);">S</div>
+          <div><div class="pc-name">Sarah</div><div class="pc-score">3 cards</div></div>
+        </div>
+        <div class="pc-toks"><div class="pct"></div><div class="pct"></div><div class="pct"></div><div class="pct e"></div><div class="pct e"></div></div>
+      </div>
+      <div class="pcard">
+        <div class="pc-top">
+          <div class="pc-ava" style="background:var(--accent2);">M</div>
+          <div><div class="pc-name">Mike</div><div class="pc-score">5 cards</div></div>
+        </div>
+        <div class="pc-toks"><div class="pct"></div><div class="pct e"></div><div class="pct e"></div><div class="pct e"></div><div class="pct e"></div></div>
+      </div>
+      <div class="pcard">
+        <div class="pc-top">
+          <div class="pc-ava" style="background:var(--accent);">J</div>
+          <div><div class="pc-name">Jess</div><div class="pc-score">3 cards</div></div>
+        </div>
+        <div class="pc-toks"><div class="pct"></div><div class="pct"></div><div class="pct"></div><div class="pct"></div><div class="pct e"></div></div>
+      </div>
+    </div>
+    <div class="round-info-block">
+      Mode: <strong>Original</strong><br>
+      Deck: <strong>42 left</strong><br>
+      Win: <strong>10 cards</strong>
+    </div>
+  </div>
+
+  <div class="center">
+    <div class="song-hero">
+      <div class="song-color-block">
+        🎵
+        <div class="sc-cover" id="scCover">🎵</div>
+      </div>
+      <div class="song-details">
+        <div>
+          <div class="sd-eyebrow" id="sdEye">Now playing — where does it go?</div>
+          <div class="sd-title" id="sdTitle">Mr. Brightside</div>
+          <div class="sd-artist" id="sdArtist">The Killers</div>
+          <div class="sd-mystery" id="sdMystery">Identity hidden — place the card first</div>
+        </div>
+        <div class="sd-year" id="sdYear">2003</div>
+      </div>
+      <div class="timer-block">
+        <div class="tb-num" id="npTimer">0:28</div>
+        <div class="tb-lbl">left</div>
+      </div>
+    </div>
+
+    <div class="wave-row" id="waveRow"></div>
+    <div class="prog-row"><div class="prog-row-fill" id="prFill"></div></div>
+
+    <div class="tl-section">
+      <div class="tl-label">Your timeline</div>
+      <div class="tl" id="tl">
+        <div class="np-gap" onclick="ng(0)" id="ng0"><div class="ng-line"></div></div>
+        <div class="np-card"><div class="nc-yr">1979</div><div class="nc-title">Don't Stop Me Now</div><div class="nc-artist">Queen</div></div>
+        <div class="np-gap" onclick="ng(1)" id="ng1"><div class="ng-line"></div></div>
+        <div class="np-card"><div class="nc-yr">1991</div><div class="nc-title">Smells Like Teen Spirit</div><div class="nc-artist">Nirvana</div></div>
+        <div class="np-gap" onclick="ng(2)" id="ng2"><div class="ng-line"></div></div>
+        <div class="np-card"><div class="nc-yr">1999</div><div class="nc-title">...Baby One More Time</div><div class="nc-artist">Britney Spears</div></div>
+        <div class="np-gap" onclick="ng(3)" id="ng3"><div class="ng-line"></div></div>
+        <div class="np-card"><div class="nc-yr">2007</div><div class="nc-title">Umbrella</div><div class="nc-artist">Rihanna</div></div>
+        <div class="np-gap" onclick="ng(4)" id="ng4"><div class="ng-line"></div></div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="ab confirm" id="confBtn" disabled onclick="npConfirm()">Confirm Place</button>
+      <button class="ab skip" onclick="npSkip()">Skip (1 token)</button>
+      <button class="ab hitster" id="hitBtn" onclick="npHitster()">HITSTER!</button>
+      <div class="spacer"></div>
+      <div class="turn-t">TURN 12</div>
+    </div>
+  </div>
+
+  <div class="right-bar">
+    <div class="rb-header">
+      <div class="lb-title">Activity Log</div>
+    </div>
+    <div class="rb-body">
+      <div class="ch-np" id="chNp">
+        <div class="cn-lbl">Challenge!</div>
+        <div class="cn-num" id="cnNum">10</div>
+      </div>
+      <div id="logArea">
+        <div class="log-np">Mike → <span class="hi4">Bohemian Rhapsody</span> <span class="ok4">✓</span></div>
+        <div class="log-np">Jess → <span class="hi4">Shape of You</span> <span class="bad4">✗</span></div>
+        <div class="log-np">Sarah named it <span class="ok4">+1🪙</span></div>
+        <div class="log-np">You → <span class="hi4">Purple Rain</span> <span class="ok4">✓</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const wr=document.getElementById('waveRow');
+  for(let i=0;i<50;i++){const b=document.createElement('div');b.className='wb';b.style.height=Math.random()*20+4+'px';wr.appendChild(b);}
+  setInterval(()=>document.querySelectorAll('.wb').forEach(b=>b.style.height=Math.random()*20+4+'px'),130);
+
+  let elapsed=0,tt=28,placed=false,sel=null;
+  const prFill=document.getElementById('prFill');
+  const npTimer=document.getElementById('npTimer');
+  const ii=setInterval(()=>{
+    elapsed+=0.1;prFill.style.width=(elapsed/tt*100)+'%';
+    const r=Math.max(tt-elapsed,0);npTimer.textContent='0:'+String(Math.ceil(r)).padStart(2,'0');
+    if(elapsed>=tt){clearInterval(ii);npReveal();}
+  },100);
+
+  function ng(i){if(placed)return;sel=i;document.querySelectorAll('.np-gap').forEach((g,j)=>g.classList.toggle('sel-g',j===i));document.getElementById('confBtn').disabled=false;}
+  function npConfirm(){
+    if(placed||sel===null)return;placed=true;
+    const tl=document.getElementById('tl');const gaps=tl.querySelectorAll('.np-gap');
+    const nc=document.createElement('div');nc.className='np-card';nc.style.borderColor='#bf5af2';nc.style.boxShadow='4px 4px 0 #bf5af2';
+    nc.innerHTML='<div class="nc-fd">🎵</div><div style="font-size:9px;color:#bf5af2;margin-top:6px;font-weight:700;">PLACED</div>';
+    tl.insertBefore(nc,gaps[sel].nextSibling);
+    document.getElementById('confBtn').disabled=true;
+    document.getElementById('hitBtn').classList.add('on');
+    document.getElementById('chNp').classList.add('on');
+    let ct=10;document.getElementById('cnNum').textContent=ct;
+    const ci=setInterval(()=>{ct--;document.getElementById('cnNum').textContent=ct;if(ct<=0){clearInterval(ci);npFlip(nc);}},1000);
+  }
+  function npFlip(card){
+    document.getElementById('hitBtn').classList.remove('on');document.getElementById('chNp').classList.remove('on');
+    const ok=(sel===3);
+    card.innerHTML='<div class="nc-yr">2003</div><div class="nc-title">Mr. Brightside</div><div class="nc-artist">The Killers</div>';
+    card.className='np-card '+(ok?'ok-c':'bad-c');
+    addLog('You → <span class="hi4">Mr. Brightside</span> '+(ok?'<span class="ok4">✓</span>':'<span class="bad4">✗</span>'));
+    npReveal();
+  }
+  function npReveal(){
+    document.getElementById('scCover').style.display='none';
+    document.getElementById('sdMystery').style.display='none';
+    document.getElementById('sdTitle').style.display='block';
+    document.getElementById('sdArtist').style.display='block';
+    document.getElementById('sdYear').style.display='block';
+    document.getElementById('sdEye').textContent='Revealed!';
+  }
+  function npSkip(){addLog('You skipped — <span class="hi4">1 token</span>');}
+  function npHitster(){document.getElementById('hitBtn').classList.remove('on');addLog('<span class="bad4">HITSTER!</span> You challenged');}
+  function addLog(html){const l=document.getElementById('logArea');const e=document.createElement('div');e.className='log-np';e.innerHTML=html;l.insertBefore(e,l.firstChild);}
+</script>
+</body>
+</html>

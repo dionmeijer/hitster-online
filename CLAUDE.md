@@ -29,14 +29,21 @@ The full functional requirements, architecture, and game rules are in `REQUIREME
 │   │   └── spotify/       ← Spotify API client (playlist fetch, metadata)
 │   ├── package.json
 │   └── tsconfig.json
-└── client/
-    ├── src/
-    │   ├── components/    ← React UI components
-    │   ├── game/          ← game state hooks and context
-    │   └── socket/        ← Socket.io client setup and event handlers
+├── client/
+│   ├── src/
+│   │   ├── components/    ← React UI components
+│   │   ├── game/          ← game state hooks and context
+│   │   └── socket/        ← Socket.io client setup and event handlers
+│   ├── package.json
+│   ├── tsconfig.json
+│   └── vite.config.ts
+└── bots/
+    ├── profiles.yaml      ← bot character definitions (edit to change behaviour)
+    ├── index.ts           ← runner: npm start [--room XXXX] [--count N] [--url ...]
+    ├── bot.ts             ← single bot client (Socket.io + behaviour model)
+    ├── types.ts           ← BotProfile and related types
     ├── package.json
-    ├── tsconfig.json
-    └── vite.config.ts
+    └── tsconfig.json
 ```
 
 ---

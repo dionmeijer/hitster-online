@@ -12,10 +12,27 @@ _What the system does from a player's perspective. No technical detail._
 ---
 
 ### 1.1 Player Onboarding
-- A player opens the game URL and enters only their **name** to participate. No account, email, or login required.
-- After entering their name, the player can either:
+- A player opens the game URL and enters their **email address** (required) and optionally a **display name**.
+- The **display name** is shown to other players. If omitted, the local part of the email address is used as the fallback display name (e.g. `alex` from `alex@example.com`).
+- Email is used to identify a player across reconnects and sessions. It is **never shown to other players**.
+- After completing the form, the player can either:
   - **Create a room** (becoming the room owner), or
-  - **Join a room** by entering a room code.
+  - **Join a room** by entering a 4-character room code, or
+  - **Click directly into an existing room** shown in the room browser (see §1.1.1).
+
+#### 1.1.1 Room Browser
+- The entry page displays a live list of all **active rooms** on the server (lobby or in-progress).
+- Each room card shows:
+  - **Room code** and **topic / description** set by the owner
+  - **Genre / playlist** (e.g. "90s Night", "Pop Classics") — the song source label
+  - **Participants**: player count and display names of players currently in the room
+  - **Round status**: lobby waiting, or current round number
+  - **Progress**: for in-progress rounds, the leading player/team's card count and the target (e.g. "Mike — 6 / 10 cards")
+- Clicking a room card pre-fills the join code. The player still needs to have entered a valid email before joining.
+- Rooms in **LOBBY** state can be joined freely.
+- Rooms in **ROUND_ACTIVE** state can be observed but the player joins the next round only.
+- Rooms in **GAME_OVER** state are shown greyed-out and cannot be joined.
+- The room list auto-refreshes every 10 seconds via a server poll or Socket.io event.
 
 ### 1.2 Rooms
 - Each room has a unique **room code** and a shareable **join link**.
@@ -120,8 +137,10 @@ _What the system must do technically to support the functional requirements._
 - Clients are stateless — they render what the server tells them. No game logic runs client-side.
 
 ### 2.6 No Authentication
-- No user accounts, sessions, or login flows are required.
-- Players are identified by a session ID (generated on first visit) and their chosen display name.
+- No user accounts, passwords, or OAuth flows are required.
+- Players are identified by their **email address** (entered at onboarding) combined with a **session ID** (UUID generated client-side, stored in `sessionStorage`).
+- The email is stored in `sessionStorage` and re-submitted on reconnect to restore the player's identity within an active room.
+- **Display name** shown in-game is the player's chosen name, or the email local part if no name was provided.
 - Room ownership is tied to the session ID of the creator.
 
 ---
@@ -277,6 +296,59 @@ The server requires the following configuration at deploy time:
 - v1 is designed for small groups (friends, team events). No scaling infrastructure needed.
 - A single server process handles all rooms.
 - No database required — all state is in-memory. Rooms are lost on server restart (acceptable for v1).
+
+---
+
+## Part 6 — Testing
+
+### 6.1 Unit Tests
+- All game logic in `server/src/game/` is written as pure functions and covered by Jest unit tests.
+- Tests live alongside source files as `*.test.ts`.
+- Key areas: placement validation, token accounting, HITSTER! resolution, win detection, tie-breaking, disconnect handling, deck exhaustion.
+- Run with `npm test` from `server/`.
+
+### 6.2 Manual Multiplayer Testing
+- Open 2–4 browser tabs at `localhost:5173`. Each tab acts as an independent player.
+- Sufficient for visual / UX verification during development.
+
+### 6.3 Bot Players
+- A bot harness lives at `/bots/` in the project root (not inside `server/` or `client/`).
+- Bots are real Socket.io clients — they connect to the running server and participate in a game exactly as human players do.
+- Bots are **a first-class demo tool**: `npm start` inside `/bots/` fills a room with configured bot players so the game can be shown end-to-end without needing human participants.
+- Bots and the "open 4 tabs" approach are complementary: bots drive the logic, tabs verify the UI.
+
+#### 6.3.1 Bot Profiles
+- Each bot's behaviour is defined by a **profile** in `/bots/profiles.yaml`.
+- Multiple profiles can be defined in the same file; the runner picks N profiles to fill a room.
+- Profile fields:
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | string | Display name shown in-game |
+| `avatar_color` | hex string | Colour used for the bot's avatar chip |
+| `knowledge` | 0.0 – 1.0 | Base probability of placing a card in the correct chronological position |
+| `genre_affinities` | string[] | Genres the bot knows well; matched against the room's playlist label. Each matching affinity adds `+0.15` to effective knowledge, capped at 1.0 |
+| `naming_willingness` | 0.0 – 1.0 | Probability the bot attempts to name the title + artist on any given turn to earn a token |
+| `challenge_rate` | 0.0 – 1.0 | Probability the bot shouts HITSTER! when another player places a card it believes is wrong |
+| `reaction_time_ms` | `{ min, max }` | Random delay range before the bot acts, simulating human thinking time |
+| `token_strategy` | `"hoard"` \| `"spend"` \| `"balanced"` | How the bot decides to use tokens: hoard = save for buy; spend = skip freely; balanced = default |
+| `join_willingness` | 0.0 – 1.0 | Probability the bot joins a room that already has active players (vs. waiting for a fresh lobby). At 1.0 it always joins; at 0.0 it only joins empty lobbies |
+
+#### 6.3.2 Bot Runner
+- `npm start` in `/bots/` reads `profiles.yaml`, connects the listed bots to `SERVER_URL` (default `http://localhost:3000`), and creates or joins a room.
+- Pass `--room XXXX` to join an existing room; omit to create a new one.
+- Pass `--count N` to spawn only N bots from the profiles list (round-robins if N > profiles).
+- Bots log every action to stdout with a timestamp and their display name.
+
+#### 6.3.3 Bot Behaviour Model
+On each turn a bot:
+1. Waits `reaction_time_ms` (random within range).
+2. Rolls against `knowledge` (adjusted for genre affinity) to decide the correct vs. a random position.
+3. Emits `turn:placed` with the chosen position.
+4. Independently rolls against `naming_willingness` and, if successful, emits a name attempt.
+
+During other players' turns:
+- If the placing player appears to have placed incorrectly (bot uses its own knowledge roll to judge), rolls against `challenge_rate` to decide whether to challenge.
 
 ---
 

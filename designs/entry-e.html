@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hitster — Entry E · Centred Hero</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@400;600;700&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:#0a0a0f;color:#e0e0ff;font-family:'Rajdhani',sans-serif;min-height:100vh;display:flex;flex-direction:column;overflow-x:hidden;}
+  .scanlines{position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.08) 2px,rgba(0,0,0,0.08) 4px);pointer-events:none;z-index:100;}
+
+  /* Animated background grid */
+  body::before{content:'';position:fixed;inset:0;background:
+    linear-gradient(rgba(124,58,237,0.04) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(124,58,237,0.04) 1px,transparent 1px);
+  background-size:48px 48px;pointer-events:none;}
+
+  header{display:flex;align-items:center;justify-content:space-between;padding:12px 24px;border-bottom:2px solid #7c3aed;background:#0f0f1a;position:sticky;top:0;z-index:50;}
+  .logo{font-family:'Press Start 2P',monospace;font-size:14px;color:#a78bfa;text-shadow:0 0 20px #7c3aed;}
+  .cursor{display:inline-block;width:10px;height:14px;background:#a78bfa;animation:blink 1s step-end infinite;vertical-align:middle;margin-left:2px;}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+  .hdr-r{display:flex;align-items:center;gap:8px;font-family:'Press Start 2P',monospace;font-size:7px;color:#4ade80;}
+  .dot{width:7px;height:7px;border-radius:50%;background:#4ade80;animation:pdot 1.5s infinite;}
+  @keyframes pdot{0%,100%{box-shadow:0 0 0 0 rgba(74,222,128,.5)}50%{box-shadow:0 0 0 6px rgba(74,222,128,0)}}
+
+  /* ── Full-width hero ── */
+  .hero{text-align:center;padding:48px 24px 36px;border-bottom:1px solid #1e1e3a;}
+  .hero-title{font-family:'Press Start 2P',monospace;font-size:36px;color:#a78bfa;text-shadow:0 0 40px #7c3aed,0 0 80px rgba(124,58,237,.3);line-height:1.4;}
+  .hero-title span{color:#4ade80;text-shadow:0 0 30px #4ade80;}
+  .hero-sub{font-size:16px;color:#6b7280;margin-top:14px;}
+
+  /* ── Two-panel body ── */
+  .two-panel{display:flex;flex:1;min-height:0;}
+
+  /* ── Rooms left (wider) ── */
+  .rooms-panel{flex:1;padding:28px 24px;overflow-y:auto;border-right:1px solid #1e1e3a;}
+  .panel-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+  .ph-label{font-family:'Press Start 2P',monospace;font-size:8px;color:#6366f1;letter-spacing:2px;}
+  .ph-meta{font-size:13px;color:#6b7280;}
+
+  /* Rooms as horizontal ticker-style cards */
+  .room-list{display:flex;flex-direction:column;gap:10px;}
+
+  .rcard{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:16px;background:#0f0f1a;border:2px solid #1e1e3a;padding:14px 16px;cursor:pointer;transition:all .2s;position:relative;}
+  .rcard::after{content:'JOIN →';font-family:'Press Start 2P',monospace;font-size:7px;color:#7c3aed;position:absolute;right:14px;top:50%;transform:translateY(-50%);opacity:0;transition:opacity .2s;}
+  .rcard:hover{border-color:#7c3aed;box-shadow:0 0 16px rgba(124,58,237,.2);}
+  .rcard:hover::after{opacity:1;}
+  .rcard.r-lobby:hover{border-color:#4ade80;box-shadow:0 0 14px rgba(74,222,128,.12);}
+  .rcard.r-lobby:hover::after{color:#4ade80;}
+  .rcard.r-over{opacity:.35;cursor:not-allowed;pointer-events:none;}
+  .rcard.r-over::after{display:none;}
+
+  .rc-code-col{font-family:'Press Start 2P',monospace;font-size:11px;color:#a78bfa;line-height:1;width:60px;}
+  .rc-badge{font-family:'Press Start 2P',monospace;font-size:6px;padding:3px 6px;border:1px solid;margin-top:5px;display:inline-block;}
+  .rc-badge.lob{color:#4ade80;border-color:#4ade80;}
+  .rc-badge.act{color:#fbbf24;border-color:#fbbf24;}
+  .rc-badge.ov{color:#374151;border-color:#374151;}
+
+  .rc-info{}
+  .rc-topic{font-size:17px;font-weight:700;color:#e0e0ff;}
+  .rc-genre{font-size:12px;color:#6b7280;margin-top:1px;}
+  .rc-players-inline{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap;}
+  .rp-chip{font-size:11px;background:#1e1e3a;padding:2px 7px;color:#9ca3af;}
+
+  .rc-progress-col{min-width:180px;}
+  .rpc-waiting{font-size:13px;color:#6b7280;}
+  .rpc-hint{font-family:'Press Start 2P',monospace;font-size:6px;color:#4ade80;margin-top:4px;}
+  .rpc-leader{font-size:13px;font-weight:700;color:#fbbf24;}
+  .rpc-bar-wrap{height:5px;background:#1e1e3a;margin-top:5px;border-radius:1px;overflow:hidden;width:100%;}
+  .rpc-bar{height:100%;background:linear-gradient(90deg,#7c3aed,#4ade80);border-radius:1px;}
+  .rpc-sub{font-size:11px;color:#6b7280;margin-top:3px;}
+
+  /* filler to stop join hint overlapping */
+  .rc-spacer{width:80px;}
+
+  /* ── Form right ── */
+  .form-panel{width:320px;min-width:320px;background:#0f0f1a;border-left:1px solid #1e1e3a;padding:28px 24px;display:flex;flex-direction:column;justify-content:center;overflow-y:auto;}
+
+  .fp-head{font-family:'Press Start 2P',monospace;font-size:9px;color:#6366f1;letter-spacing:2px;margin-bottom:24px;}
+
+  .fl{font-family:'Press Start 2P',monospace;font-size:7px;color:#6366f1;letter-spacing:2px;margin-bottom:8px;display:flex;align-items:center;gap:6px;}
+  .req{width:5px;height:5px;border-radius:50%;background:#ef4444;}
+  .opt{font-family:'Rajdhani',sans-serif;font-size:11px;color:#374151;font-weight:600;letter-spacing:0;}
+  .fi{width:100%;background:#1e1e3a;border:2px solid #374151;color:#e0e0ff;font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:600;padding:10px 12px;outline:none;transition:all .2s;margin-bottom:16px;}
+  .fi::placeholder{color:#374151;font-weight:400;}
+  .fi:focus{border-color:#7c3aed;box-shadow:0 0 12px rgba(124,58,237,.25);}
+  .fi.v{border-color:#4ade80;}
+  .fi.e{border-color:#ef4444;}
+  .err-t{font-size:11px;color:#ef4444;margin-top:-12px;margin-bottom:12px;display:none;}
+  .err-t.s{display:block;}
+
+  .preview-chip{display:flex;align-items:center;gap:8px;background:#0a0a0f;border:1px solid #1e1e3a;padding:8px 12px;margin-bottom:20px;}
+  .pc-lbl{font-family:'Press Start 2P',monospace;font-size:6px;color:#6b7280;}
+  .pc-ava{width:22px;height:22px;background:#1a0a2e;border:1px solid #7c3aed;display:flex;align-items:center;justify-content:center;font-family:'Press Start 2P',monospace;font-size:7px;color:#a78bfa;flex-shrink:0;}
+  .pc-name{font-size:14px;font-weight:700;}
+  .divider{height:1px;background:#1e1e3a;margin:4px 0 20px;}
+
+  .fp-btns{display:flex;flex-direction:column;gap:10px;}
+  .fpbtn{padding:12px 16px;border:2px solid;font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s;display:flex;align-items:center;gap:8px;}
+  .fpbtn:disabled{opacity:.3;cursor:not-allowed;}
+  .fpbtn.create{background:#7c3aed;border-color:#6d28d9;color:#fff;}
+  .fpbtn.create:not(:disabled):hover{background:#8b5cf6;box-shadow:0 0 18px rgba(124,58,237,.4);}
+  .fpbtn.join{background:transparent;border-color:#4ade80;color:#4ade80;}
+  .fpbtn.join:not(:disabled):hover{background:rgba(74,222,128,.06);box-shadow:0 0 12px rgba(74,222,128,.15);}
+
+  .join-expand{display:none;flex-direction:column;gap:8px;}
+  .join-expand.on{display:flex;}
+  .jrow{display:flex;gap:8px;}
+  .jcode{font-family:'Press Start 2P',monospace;font-size:13px;text-transform:uppercase;letter-spacing:4px;text-align:center;}
+  .jgo{flex-shrink:0;padding:10px 14px;background:#4ade80;border:2px solid #16a34a;color:#0a0a0f;font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:700;cursor:pointer;text-transform:uppercase;}
+  .jcancel{font-size:11px;color:#6b7280;background:none;border:none;cursor:pointer;font-family:'Rajdhani',sans-serif;text-transform:uppercase;letter-spacing:1px;}
+  .jcancel:hover{color:#e0e0ff;}
+
+  /* Flicker animation on prefill */
+  @keyframes fieldflash{0%{border-color:#4ade80;box-shadow:0 0 16px rgba(74,222,128,.4)}100%{border-color:#374151;box-shadow:none}}
+  .fi.flash{animation:fieldflash 0.6s ease-out;}
+</style>
+</head>
+<body>
+<div class="scanlines"></div>
+
+<header>
+  <div class="logo">HITSTER<div class="cursor"></div></div>
+  <div class="hdr-r"><div class="dot"></div>LIVE</div>
+</header>
+
+<div class="hero">
+  <div class="hero-title">HIT<span>STER</span></div>
+  <div class="hero-sub">Build your timeline. Guess the decade. First to 10 songs wins.</div>
+</div>
+
+<div class="two-panel">
+
+  <!-- LEFT: rooms -->
+  <div class="rooms-panel">
+    <div class="panel-head">
+      <div class="ph-label">Active Rooms</div>
+      <div class="ph-meta" id="roomMeta"></div>
+    </div>
+    <div class="room-list" id="roomList"></div>
+  </div>
+
+  <!-- RIGHT: form -->
+  <div class="form-panel">
+    <div class="fp-head">Join the Game</div>
+
+    <div class="fl"><span class="req"></span>Email address</div>
+    <input class="fi" id="email" type="email" placeholder="you@example.com" autocomplete="email" oninput="onEmail()" onblur="blurEmail()"/>
+    <div class="err-t" id="emailErr">Enter a valid email address</div>
+
+    <div class="fl">Display name <span class="opt">optional</span></div>
+    <input class="fi" id="name" type="text" placeholder="Leave blank to use email" maxlength="24" oninput="onName()"/>
+
+    <div class="preview-chip">
+      <div class="pc-lbl">Shown as</div>
+      <div class="pc-ava" id="ava">?</div>
+      <div class="pc-name" id="prevName">—</div>
+    </div>
+
+    <hr class="divider"/>
+
+    <div class="fp-btns">
+      <button class="fpbtn create" id="createBtn" disabled onclick="goCreate()">⊕ Create a room</button>
+      <div id="joinToggle">
+        <button class="fpbtn join" id="joinBtn" disabled onclick="openJoin()">→ Join by code</button>
+      </div>
+      <div class="join-expand" id="joinEx">
+        <div class="jrow">
+          <input class="fi jcode" id="code" type="text" placeholder="XXXX" maxlength="4" oninput="onCode(this)" style="margin-bottom:0;"/>
+          <button class="jgo" onclick="goJoin()">Join</button>
+        </div>
+        <button class="jcancel" onclick="closeJoin()">← Back</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const ROOMS=[
+  {code:'NITE',topic:'90s Night',genre:'90s Pop & Rock',status:'lobby',players:[{n:'Sarah'},{n:'Mike'},{n:'Jess'}],round:null},
+  {code:'XKCD',topic:'Office Party',genre:'All-time hits',status:'active',players:[{n:'Tom'},{n:'Lin'},{n:'Dan'},{n:'Amy'}],round:{num:1,leader:'Tom',cards:6,target:10}},
+  {code:'POP5',topic:'Pop Classics',genre:'2000s Pop',status:'active',players:[{n:'Alex'},{n:'Rosa'}],round:{num:3,leader:'Rosa',cards:8,target:10}},
+  {code:'JAZZ',topic:'Jazz & Blues',genre:'Jazz Standards',status:'lobby',players:[{n:'Sam'},{n:'Pat'},{n:'Chris'},{n:'Eve'},{n:'Roy'}],round:null},
+  {code:'ROCK',topic:'Classic Rock',genre:'70s–80s Rock',status:'over',players:[{n:'Jane'},{n:'Mark'},{n:'Neil'}],round:{num:2,leader:'Jane',cards:10,target:10}},
+];
+
+function buildRooms(){
+  const list=document.getElementById('roomList');list.innerHTML='';
+  const open=ROOMS.filter(r=>r.status!=='over');
+  document.getElementById('roomMeta').textContent=open.length+' room'+(open.length!==1?'s':'')+' open';
+  ROOMS.forEach(r=>{
+    const card=document.createElement('div');
+    const bCls=r.status==='lobby'?'lob':r.status==='active'?'act':'ov';
+    const bTxt=r.status==='lobby'?'LOBBY':r.status==='active'?'● LIVE':'ENDED';
+    const chips=r.players.map(p=>`<div class="rp-chip">${p.n}</div>`).join('');
+    const progCol=r.round
+      ?`<div class="rc-progress-col"><div class="rpc-leader">${r.round.leader} — ${r.round.cards} / ${r.round.target}</div><div class="rpc-bar-wrap"><div class="rpc-bar" style="width:${r.round.cards/r.round.target*100}%"></div></div><div class="rpc-sub">Round ${r.round.num}</div></div>`
+      :`<div class="rc-progress-col"><div class="rpc-waiting">${r.players.length} in lobby</div><div class="rpc-hint">▶ OPEN</div></div>`;
+
+    card.className='rcard r-'+(r.status==='over'?'over':r.status);
+    card.innerHTML=`<div class="rc-code-col">${r.code}<br><span class="rc-badge ${bCls}">${bTxt}</span></div><div class="rc-info"><div class="rc-topic">${r.topic}</div><div class="rc-genre">${r.genre}</div><div class="rc-players-inline">${chips}</div></div>${progCol}<div class="rc-spacer"></div>`;
+    if(r.status!=='over') card.onclick=()=>prefill(r.code);
+    list.appendChild(card);
+  });
+}
+
+function prefill(code){
+  openJoin();
+  const codeEl=document.getElementById('code');
+  codeEl.value=code;
+  codeEl.classList.remove('flash');
+  void codeEl.offsetWidth; // reflow
+  codeEl.classList.add('flash');
+  if(!isEmail(document.getElementById('email').value)) document.getElementById('email').focus();
+}
+
+function displayName(){const n=document.getElementById('name').value.trim();const e=document.getElementById('email').value.trim();return n||(e?e.split('@')[0]:null);}
+function isEmail(v){return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());}
+function updateBtns(){const ok=isEmail(document.getElementById('email').value);['createBtn','joinBtn'].forEach(id=>document.getElementById(id).disabled=!ok);if(ok){document.getElementById('email').classList.add('v');document.getElementById('email').classList.remove('e');}}
+function updatePreview(){const l=displayName();document.getElementById('prevName').textContent=l||'—';document.getElementById('ava').textContent=l?l[0].toUpperCase():'?';}
+function onEmail(){document.getElementById('emailErr').classList.remove('s');document.getElementById('email').classList.remove('e');updatePreview();updateBtns();}
+function onName(){updatePreview();}
+function blurEmail(){const v=document.getElementById('email').value.trim();if(v&&!isEmail(v)){document.getElementById('email').classList.add('e');document.getElementById('emailErr').classList.add('s');}}
+function openJoin(){document.getElementById('joinToggle').style.display='none';document.getElementById('joinEx').classList.add('on');}
+function closeJoin(){document.getElementById('joinToggle').style.display='';document.getElementById('joinEx').classList.remove('on');document.getElementById('code').value='';}
+function onCode(el){el.value=el.value.toUpperCase().replace(/[^A-Z0-9]/g,'');}
+function goCreate(){if(!isEmail(document.getElementById('email').value))return;window.location.href='v1-dark-arcade.html';}
+function goJoin(){const c=document.getElementById('code').value;if(c.length!==4)return;if(!isEmail(document.getElementById('email').value))return;window.location.href='v1-dark-arcade.html';}
+
+buildRooms();
+</script>
+</body>
+</html>

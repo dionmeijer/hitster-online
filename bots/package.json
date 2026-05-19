@@ -1,0 +1,19 @@
+{
+  "name": "hitster-bots",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Bot players for Hitster Online — demo and testing tool",
+  "scripts": {
+    "start": "tsx index.ts",
+    "dev": "tsx watch index.ts"
+  },
+  "dependencies": {
+    "socket.io-client": "^4.7.5",
+    "yaml": "^2.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.2",
+    "tsx": "^4.15.6",
+    "typescript": "^5.4.5"
+  }
+}

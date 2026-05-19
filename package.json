@@ -1,0 +1,23 @@
+{
+  "name": "hitster-online",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": ["server", "client", "bots"],
+  "scripts": {
+    "dev":         "concurrently -n server,client -c cyan,magenta \"npm run dev -w server\" \"npm run dev -w client\"",
+    "dev:server":  "npm run dev -w server",
+    "dev:client":  "npm run dev -w client",
+    "dev:bots":    "npm start -w bots",
+    "build":       "npm run build -w server && npm run build -w client",
+    "test":        "npm run test -w server",
+    "test:watch":  "npm run test:watch -w server",
+    "test:bots":   "npm start -w bots -- --count 4",
+    "smoke":       "tsx scripts/smoke.ts",
+    "typecheck":   "tsc -p server/tsconfig.json --noEmit && tsc -p client/tsconfig.json --noEmit && tsc -p bots/tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "tsx": "^4.15.6",
+    "typescript": "^5.4.5"
+  }
+}

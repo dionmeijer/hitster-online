@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hitster — Entry D · Terminal</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:#020408;color:#00ff41;font-family:'Share Tech Mono',monospace;min-height:100vh;display:flex;flex-direction:column;overflow-x:hidden;}
+  .scanlines{position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.12) 2px,rgba(0,0,0,0.12) 4px);pointer-events:none;z-index:100;}
+  /* Green terminal glow */
+  body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse at 50% 50%,rgba(0,255,65,0.03) 0%,transparent 70%);pointer-events:none;z-index:0;}
+
+  header{display:flex;align-items:center;justify-content:space-between;padding:10px 24px;border-bottom:1px solid #00ff41;background:rgba(0,0,0,0.8);position:sticky;top:0;z-index:50;}
+  .logo{font-family:'Press Start 2P',monospace;font-size:12px;color:#00ff41;text-shadow:0 0 16px #00ff41;}
+  .hdr-r{display:flex;align-items:center;gap:16px;font-size:11px;color:#006b1a;}
+  .blink{animation:blink 1s step-end infinite;}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+
+  .terminal{flex:1;display:grid;grid-template-columns:380px 1fr;min-height:0;}
+
+  /* ── Left: form as terminal prompts ── */
+  .term-left{border-right:1px solid #004a0f;padding:28px 24px;overflow-y:auto;background:rgba(0,0,0,0.5);}
+
+  .term-line{margin-bottom:4px;font-size:13px;color:#006b1a;line-height:1.6;}
+  .term-line.hi{color:#00ff41;}
+  .term-line.dim{color:#003a0d;}
+  .term-line.err{color:#ff4141;}
+  .term-line.warn{color:#ffb800;}
+
+  .term-ascii{font-size:8px;line-height:1.3;color:#004a0f;margin-bottom:16px;}
+  .term-ascii.bright{color:#00c031;}
+
+  .prompt-block{margin-bottom:20px;}
+  .prompt-label{font-size:10px;color:#006b1a;margin-bottom:6px;}
+  .prompt-label.active-label{color:#00ff41;}
+  .prompt-row{display:flex;align-items:center;gap:8px;border:1px solid #004a0f;background:#000;padding:8px 12px;transition:border-color .2s;}
+  .prompt-row:focus-within{border-color:#00ff41;box-shadow:0 0 10px rgba(0,255,65,.15);}
+  .prompt-row.v{border-color:#00c031;}
+  .prompt-row.e{border-color:#ff4141;}
+  .prompt-symbol{color:#00ff41;font-size:13px;flex-shrink:0;}
+  .term-input{flex:1;background:transparent;border:none;outline:none;color:#00ff41;font-family:'Share Tech Mono',monospace;font-size:13px;caret-color:#00ff41;}
+  .term-input::placeholder{color:#003a0d;}
+
+  .preview-term{border:1px solid #004a0f;padding:8px 12px;background:#000;margin-bottom:16px;font-size:12px;color:#006b1a;}
+  .pt-id{color:#00ff41;}
+
+  .divider-term{border:none;border-top:1px solid #004a0f;margin:16px 0;}
+
+  .term-btns{display:flex;flex-direction:column;gap:8px;}
+  .tbtn{padding:10px 16px;border:1px solid;font-family:'Share Tech Mono',monospace;font-size:12px;cursor:pointer;background:transparent;transition:all .15s;text-align:left;display:flex;align-items:center;gap:8px;letter-spacing:0.5px;}
+  .tbtn:disabled{opacity:.3;cursor:not-allowed;}
+  .tbtn.create{color:#00ff41;border-color:#00ff41;}
+  .tbtn.create:not(:disabled):hover{background:rgba(0,255,65,.08);box-shadow:0 0 12px rgba(0,255,65,.2);color:#7fff90;}
+  .tbtn.join-t{color:#00c8ff;border-color:#00c8ff;}
+  .tbtn.join-t:not(:disabled):hover{background:rgba(0,200,255,.06);box-shadow:0 0 10px rgba(0,200,255,.15);}
+
+  .code-block{display:none;flex-direction:column;gap:8px;}
+  .code-block.on{display:flex;}
+  .code-row{display:flex;gap:8px;}
+  .code-in{flex:1;padding:9px 12px;border:1px solid #00c8ff;background:#000;color:#00c8ff;font-family:'Share Tech Mono',monospace;font-size:16px;outline:none;text-transform:uppercase;letter-spacing:4px;text-align:center;}
+  .code-in:focus{box-shadow:0 0 10px rgba(0,200,255,.2);}
+  .code-go{padding:9px 14px;background:#00c8ff;border:none;color:#000;font-family:'Share Tech Mono',monospace;font-size:12px;cursor:pointer;font-weight:700;}
+  .code-cancel{font-size:10px;color:#004a0f;background:none;border:none;cursor:pointer;font-family:'Share Tech Mono',monospace;}
+  .code-cancel:hover{color:#00ff41;}
+
+  /* ── Right: room log ── */
+  .term-right{padding:24px;overflow-y:auto;}
+  .tr-title{font-size:10px;color:#006b1a;margin-bottom:16px;display:flex;align-items:center;gap:12px;}
+  .tr-title::after{content:'';flex:1;height:1px;background:#004a0f;}
+
+  /* Room as "process table" rows */
+  .rtable{width:100%;border-collapse:collapse;}
+  .rtable th{font-size:9px;color:#004a0f;text-transform:uppercase;letter-spacing:1px;padding:4px 8px;text-align:left;border-bottom:1px solid #004a0f;}
+  .rtable td{padding:0;}
+
+  .rrow{cursor:pointer;transition:background .15s;}
+  .rrow:hover td{background:rgba(0,255,65,.04);}
+  .rrow.is-over{opacity:.3;cursor:not-allowed;}
+  .rrow.is-over:hover td{background:transparent;}
+  .rrow td{border-bottom:1px solid rgba(0,74,15,.4);vertical-align:middle;}
+
+  .td-code{padding:12px 8px;font-family:'Press Start 2P',monospace;font-size:9px;color:#00ff41;white-space:nowrap;}
+  .td-topic{padding:12px 8px;}
+  .td-name{font-size:14px;color:#00ff41;font-weight:700;}
+  .td-genre{font-size:10px;color:#006b1a;margin-top:2px;}
+  .td-status{padding:12px 8px;white-space:nowrap;}
+  .status-tag{font-size:9px;padding:3px 8px;border:1px solid;}
+  .st-lobby{color:#00ff41;border-color:#00ff41;}
+  .st-active{color:#ffb800;border-color:#ffb800;}
+  .st-over{color:#333;border-color:#333;}
+  .td-players{padding:12px 8px;}
+  .player-list-t{display:flex;gap:4px;flex-wrap:wrap;}
+  .plt{font-size:10px;color:#006b1a;border:1px solid #004a0f;padding:2px 6px;}
+  .plt.me{color:#00ff41;border-color:#00ff41;}
+  .td-progress{padding:12px 8px;min-width:160px;}
+  .prog-terminal{height:4px;background:#004a0f;border-radius:1px;overflow:hidden;margin-bottom:4px;}
+  .prog-t-fill{height:100%;background:#00ff41;}
+  .prog-t-label{font-size:10px;color:#00ff41;}
+  .prog-t-round{font-size:9px;color:#006b1a;}
+  .waiting-t{font-size:11px;color:#006b1a;}
+
+  .rrow-expanded{display:none;}
+  .rrow-expanded.on{display:table-row;}
+  .rrow-expanded td{background:#000;padding:12px 8px;border-bottom:1px solid #004a0f;}
+  .exp-content{display:flex;align-items:center;gap:12px;}
+  .exp-label{font-size:10px;color:#006b1a;}
+  .exp-code-val{font-family:'Press Start 2P',monospace;font-size:14px;color:#00c8ff;}
+  .exp-join-btn{padding:6px 12px;background:transparent;border:1px solid #00c8ff;color:#00c8ff;font-family:'Share Tech Mono',monospace;font-size:11px;cursor:pointer;}
+  .exp-join-btn:hover{background:rgba(0,200,255,.1);}
+  .exp-cancel-t{padding:4px 8px;background:transparent;border:1px solid #004a0f;color:#006b1a;font-family:'Share Tech Mono',monospace;font-size:10px;cursor:pointer;}
+
+  .no-data{padding:40px;text-align:center;color:#004a0f;font-size:11px;}
+</style>
+</head>
+<body>
+<div class="scanlines"></div>
+
+<header>
+  <div class="logo">HITSTER</div>
+  <div class="hdr-r">
+    <span>SYS: ONLINE</span>
+    <span class="blink">■</span>
+    <span id="clock"></span>
+  </div>
+</header>
+
+<div class="terminal">
+
+  <!-- LEFT: terminal form -->
+  <div class="term-left">
+    <pre class="term-ascii bright">
+ _     _ _ _       _
+| |__ (_) | |_____| |_ ___ _ __
+| '_ \| | | / ____| __/ _ \ '__|
+| | | | | | \____  \ ||  __/ |
+|_| |_|_|_|_|____/  \__\___|_|
+    </pre>
+    <div class="term-line hi">HITSTER v1.0 — MULTIPLAYER MUSIC TIMELINE</div>
+    <div class="term-line dim">Build your timeline. Guess the decade. First to 10 wins.</div>
+    <div class="term-line dim">──────────────────────────────────────</div>
+    <br/>
+
+    <div class="prompt-block">
+      <div class="prompt-label active-label">$ EMAIL [required]</div>
+      <div class="prompt-row" id="emailRow">
+        <span class="prompt-symbol">›</span>
+        <input class="term-input" id="email" type="email" placeholder="user@domain.com" autocomplete="email" oninput="onEmail()" onblur="blurEmail()"/>
+      </div>
+      <div class="term-line err" id="emailErr" style="display:none;margin-top:4px;">ERR: invalid email format</div>
+    </div>
+
+    <div class="prompt-block">
+      <div class="prompt-label">$ DISPLAY_NAME [optional — defaults to email prefix]</div>
+      <div class="prompt-row">
+        <span class="prompt-symbol" style="color:#006b1a;">›</span>
+        <input class="term-input" id="name" type="text" placeholder="" maxlength="24" oninput="onName()" style="color:#00c8ff;caret-color:#00c8ff;"/>
+      </div>
+    </div>
+
+    <div class="preview-term">
+      <span style="color:#006b1a;">IDENTITY: </span><span class="pt-id" id="prevName">—</span>
+    </div>
+
+    <hr class="divider-term"/>
+
+    <div class="term-btns">
+      <button class="tbtn create" id="createBtn" disabled onclick="goCreate()">
+        [⊕] ./create_room.sh
+      </button>
+
+      <div id="joinToggle">
+        <button class="tbtn join-t" id="joinBtn" disabled onclick="openJoin()">
+          [→] ./join_room.sh --code XXXX
+        </button>
+      </div>
+      <div class="code-block" id="codeBlock">
+        <div class="code-row">
+          <input class="code-in" id="code" type="text" placeholder="XXXX" maxlength="4" oninput="onCode(this)"/>
+          <button class="code-go" onclick="goJoin()">EXEC</button>
+        </div>
+        <button class="code-cancel" onclick="closeJoin()">^ cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: room table -->
+  <div class="term-right">
+    <div class="tr-title">ACTIVE_ROOMS <span id="roomMeta" style="color:#006b1a;font-size:10px;"></span></div>
+
+    <table class="rtable">
+      <thead>
+        <tr>
+          <th>CODE</th>
+          <th>ROOM / GENRE</th>
+          <th>STATUS</th>
+          <th>PLAYERS</th>
+          <th>PROGRESS</th>
+        </tr>
+      </thead>
+      <tbody id="roomBody"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+// Clock
+setInterval(()=>{document.getElementById('clock').textContent=new Date().toLocaleTimeString();},1000);
+
+const ROOMS=[
+  {code:'NITE',topic:'90s Night',genre:'90s Pop & Rock',status:'lobby',players:[{n:'Sarah'},{n:'Mike'},{n:'Jess'}],round:null},
+  {code:'XKCD',topic:'Office Party',genre:'All-time hits',status:'active',players:[{n:'Tom'},{n:'Lin'},{n:'Dan'},{n:'Amy'}],round:{num:1,leader:'Tom',cards:6,target:10}},
+  {code:'POP5',topic:'Pop Classics',genre:'2000s Pop',status:'active',players:[{n:'Alex'},{n:'Rosa'}],round:{num:3,leader:'Rosa',cards:8,target:10}},
+  {code:'JAZZ',topic:'Jazz & Blues',genre:'Jazz Standards',status:'lobby',players:[{n:'Sam'},{n:'Pat'},{n:'Chris'},{n:'Eve'},{n:'Roy'}],round:null},
+  {code:'ROCK',topic:'Classic Rock',genre:'70s–80s Rock',status:'over',players:[{n:'Jane'},{n:'Mark'},{n:'Neil'}],round:{num:2,leader:'Jane',cards:10,target:10}},
+];
+
+let expandedCode=null;
+function buildRooms(){
+  const tbody=document.getElementById('roomBody');tbody.innerHTML='';
+  const open=ROOMS.filter(r=>r.status!=='over');
+  document.getElementById('roomMeta').textContent='['+open.length+' open / '+ROOMS.length+' total]';
+  ROOMS.forEach(r=>{
+    const stCls=r.status==='lobby'?'st-lobby':r.status==='active'?'st-active':'st-over';
+    const stTxt=r.status==='lobby'?'LOBBY':r.status==='active'?'LIVE':'ENDED';
+    const chips=r.players.map(p=>`<div class="plt">${p.n}</div>`).join('');
+    const prog=r.round
+      ?`<div class="prog-terminal"><div class="prog-t-fill" style="width:${r.round.cards/r.round.target*100}%"></div></div><div class="prog-t-label">${r.round.leader}: ${r.round.cards}/${r.round.target}</div><div class="prog-t-round">RND ${r.round.num}</div>`
+      :`<div class="waiting-t">${r.players.length} waiting</div>`;
+
+    const tr=document.createElement('tr');
+    tr.className='rrow '+(r.status==='over'?'is-over':'');
+    tr.innerHTML=`<td class="td-code">${r.code}</td><td class="td-topic"><div class="td-name">${r.topic}</div><div class="td-genre">${r.genre}</div></td><td class="td-status"><span class="status-tag ${stCls}">${stTxt}</span></td><td class="td-players"><div class="player-list-t">${chips}</div></td><td class="td-progress">${prog}</td>`;
+
+    if(r.status!=='over'){
+      tr.onclick=()=>toggleExpand(r.code);
+    }
+
+    // Expanded row
+    const trEx=document.createElement('tr');
+    trEx.className='rrow-expanded';
+    trEx.id='exp-'+r.code;
+    trEx.innerHTML=`<td colspan="5"><div class="exp-content"><span class="exp-label">ROOM CODE:</span><span class="exp-code-val">${r.code}</span><button class="exp-join-btn" onclick="prefill('${r.code}')">./join_room.sh --code ${r.code}</button><button class="exp-cancel-t" onclick="collapseAll()">^ dismiss</button></div></td>`;
+
+    tbody.appendChild(tr);
+    tbody.appendChild(trEx);
+  });
+}
+
+function toggleExpand(code){
+  if(expandedCode===code){collapseAll();return;}
+  collapseAll();
+  expandedCode=code;
+  document.getElementById('exp-'+code).classList.add('on');
+}
+function collapseAll(){
+  document.querySelectorAll('.rrow-expanded').forEach(r=>r.classList.remove('on'));
+  expandedCode=null;
+}
+function prefill(code){
+  openJoin();
+  document.getElementById('code').value=code;
+  if(!isEmail(document.getElementById('email').value)) document.getElementById('email').focus();
+}
+
+// Form
+function displayName(){const n=document.getElementById('name').value.trim();const e=document.getElementById('email').value.trim();return n||(e?e.split('@')[0]:null);}
+function isEmail(v){return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());}
+function updateBtns(){const ok=isEmail(document.getElementById('email').value);['createBtn','joinBtn'].forEach(id=>document.getElementById(id).disabled=!ok);if(ok){document.getElementById('emailRow').classList.add('v');document.getElementById('emailRow').classList.remove('e');}}
+function updatePreview(){const l=displayName();document.getElementById('prevName').textContent=l||'—';}
+function onEmail(){document.getElementById('emailErr').style.display='none';document.getElementById('emailRow').classList.remove('e');updatePreview();updateBtns();}
+function onName(){updatePreview();}
+function blurEmail(){const v=document.getElementById('email').value.trim();if(v&&!isEmail(v)){document.getElementById('emailRow').classList.add('e');document.getElementById('emailErr').style.display='block';}}
+function openJoin(){document.getElementById('joinToggle').style.display='none';document.getElementById('codeBlock').classList.add('on');setTimeout(()=>document.getElementById('code').focus(),50);}
+function closeJoin(){document.getElementById('joinToggle').style.display='';document.getElementById('codeBlock').classList.remove('on');document.getElementById('code').value='';}
+function onCode(el){el.value=el.value.toUpperCase().replace(/[^A-Z0-9]/g,'');}
+function goCreate(){if(!isEmail(document.getElementById('email').value))return;window.location.href='v1-dark-arcade.html';}
+function goJoin(){const c=document.getElementById('code').value;if(c.length!==4)return;if(!isEmail(document.getElementById('email').value))return;window.location.href='v1-dark-arcade.html';}
+
+buildRooms();
+</script>
+</body>
+</html>
