@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hitster — Entry C · Big Cards</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@400;600;700&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:#0a0a0f;color:#e0e0ff;font-family:'Rajdhani',sans-serif;min-height:100vh;display:flex;flex-direction:column;overflow-x:hidden;}
+  .scanlines{position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.08) 2px,rgba(0,0,0,0.08) 4px);pointer-events:none;z-index:100;}
+
+  header{display:flex;align-items:center;justify-content:space-between;padding:12px 24px;border-bottom:2px solid #7c3aed;background:#0f0f1a;}
+  .logo{font-family:'Press Start 2P',monospace;font-size:14px;color:#a78bfa;text-shadow:0 0 20px #7c3aed;}
+  .cursor{display:inline-block;width:10px;height:14px;background:#a78bfa;animation:blink 1s step-end infinite;vertical-align:middle;margin-left:2px;}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+  .live{display:flex;align-items:center;gap:6px;font-family:'Press Start 2P',monospace;font-size:7px;color:#4ade80;}
+  .dot{width:7px;height:7px;border-radius:50%;background:#4ade80;animation:pdot 1.5s infinite;}
+  @keyframes pdot{0%,100%{box-shadow:0 0 0 0 rgba(74,222,128,.5)}50%{box-shadow:0 0 0 6px rgba(74,222,128,0)}}
+
+  /* ── Three-column layout ── */
+  .body{display:grid;grid-template-columns:340px 1fr;flex:1;min-height:0;}
+
+  /* ── LEFT: compact stacked form ── */
+  .left-pane{background:#0f0f1a;border-right:2px solid #1e1e3a;display:flex;flex-direction:column;overflow-y:auto;}
+
+  .brand-block{padding:28px 24px 20px;border-bottom:1px solid #1e1e3a;}
+  .brand-title{font-family:'Press Start 2P',monospace;font-size:18px;color:#a78bfa;text-shadow:0 0 24px #7c3aed;line-height:1.5;}
+  .brand-title span{color:#4ade80;}
+  .brand-sub{font-size:13px;color:#6b7280;margin-top:10px;line-height:1.5;}
+
+  .form-section{padding:20px 24px;flex:1;}
+  .fl{font-family:'Press Start 2P',monospace;font-size:7px;color:#6366f1;letter-spacing:2px;margin-bottom:7px;display:flex;align-items:center;gap:6px;}
+  .req{width:5px;height:5px;border-radius:50%;background:#ef4444;}
+  .opt{font-family:'Rajdhani',sans-serif;font-size:11px;color:#374151;font-weight:600;letter-spacing:0;}
+  .fi{width:100%;background:#1e1e3a;border:2px solid #374151;color:#e0e0ff;font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:600;padding:10px 12px;outline:none;transition:all .2s;margin-bottom:16px;}
+  .fi::placeholder{color:#374151;font-weight:400;}
+  .fi:focus{border-color:#7c3aed;box-shadow:0 0 12px rgba(124,58,237,.3);}
+  .fi.v{border-color:#4ade80;}
+  .fi.e{border-color:#ef4444;}
+  .err{font-size:11px;color:#ef4444;margin-top:-12px;margin-bottom:14px;display:none;}
+  .err.s{display:block;}
+
+  .preview-chip{display:flex;align-items:center;gap:8px;background:#0a0a0f;border:1px solid #1e1e3a;padding:8px 12px;margin-bottom:20px;}
+  .pc-lbl{font-family:'Press Start 2P',monospace;font-size:6px;color:#6b7280;}
+  .pc-ava{width:22px;height:22px;background:#1a0a2e;border:1px solid #7c3aed;display:flex;align-items:center;justify-content:center;font-family:'Press Start 2P',monospace;font-size:7px;color:#a78bfa;flex-shrink:0;}
+  .pc-name{font-size:14px;font-weight:700;}
+
+  .divider{height:1px;background:#1e1e3a;margin:4px 0 20px;}
+
+  .action-btns{display:flex;flex-direction:column;gap:10px;}
+  .abtn{padding:12px 16px;border:2px solid;font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:8px;}
+  .abtn:disabled{opacity:.3;cursor:not-allowed;}
+  .abtn.create{background:#7c3aed;border-color:#6d28d9;color:#fff;}
+  .abtn.create:not(:disabled):hover{background:#8b5cf6;box-shadow:0 0 20px rgba(124,58,237,.4);}
+  .abtn.join{background:transparent;border-color:#4ade80;color:#4ade80;}
+  .abtn.join:not(:disabled):hover{background:rgba(74,222,128,.06);box-shadow:0 0 12px rgba(74,222,128,.2);}
+
+  .join-expand{display:none;flex-direction:column;gap:8px;}
+  .join-expand.on{display:flex;}
+  .jrow{display:flex;gap:8px;}
+  .jcode{font-family:'Press Start 2P',monospace;font-size:13px;text-transform:uppercase;letter-spacing:4px;text-align:center;}
+  .jgo{flex-shrink:0;padding:10px 16px;background:#4ade80;border:2px solid #16a34a;color:#0a0a0f;font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:1px;}
+  .jcancel{font-size:11px;color:#6b7280;background:none;border:none;cursor:pointer;font-family:'Rajdhani',sans-serif;text-transform:uppercase;letter-spacing:1px;}
+  .jcancel:hover{color:#e0e0ff;}
+
+  /* ── RIGHT: horizontal scrolling room strip ── */
+  .right-pane{display:flex;flex-direction:column;padding:24px 28px;overflow:hidden;}
+  .rp-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-shrink:0;}
+  .rp-title{font-family:'Press Start 2P',monospace;font-size:9px;color:#6366f1;letter-spacing:2px;}
+  .rp-meta{font-size:13px;color:#6b7280;}
+  .rp-sub{font-size:12px;color:#374151;margin-bottom:16px;flex-shrink:0;}
+
+  .scroll-track{display:flex;gap:14px;overflow-x:auto;padding-bottom:12px;flex:1;align-items:flex-start;}
+  .scroll-track::-webkit-scrollbar{height:4px;}
+  .scroll-track::-webkit-scrollbar-track{background:#1e1e3a;}
+  .scroll-track::-webkit-scrollbar-thumb{background:#374151;}
+
+  /* Big portrait room cards */
+  .big-room{width:220px;min-width:220px;background:#0f0f1a;border:2px solid #1e1e3a;padding:20px 16px;cursor:pointer;transition:all .2s;position:relative;display:flex;flex-direction:column;gap:12px;}
+  .big-room:hover{border-color:#7c3aed;transform:translateY(-4px);box-shadow:0 8px 32px rgba(124,58,237,.25);}
+  .big-room.br-lobby:hover{border-color:#4ade80;box-shadow:0 8px 32px rgba(74,222,128,.15);}
+  .big-room.br-over{opacity:.35;cursor:not-allowed;pointer-events:none;}
+
+  .br-badge{font-family:'Press Start 2P',monospace;font-size:7px;padding:4px 8px;border:1px solid;display:inline-block;}
+  .br-badge.lob{color:#4ade80;border-color:#4ade80;}
+  .br-badge.act{color:#fbbf24;border-color:#fbbf24;}
+  .br-badge.ov{color:#374151;border-color:#374151;}
+
+  .br-code{font-family:'Press Start 2P',monospace;font-size:12px;color:#a78bfa;margin-top:4px;}
+  .br-topic{font-size:20px;font-weight:700;line-height:1.2;margin-top:2px;}
+  .br-genre{font-size:12px;color:#6b7280;margin-top:2px;}
+
+  .br-avatars{display:flex;gap:4px;flex-wrap:wrap;}
+  .br-av{width:28px;height:28px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-family:'Press Start 2P',monospace;font-size:8px;font-weight:700;}
+
+  .br-progress{background:#0a0a0f;border:1px solid #1e1e3a;padding:10px 12px;margin-top:auto;}
+  .bpr-label{font-family:'Press Start 2P',monospace;font-size:6px;color:#6b7280;margin-bottom:5px;}
+  .bpr-lead{font-size:14px;font-weight:700;color:#fbbf24;}
+  .bpr-bar{height:6px;background:#1e1e3a;margin-top:6px;border-radius:1px;overflow:hidden;}
+  .bpr-fill{height:100%;background:linear-gradient(90deg,#7c3aed,#4ade80);border-radius:1px;}
+  .bpr-count{font-size:11px;color:#6b7280;margin-top:4px;}
+
+  .br-waiting{border:1px solid #1e1e3a;padding:10px 12px;margin-top:auto;}
+  .brw-count{font-size:14px;color:#6b7280;}
+  .brw-hint{font-family:'Press Start 2P',monospace;font-size:7px;color:#4ade80;margin-top:6px;}
+
+  .br-join-overlay{position:absolute;inset:0;background:rgba(124,58,237,.08);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .2s;pointer-events:none;}
+  .big-room:hover .br-join-overlay{opacity:1;}
+  .br-join-text{font-family:'Press Start 2P',monospace;font-size:9px;color:#a78bfa;text-shadow:0 0 10px #7c3aed;}
+</style>
+</head>
+<body>
+<div class="scanlines"></div>
+
+<header>
+  <div class="logo">HITSTER<div class="cursor"></div></div>
+  <div class="live"><div class="dot"></div>LIVE</div>
+</header>
+
+<div class="body">
+
+  <!-- LEFT: form -->
+  <div class="left-pane">
+    <div class="brand-block">
+      <div class="brand-title">HIT<span>STER</span></div>
+      <div class="brand-sub">Build your timeline. Guess the decade.<br>First to 10 songs wins.</div>
+    </div>
+    <div class="form-section">
+      <div class="fl"><span class="req"></span>Email address</div>
+      <input class="fi" id="email" type="email" placeholder="you@example.com" autocomplete="email" oninput="onEmail()" onblur="blurEmail()"/>
+      <div class="err" id="emailErr">Enter a valid email address</div>
+
+      <div class="fl">Display name <span class="opt">optional</span></div>
+      <input class="fi" id="name" type="text" placeholder="Leave blank to use email" maxlength="24" oninput="onName()"/>
+
+      <div class="preview-chip">
+        <div class="pc-lbl">Shown as</div>
+        <div class="pc-ava" id="ava">?</div>
+        <div class="pc-name" id="prevName">—</div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="action-btns">
+        <button class="abtn create" id="createBtn" disabled onclick="goCreate()">⊕ Create a room</button>
+
+        <div id="joinToggle">
+          <button class="abtn join" id="joinBtn" disabled onclick="openJoin()">→ Join by code</button>
+        </div>
+        <div class="join-expand" id="joinEx">
+          <div class="jrow">
+            <input class="fi jcode" id="code" type="text" placeholder="XXXX" maxlength="4" oninput="onCode(this)" style="margin-bottom:0;"/>
+            <button class="jgo" onclick="goJoin()">Join</button>
+          </div>
+          <button class="jcancel" onclick="closeJoin()">← Back</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: horizontal room browser -->
+  <div class="right-pane">
+    <div class="rp-head">
+      <div class="rp-title">Active Rooms</div>
+      <div class="rp-meta" id="roomMeta"></div>
+    </div>
+    <div class="rp-sub">Click a room to join — or enter a code on the left.</div>
+    <div class="scroll-track" id="scrollTrack"></div>
+  </div>
+
+</div>
+
+<script>
+const ROOMS=[
+  {code:'NITE',topic:'90s Night',genre:'90s Pop & Rock',status:'lobby',players:[{n:'Sarah',c:'#4ade80'},{n:'Mike',c:'#fbbf24'},{n:'Jess',c:'#f87171'}],round:null},
+  {code:'XKCD',topic:'Office Party',genre:'All-time hits',status:'active',players:[{n:'Tom',c:'#a78bfa'},{n:'Lin',c:'#4ade80'},{n:'Dan',c:'#fbbf24'},{n:'Amy',c:'#fb923c'}],round:{num:1,leader:'Tom',cards:6,target:10}},
+  {code:'POP5',topic:'Pop Classics',genre:'2000s Pop',status:'active',players:[{n:'Alex',c:'#60a5fa'},{n:'Rosa',c:'#f472b6'}],round:{num:3,leader:'Rosa',cards:8,target:10}},
+  {code:'JAZZ',topic:'Jazz & Blues',genre:'Jazz Standards',status:'lobby',players:[{n:'Sam',c:'#34d399'},{n:'Pat',c:'#fbbf24'},{n:'Chris',c:'#c084fc'},{n:'Eve',c:'#fb923c'},{n:'Roy',c:'#60a5fa'}],round:null},
+  {code:'ROCK',topic:'Classic Rock',genre:'70s–80s Rock',status:'over',players:[{n:'Jane',c:'#6b7280'},{n:'Mark',c:'#6b7280'},{n:'Neil',c:'#6b7280'}],round:{num:2,leader:'Jane',cards:10,target:10}},
+];
+
+function buildRooms(){
+  const track=document.getElementById('scrollTrack');track.innerHTML='';
+  const open=ROOMS.filter(r=>r.status!=='over');
+  document.getElementById('roomMeta').textContent=open.length+' room'+(open.length!==1?'s':'')+' open';
+  ROOMS.forEach(r=>{
+    const card=document.createElement('div');
+    const bCls=r.status==='lobby'?'lob':r.status==='active'?'act':'ov';
+    const bTxt=r.status==='lobby'?'LOBBY':r.status==='active'?'● LIVE':'ENDED';
+    card.className='big-room br-'+(r.status==='over'?'over':r.status==='lobby'?'lobby':'active');
+    const avs=r.players.map(p=>`<div class="br-av" style="background:${p.c}22;border:1px solid ${p.c};color:${p.c};">${p.n[0]}</div>`).join('');
+    const bottom=r.round
+      ?`<div class="br-progress"><div class="bpr-label">Round ${r.round.num}</div><div class="bpr-lead">${r.round.leader} — ${r.round.cards}/${r.round.target}</div><div class="bpr-bar"><div class="bpr-fill" style="width:${r.round.cards/r.round.target*100}%"></div></div><div class="bpr-count">Target: ${r.round.target} cards</div></div>`
+      :`<div class="br-waiting"><div class="brw-count">${r.players.length} waiting to start</div><div class="brw-hint">▶ JOIN NOW</div></div>`;
+    card.innerHTML=`<div class="br-badge ${bCls}">${bTxt}</div><div class="br-code">${r.code}</div><div class="br-topic">${r.topic}</div><div class="br-genre">${r.genre}</div><div class="br-avatars">${avs}</div>${bottom}<div class="br-join-overlay"><div class="br-join-text">CLICK TO JOIN</div></div>`;
+    if(r.status!=='over') card.onclick=()=>prefill(r.code);
+    track.appendChild(card);
+  });
+}
+
+function prefill(code){
+  openJoin();
+  document.getElementById('code').value=code;
+  if(!isEmail(document.getElementById('email').value)) document.getElementById('email').focus();
+  else document.getElementById('code').focus();
+}
+
+function displayName(){const n=document.getElementById('name').value.trim();const e=document.getElementById('email').value.trim();return n||(e?e.split('@')[0]:null);}
+function isEmail(v){return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());}
+function updateBtns(){const ok=isEmail(document.getElementById('email').value);['createBtn','joinBtn'].forEach(id=>document.getElementById(id).disabled=!ok);if(ok){document.getElementById('email').classList.add('v');document.getElementById('email').classList.remove('e');}}
+function updatePreview(){const l=displayName();document.getElementById('prevName').textContent=l||'—';document.getElementById('ava').textContent=l?l[0].toUpperCase():'?';}
+function onEmail(){document.getElementById('emailErr').classList.remove('s');document.getElementById('email').classList.remove('e');updatePreview();updateBtns();}
+function onName(){updatePreview();}
+function blurEmail(){const v=document.getElementById('email').value.trim();if(v&&!isEmail(v)){document.getElementById('email').classList.add('e');document.getElementById('emailErr').classList.add('s');}}
+function openJoin(){document.getElementById('joinToggle').style.display='none';document.getElementById('joinEx').classList.add('on');document.getElementById('code').focus();}
+function closeJoin(){document.getElementById('joinToggle').style.display='';document.getElementById('joinEx').classList.remove('on');document.getElementById('code').value='';}
+function onCode(el){el.value=el.value.toUpperCase().replace(/[^A-Z0-9]/g,'');}
+function goCreate(){if(!isEmail(document.getElementById('email').value))return;window.location.href='v1-dark-arcade.html';}
+function goJoin(){const c=document.getElementById('code').value;if(c.length!==4)return;if(!isEmail(document.getElementById('email').value))return;window.location.href='v1-dark-arcade.html';}
+
+buildRooms();
+</script>
+</body>
+</html>

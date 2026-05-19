@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hitster — Entry B · Rooms First</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@400;600;700&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:#0a0a0f;color:#e0e0ff;font-family:'Rajdhani',sans-serif;min-height:100vh;overflow-x:hidden;}
+  .scanlines{position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.08) 2px,rgba(0,0,0,0.08) 4px);pointer-events:none;z-index:100;}
+
+  header{display:flex;align-items:center;justify-content:space-between;padding:12px 24px;border-bottom:2px solid #7c3aed;background:#0f0f1a;position:sticky;top:0;z-index:50;}
+  .logo{font-family:'Press Start 2P',monospace;font-size:14px;color:#a78bfa;text-shadow:0 0 20px #7c3aed;}
+  .cursor{display:inline-block;width:10px;height:14px;background:#a78bfa;animation:blink 1s step-end infinite;vertical-align:middle;margin-left:2px;}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+  .hdr-right{display:flex;align-items:center;gap:12px;}
+  .live-pip{width:7px;height:7px;border-radius:50%;background:#4ade80;animation:pulse 1.5s infinite;}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(74,222,128,0.5)}50%{box-shadow:0 0 0 6px rgba(74,222,128,0)}}
+  .live-label{font-family:'Press Start 2P',monospace;font-size:7px;color:#4ade80;}
+
+  /* ── Hero bar ── */
+  .hero-bar{background:linear-gradient(135deg,#1a0a2e,#0f0f1a);border-bottom:1px solid #1e1e3a;padding:32px 40px;text-align:center;}
+  .ht{font-family:'Press Start 2P',monospace;font-size:28px;color:#a78bfa;text-shadow:0 0 40px #7c3aed;line-height:1.4;}
+  .ht span{color:#4ade80;text-shadow:0 0 30px #4ade80;}
+  .hs{font-size:15px;color:#6b7280;margin-top:12px;}
+
+  /* ── Page body ── */
+  .page-body{max-width:1100px;margin:0 auto;padding:32px 24px;}
+
+  /* ── Room grid ── */
+  .section-head{display:flex;align-items:center;gap:12px;margin-bottom:16px;}
+  .sh-title{font-family:'Press Start 2P',monospace;font-size:9px;color:#6366f1;letter-spacing:2px;}
+  .sh-line{flex:1;height:1px;background:#1e1e3a;}
+  .sh-count{font-size:13px;color:#6b7280;}
+
+  .room-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:40px;}
+
+  .rcard{background:#0f0f1a;border:2px solid #1e1e3a;padding:16px;cursor:pointer;transition:all 0.2s;position:relative;overflow:hidden;}
+  .rcard::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(124,58,237,0.04),transparent);opacity:0;transition:opacity 0.2s;}
+  .rcard:hover::before{opacity:1;}
+  .rcard:hover{border-color:#7c3aed;box-shadow:0 0 20px rgba(124,58,237,0.2);transform:translateY(-2px);}
+  .rcard.is-lobby:hover{border-color:#4ade80;box-shadow:0 0 20px rgba(74,222,128,0.15);}
+  .rcard.is-over{opacity:0.35;cursor:not-allowed;pointer-events:none;}
+
+  .rcard-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;}
+  .rcard-left{}
+  .rcard-code{font-family:'Press Start 2P',monospace;font-size:10px;color:#a78bfa;}
+  .rcard-topic{font-size:18px;font-weight:700;margin-top:3px;}
+  .rcard-genre{font-size:12px;color:#6b7280;margin-top:2px;}
+
+  .badge{font-family:'Press Start 2P',monospace;font-size:7px;padding:4px 8px;border:1px solid;}
+  .b-lobby{color:#4ade80;border-color:#4ade80;}
+  .b-active{color:#fbbf24;border-color:#fbbf24;animation:badgepulse 2s infinite;}
+  @keyframes badgepulse{0%,100%{box-shadow:none}50%{box-shadow:0 0 8px rgba(251,191,36,0.4)}}
+  .b-over{color:#374151;border-color:#374151;}
+
+  .rcard-players{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px;}
+  .pchip{display:flex;align-items:center;gap:4px;background:#1e1e3a;padding:3px 8px;font-size:12px;font-weight:600;}
+  .pchip .a{width:16px;height:16px;border-radius:2px;display:flex;align-items:center;justify-content:center;font-family:'Press Start 2P',monospace;font-size:5px;color:#fff;}
+
+  .progress-block{border-top:1px solid #1e1e3a;padding-top:10px;}
+  .pb-label{font-family:'Press Start 2P',monospace;font-size:6px;color:#6b7280;margin-bottom:5px;}
+  .pb-leader{font-size:14px;font-weight:700;color:#fbbf24;margin-bottom:6px;}
+  .bar-outer{height:5px;background:#1e1e3a;border-radius:1px;overflow:hidden;}
+  .bar-inner{height:100%;background:linear-gradient(90deg,#7c3aed,#4ade80);border-radius:1px;}
+  .pb-sub{font-size:11px;color:#6b7280;margin-top:4px;}
+
+  .waiting-block{border-top:1px solid #1e1e3a;padding-top:10px;}
+  .wb-text{font-size:13px;color:#6b7280;}
+  .wb-hint{font-family:'Press Start 2P',monospace;font-size:7px;color:#4ade80;margin-top:6px;}
+
+  .join-hint{font-family:'Press Start 2P',monospace;font-size:7px;color:#7c3aed;position:absolute;right:12px;bottom:12px;opacity:0;transition:opacity 0.2s;}
+  .rcard:hover .join-hint{opacity:1;}
+
+  /* ── Form footer (sticky) ── */
+  .form-footer{position:sticky;bottom:0;background:#0f0f1a;border-top:2px solid #7c3aed;padding:18px 24px;display:flex;align-items:center;gap:16px;z-index:50;}
+  .ff-field{display:flex;align-items:center;gap:10px;flex:1;}
+  .ff-label{font-family:'Press Start 2P',monospace;font-size:7px;color:#6366f1;letter-spacing:1px;white-space:nowrap;}
+  .ff-req{width:5px;height:5px;border-radius:50%;background:#ef4444;flex-shrink:0;}
+  .ff-input{flex:1;background:#1e1e3a;border:2px solid #374151;color:#e0e0ff;font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:600;padding:9px 12px;outline:none;transition:all 0.2s;}
+  .ff-input::placeholder{color:#374151;font-weight:400;}
+  .ff-input:focus{border-color:#7c3aed;box-shadow:0 0 10px rgba(124,58,237,0.3);}
+  .ff-input.v{border-color:#4ade80;}
+  .ff-input.e{border-color:#ef4444;}
+  .ff-sep{width:1px;height:40px;background:#1e1e3a;}
+  .ff-preview{display:flex;align-items:center;gap:8px;min-width:140px;}
+  .ff-ava{width:24px;height:24px;background:#1a0a2e;border:1px solid #7c3aed;display:flex;align-items:center;justify-content:center;font-family:'Press Start 2P',monospace;font-size:7px;color:#a78bfa;flex-shrink:0;}
+  .ff-pname{font-size:14px;font-weight:700;color:#e0e0ff;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .ff-actions{display:flex;gap:8px;}
+  .ff-btn{padding:10px 18px;border:2px solid;font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all 0.15s;white-space:nowrap;}
+  .ff-btn:disabled{opacity:0.3;cursor:not-allowed;}
+  .ff-btn.create{background:#7c3aed;border-color:#6d28d9;color:#fff;}
+  .ff-btn.create:not(:disabled):hover{background:#8b5cf6;box-shadow:0 0 16px rgba(124,58,237,0.4);}
+
+  /* Code modal overlay */
+  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.7);display:none;align-items:center;justify-content:center;z-index:200;}
+  .modal-bg.on{display:flex;}
+  .modal{background:#0f0f1a;border:2px solid #7c3aed;padding:28px 32px;width:340px;box-shadow:0 0 40px rgba(124,58,237,0.4);}
+  .modal-title{font-family:'Press Start 2P',monospace;font-size:9px;color:#a78bfa;margin-bottom:16px;}
+  .modal-code{font-family:'Press Start 2P',monospace;font-size:24px;color:#4ade80;text-align:center;margin-bottom:6px;}
+  .modal-sub{font-size:13px;color:#6b7280;margin-bottom:20px;}
+  .modal-row{display:flex;gap:8px;}
+  .modal-input{flex:1;background:#1e1e3a;border:2px solid #374151;color:#e0e0ff;font-family:'Press Start 2P',monospace;font-size:14px;padding:10px;outline:none;text-align:center;letter-spacing:3px;text-transform:uppercase;}
+  .modal-input:focus{border-color:#7c3aed;}
+  .modal-join{padding:10px 16px;background:#4ade80;border:none;color:#0a0a0f;font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:1px;}
+  .modal-cancel{display:block;text-align:center;font-family:'Press Start 2P',monospace;font-size:7px;color:#6b7280;margin-top:14px;cursor:pointer;background:none;border:none;letter-spacing:1px;}
+  .modal-cancel:hover{color:#e0e0ff;}
+</style>
+</head>
+<body>
+<div class="scanlines"></div>
+
+<header>
+  <div class="logo">HITSTER<div class="cursor"></div></div>
+  <div class="hdr-right">
+    <div class="live-pip"></div>
+    <div class="live-label">LIVE</div>
+  </div>
+</header>
+
+<div class="hero-bar">
+  <div class="ht">HIT<span>STER</span></div>
+  <div class="hs">Build your timeline. Guess the decade. First to 10 songs wins.</div>
+</div>
+
+<div class="page-body">
+  <div class="section-head">
+    <div class="sh-title">Open Rooms</div>
+    <div class="sh-line"></div>
+    <div class="sh-count" id="roomCount"></div>
+  </div>
+  <div class="room-grid" id="roomGrid"></div>
+</div>
+
+<!-- Sticky form footer -->
+<div class="form-footer">
+  <div class="ff-field">
+    <div class="ff-req"></div>
+    <div class="ff-label">Email</div>
+    <input class="ff-input" id="email" type="email" placeholder="you@example.com" autocomplete="email" oninput="onEmail()" onblur="blurEmail()"/>
+  </div>
+  <div class="ff-sep"></div>
+  <div class="ff-field">
+    <div class="ff-label" style="color:#6b7280;">Name</div>
+    <input class="ff-input" id="name" type="text" placeholder="optional" maxlength="24" oninput="onName()" style="border-color:#1e1e3a;"/>
+  </div>
+  <div class="ff-sep"></div>
+  <div class="ff-preview">
+    <div class="ff-ava" id="ava">?</div>
+    <div class="ff-pname" id="prevName">—</div>
+  </div>
+  <div class="ff-actions">
+    <button class="ff-btn create" id="createBtn" disabled onclick="openModal('')">⊕ Create</button>
+    <button class="ff-btn" id="joinAnyBtn" disabled onclick="openModal('')" style="background:transparent;border-color:#4ade80;color:#4ade80;">→ Join</button>
+  </div>
+</div>
+
+<!-- Join modal -->
+<div class="modal-bg" id="modalBg" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="modal-title">Join a Room</div>
+    <div class="modal-code" id="modalCode"></div>
+    <div class="modal-sub" id="modalSub">Enter or confirm the 4-character room code</div>
+    <div class="modal-row">
+      <input class="modal-input" id="modalInput" type="text" placeholder="XXXX" maxlength="4" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')"/>
+      <button class="modal-join" onclick="goJoin()">Join</button>
+    </div>
+    <button class="modal-cancel" onclick="closeModal()">← Cancel</button>
+  </div>
+</div>
+
+<script>
+const ROOMS=[
+  {code:'NITE',topic:'90s Night',genre:'90s Pop & Rock',status:'lobby',players:[{n:'Sarah',c:'#4ade80'},{n:'Mike',c:'#fbbf24'},{n:'Jess',c:'#f87171'}],round:null},
+  {code:'XKCD',topic:'Office Party',genre:'All-time hits',status:'active',players:[{n:'Tom',c:'#a78bfa'},{n:'Lin',c:'#4ade80'},{n:'Dan',c:'#fbbf24'},{n:'Amy',c:'#fb923c'}],round:{num:1,leader:'Tom',cards:6,target:10}},
+  {code:'POP5',topic:'Pop Classics',genre:'2000s Pop',status:'active',players:[{n:'Alex',c:'#60a5fa'},{n:'Rosa',c:'#f472b6'}],round:{num:3,leader:'Rosa',cards:8,target:10}},
+  {code:'JAZZ',topic:'Jazz & Blues',genre:'Jazz Standards',status:'lobby',players:[{n:'Sam',c:'#34d399'},{n:'Pat',c:'#fbbf24'},{n:'Chris',c:'#c084fc'},{n:'Eve',c:'#fb923c'},{n:'Roy',c:'#60a5fa'}],round:null},
+  {code:'ROCK',topic:'Classic Rock',genre:'70s–80s Rock',status:'over',players:[{n:'Jane',c:'#6b7280'},{n:'Mark',c:'#6b7280'},{n:'Neil',c:'#6b7280'}],round:{num:2,leader:'Jane',cards:10,target:10}},
+];
+
+function buildRooms(){
+  const grid=document.getElementById('roomGrid');
+  grid.innerHTML='';
+  const open=ROOMS.filter(r=>r.status!=='over');
+  document.getElementById('roomCount').textContent=open.length+' room'+(open.length!==1?'s':'')+' open';
+  ROOMS.forEach(r=>{
+    const card=document.createElement('div');
+    card.className='rcard '+(r.status==='over'?'is-over':r.status==='lobby'?'is-lobby':'');
+    const bClass=r.status==='lobby'?'b-lobby':r.status==='active'?'b-active':'b-over';
+    const bText=r.status==='lobby'?'LOBBY':r.status==='active'?'● LIVE':'ENDED';
+    const chips=r.players.map(p=>`<div class="pchip"><div class="a" style="background:${p.c}22;border:1px solid ${p.c};color:${p.c};">${p.n[0]}</div>${p.n}</div>`).join('');
+    const bottom=r.round
+      ?`<div class="progress-block"><div class="pb-label">Round ${r.round.num} · Leader</div><div class="pb-leader">${r.round.leader} — ${r.round.cards} / ${r.round.target} cards</div><div class="bar-outer"><div class="bar-inner" style="width:${r.round.cards/r.round.target*100}%"></div></div><div class="pb-sub">Turn in progress</div></div>`
+      :`<div class="waiting-block"><div class="wb-text">${r.players.length} player${r.players.length!==1?'s':''} waiting</div><div class="wb-hint">▶ OPEN TO JOIN</div></div>`;
+    card.innerHTML=`<div class="rcard-head"><div class="rcard-left"><div class="rcard-code">${r.code}</div><div class="rcard-topic">${r.topic}</div><div class="rcard-genre">${r.genre}</div></div><div class="badge ${bClass}">${bText}</div></div><div class="rcard-players">${chips}</div>${bottom}<div class="join-hint">JOIN →</div>`;
+    if(r.status!=='over') card.onclick=()=>openModal(r.code);
+    grid.appendChild(card);
+  });
+}
+
+function openModal(code){
+  if(!isEmail(document.getElementById('email').value)){
+    document.getElementById('email').classList.add('e');
+    document.getElementById('email').focus();
+    return;
+  }
+  document.getElementById('modalInput').value=code;
+  document.getElementById('modalCode').textContent=code?'Room '+code:'';
+  document.getElementById('modalSub').textContent=code?'Confirm to join this room':'Enter the 4-character room code';
+  document.getElementById('modalBg').classList.add('on');
+  if(!code) document.getElementById('modalInput').focus();
+}
+function closeModal(){document.getElementById('modalBg').classList.remove('on');}
+function goJoin(){const c=document.getElementById('modalInput').value;if(c.length!==4)return;window.location.href='v1-dark-arcade.html';}
+
+// Form
+function displayName(){const n=document.getElementById('name').value.trim();const e=document.getElementById('email').value.trim();return n||(e?e.split('@')[0]:null);}
+function isEmail(v){return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());}
+function updateBtns(){const ok=isEmail(document.getElementById('email').value);['createBtn','joinAnyBtn'].forEach(id=>document.getElementById(id).disabled=!ok);if(ok){document.getElementById('email').classList.add('v');document.getElementById('email').classList.remove('e');}}
+function updatePreview(){const l=displayName();document.getElementById('prevName').textContent=l||'—';document.getElementById('ava').textContent=l?l[0].toUpperCase():'?';}
+function onEmail(){document.getElementById('email').classList.remove('e');updatePreview();updateBtns();}
+function onName(){updatePreview();}
+function blurEmail(){const v=document.getElementById('email').value.trim();if(v&&!isEmail(v)){document.getElementById('email').classList.add('e');document.getElementById('email').classList.remove('v');}}
+
+document.getElementById('modalInput').addEventListener('keydown',e=>{if(e.key==='Enter')goJoin();});
+buildRooms();
+</script>
+</body>
+</html>

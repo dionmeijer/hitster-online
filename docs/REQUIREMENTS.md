@@ -17,7 +17,22 @@ _What the system does from a player's perspective. No technical detail._
 - Email is used to identify a player across reconnects and sessions. It is **never shown to other players**.
 - After completing the form, the player can either:
   - **Create a room** (becoming the room owner), or
-  - **Join a room** by entering a 4-character room code.
+  - **Join a room** by entering a 4-character room code, or
+  - **Click directly into an existing room** shown in the room browser (see §1.1.1).
+
+#### 1.1.1 Room Browser
+- The entry page displays a live list of all **active rooms** on the server (lobby or in-progress).
+- Each room card shows:
+  - **Room code** and **topic / description** set by the owner
+  - **Genre / playlist** (e.g. "90s Night", "Pop Classics") — the song source label
+  - **Participants**: player count and display names of players currently in the room
+  - **Round status**: lobby waiting, or current round number
+  - **Progress**: for in-progress rounds, the leading player/team's card count and the target (e.g. "Mike — 6 / 10 cards")
+- Clicking a room card pre-fills the join code. The player still needs to have entered a valid email before joining.
+- Rooms in **LOBBY** state can be joined freely.
+- Rooms in **ROUND_ACTIVE** state can be observed but the player joins the next round only.
+- Rooms in **GAME_OVER** state are shown greyed-out and cannot be joined.
+- The room list auto-refreshes every 10 seconds via a server poll or Socket.io event.
 
 ### 1.2 Rooms
 - Each room has a unique **room code** and a shareable **join link**.
