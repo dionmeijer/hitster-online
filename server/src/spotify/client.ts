@@ -138,41 +138,80 @@ export class SpotifyClient {
 
   private async getTracksFromPlaylist(playlistId: string): Promise<Card[]> {
     const cards: Card[] = [];
-    let url: string | null =
+    // Fetch only the first page (max 50 tracks) — no pagination
+    const url =
       `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=50&fields=items(track(id,name,artists,album,preview_url)),next`;
 
-    while (url) {
-      const resp = await this.fetchWithAuth(url);
-      if (!resp.ok) {
-        const text = await resp.text();
-        throw new Error(`Spotify playlist fetch failed: ${resp.status} ${text}`);
-      }
-      const data = (await resp.json()) as SpotifyPlaylistTracksResponse;
-      for (const item of data.items) {
-        if (!item.track) continue;
-        const card = mapSpotifyTrack(item.track);
-        if (card) cards.push(card);
-      }
-      url = data.next;
+    const resp = await this.fetchWithAuth(url);
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`Spotify playlist fetch failed: ${resp.status} ${text}`);
+    }
+    const data = (await resp.json()) as SpotifyPlaylistTracksResponse;
+    for (const item of data.items) {
+      if (!item.track) continue;
+      const card = mapSpotifyTrack(item.track);
+      if (card) cards.push(card);
+    }
+
+    if (cards.length < 6) {
+      throw new Error(
+        `Spotify returned only ${cards.length} playable tracks (need at least 6). Try a different playlist or genre.`
+      );
     }
 
     return shuffleArray(cards);
   }
 
   private async searchTracksByGenre(genre: string, limit: number): Promise<Card[]> {
-    const query = encodeURIComponent(`genre:"${genre}"`);
-    const url = `https://api.spotify.com/v1/search?q=${query}&type=track&limit=${Math.min(limit, 50)}`;
-    const resp = await this.fetchWithAuth(url);
-    if (!resp.ok) {
-      const text = await resp.text();
-      throw new Error(`Spotify search failed: ${resp.status} ${text}`);
+    const cap = Math.min(limit, 50);
+
+    // First attempt: strict genre tag filter
+    const strictQuery = encodeURIComponent(`genre:"${genre}"`);
+    const strictUrl = `https://api.spotify.com/v1/search?q=${strictQuery}&type=track&limit=${cap}`;
+    const strictResp = await this.fetchWithAuth(strictUrl);
+    if (!strictResp.ok) {
+      const text = await strictResp.text();
+      throw new Error(`Spotify search failed: ${strictResp.status} ${text}`);
     }
-    const data = (await resp.json()) as SpotifySearchResponse;
+    const strictData = (await strictResp.json()) as SpotifySearchResponse;
+    const strictCards: Card[] = [];
+    for (const track of strictData.tracks.items) {
+      const card = mapSpotifyTrack(track);
+      if (card) strictCards.push(card);
+    }
+
+    // If strict genre search returned enough results, use them
+    if (strictCards.length >= 10) {
+      if (strictCards.length < 6) {
+        throw new Error(
+          `Spotify returned only ${strictCards.length} playable tracks (need at least 6). Try a different playlist or genre.`
+        );
+      }
+      return shuffleArray(strictCards);
+    }
+
+    // Fall back to a broad keyword search
+    const broadQuery = encodeURIComponent(genre);
+    const broadUrl = `https://api.spotify.com/v1/search?q=${broadQuery}&type=track&limit=${cap}`;
+    const broadResp = await this.fetchWithAuth(broadUrl);
+    if (!broadResp.ok) {
+      const text = await broadResp.text();
+      throw new Error(`Spotify search failed: ${broadResp.status} ${text}`);
+    }
+    const broadData = (await broadResp.json()) as SpotifySearchResponse;
     const cards: Card[] = [];
-    for (const track of data.tracks.items) {
+    for (const track of broadData.tracks.items) {
       const card = mapSpotifyTrack(track);
       if (card) cards.push(card);
     }
+
+    if (cards.length < 6) {
+      throw new Error(
+        `Spotify returned only ${cards.length} playable tracks (need at least 6). Try a different playlist or genre.`
+      );
+    }
+
     return shuffleArray(cards);
   }
 }
