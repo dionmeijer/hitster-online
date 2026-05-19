@@ -3,6 +3,8 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
+import { existsSync } from 'fs';
+import { join } from 'path';
 import type {
   ServerToClientEvents,
   ClientToServerEvents,
@@ -55,6 +57,16 @@ const challengeTimers = new Map<string, ReturnType<typeof setTimeout>>();
 // ---------------------------------------------------------------------------
 // HTTP routes
 // ---------------------------------------------------------------------------
+
+// Serve built React client if available, otherwise redirect to Vite dev server
+const clientDist = join(__dirname, '../../client/dist');
+if (existsSync(clientDist)) {
+  app.use(express.static(clientDist));
+  app.get('*', (_req, res) => res.sendFile(join(clientDist, 'index.html')));
+} else {
+  const devUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+  app.get('/', (_req, res) => res.redirect(devUrl));
+}
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', rooms: store.getAll().length });
