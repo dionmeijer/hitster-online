@@ -195,6 +195,16 @@ body {
   margin-top: 6px;
 }
 
+.server-error-msg {
+  font-size: 13px;
+  color: #ef4444;
+  background: #ef444422;
+  border: 1px solid #ef4444;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-top: 8px;
+}
+
 .preview-row {
   display: flex;
   align-items: center;

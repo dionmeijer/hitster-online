@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { RoomSummary } from '../../../shared/types';
+import type { Room, RoomSummary } from '../../../shared/types';
 
 interface EntryPageProps {
   onConnect: (displayName: string, email: string) => void;
   onCreateRoom: (topic: string) => void;
   onJoinRoom: (code: string) => void;
   serverUrl?: string;
+  serverError?: string | null;
+  roomJoined?: Room | null;
 }
 
 const AVATAR_COLORS = [
@@ -39,7 +41,7 @@ function isRoomJoinable(status: string): boolean {
   return status === 'lobby';
 }
 
-export default function EntryPage({ onConnect, onCreateRoom, onJoinRoom, serverUrl }: EntryPageProps) {
+export default function EntryPage({ onConnect, onCreateRoom, onJoinRoom, serverUrl, serverError, roomJoined }: EntryPageProps) {
   const [email, setEmail] = useState(() => sessionStorage.getItem('hitster_email') ?? '');
   const [emailDirty, setEmailDirty] = useState(() => !!sessionStorage.getItem('hitster_email'));
   const [emailError, setEmailError] = useState(false);
@@ -50,8 +52,16 @@ export default function EntryPage({ onConnect, onCreateRoom, onJoinRoom, serverU
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [roomsLoading, setRoomsLoading] = useState(true);
+  const [connecting, setConnecting] = useState(false);
   const codeInputRef = useRef<HTMLInputElement>(null);
   const topicInputRef = useRef<HTMLInputElement>(null);
+
+  // Clear connecting spinner when room is joined or an error arrives
+  useEffect(() => {
+    if (roomJoined || serverError) {
+      setConnecting(false);
+    }
+  }, [roomJoined, serverError]);
 
   const resolvedName = displayName.trim() || (email.trim() ? email.trim().split('@')[0] : '');
   const emailValid = isValidEmail(email);
@@ -114,12 +124,14 @@ export default function EntryPage({ onConnect, onCreateRoom, onJoinRoom, serverU
 
   function handleJoinSubmit() {
     if (code.length !== 4 || !emailValid) return;
+    setConnecting(true);
     onConnect(resolvedName || email, email);
     onJoinRoom(code);
   }
 
   function handleCreateSubmit() {
     if (!emailValid || !joinTopic.trim()) return;
+    setConnecting(true);
     onConnect(resolvedName || email, email);
     onCreateRoom(joinTopic.trim());
     setShowCreateModal(false);
@@ -216,17 +228,24 @@ export default function EntryPage({ onConnect, onCreateRoom, onJoinRoom, serverU
           {/* Create button */}
           <button
             className="btn btn-create"
-            disabled={!emailValid}
+            disabled={!emailValid || connecting}
             onClick={handleCreateClick}
           >
-            ⊕ Create a room
+            {connecting ? '⏳ Connecting…' : '⊕ Create a room'}
           </button>
+
+          {/* Server error banner */}
+          {serverError && (
+            <div className="server-error-msg" role="alert">
+              {serverError}
+            </div>
+          )}
 
           {/* Join section */}
           {!joinOpen ? (
             <button
               className="btn btn-join"
-              disabled={!emailValid}
+              disabled={!emailValid || connecting}
               onClick={openJoin}
             >
               → Join by code
@@ -247,9 +266,9 @@ export default function EntryPage({ onConnect, onCreateRoom, onJoinRoom, serverU
                 <button
                   className="btn-go"
                   onClick={handleJoinSubmit}
-                  disabled={code.length !== 4 || !emailValid}
+                  disabled={code.length !== 4 || !emailValid || connecting}
                 >
-                  Join
+                  {connecting ? '…' : 'Join'}
                 </button>
               </div>
               <button className="btn-cancel" onClick={closeJoin}>

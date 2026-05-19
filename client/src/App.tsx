@@ -19,6 +19,8 @@ export default function App() {
         onConnect={game.connect}
         onCreateRoom={game.createRoom}
         onJoinRoom={game.joinRoom}
+        serverError={game.socketError}
+        roomJoined={game.room}
       />
     );
   }

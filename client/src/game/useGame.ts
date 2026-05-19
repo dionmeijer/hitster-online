@@ -12,6 +12,7 @@ export interface GameState {
   lastFlip: { card: Card; correct: boolean } | null;
   roundEnded: { winnerId: string | null } | null;
   myTokens: number;
+  socketError: string | null;
   connect: (displayName: string, email: string) => void;
   createRoom: (topic: string) => void;
   joinRoom: (code: string) => void;
@@ -32,6 +33,7 @@ export function useGame(): GameState {
   const [lastFlip, setLastFlip] = useState<{ card: Card; correct: boolean } | null>(null);
   const [roundEnded, setRoundEnded] = useState<{ winnerId: string | null } | null>(null);
   const [myTokens, setMyTokens] = useState(0);
+  const [socketError, setSocketError] = useState<string | null>(null);
 
   const sessionId = sessionStorage.getItem('hitster_session_id') ?? '';
 
@@ -40,12 +42,14 @@ export function useGame(): GameState {
       setRoom(r);
       setRoundEnded(null);
       setLastFlip(null);
+      setSocketError(null);
     });
 
     socket.on('room:joined', ({ room: r }) => {
       setRoom(r);
       setRoundEnded(null);
       setLastFlip(null);
+      setSocketError(null);
     });
 
     socket.on('room:updated', (r) => {
@@ -133,6 +137,7 @@ export function useGame(): GameState {
 
     socket.on('error', (msg) => {
       console.error('[hitster socket error]', msg);
+      setSocketError(typeof msg === 'string' ? msg : (msg as { message?: string })?.message ?? 'An error occurred');
     });
 
     return () => {
@@ -166,11 +171,19 @@ export function useGame(): GameState {
   }, []);
 
   const createRoom = useCallback((topic: string) => {
-    socket.emit('room:create', { topic });
+    if (socket.connected) {
+      socket.emit('room:create', { topic });
+    } else {
+      socket.once('connect', () => socket.emit('room:create', { topic }));
+    }
   }, []);
 
   const joinRoom = useCallback((code: string) => {
-    socket.emit('room:join', { roomCode: code });
+    if (socket.connected) {
+      socket.emit('room:join', { roomCode: code });
+    } else {
+      socket.once('connect', () => socket.emit('room:join', { roomCode: code }));
+    }
   }, []);
 
   const startRound = useCallback((mode: GameMode, playlistLabel?: string) => {
@@ -203,6 +216,7 @@ export function useGame(): GameState {
     lastFlip,
     roundEnded,
     myTokens,
+    socketError,
     connect,
     createRoom,
     joinRoom,
