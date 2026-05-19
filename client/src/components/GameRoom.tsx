@@ -421,30 +421,32 @@ function WinScreen({ winnerId, room, sessionId, onPlayAgain }: WinScreenProps) {
 interface LobbyScreenProps {
   room: Room;
   sessionId: string;
-  onStartRound: (mode: GameMode) => void;
+  onStartRound: (mode: GameMode, playlistLabel?: string) => void;
+  onLeave: () => void;
 }
 
-function LobbyScreen({ room, sessionId, onStartRound }: LobbyScreenProps) {
+function LobbyScreen({ room, sessionId, onStartRound, onLeave }: LobbyScreenProps) {
   const isOwner = room.ownerId === sessionId;
   const players = Object.values(room.players);
+  const [playlistLabel, setPlaylistLabel] = useState('');
 
   return (
     <div className="lobby-screen">
-      <div className="lobby-code">{room.code}</div>
+      <div className="lobby-code" data-testid="lobby-room-code">{room.code}</div>
       <div className="lobby-code-label">Share this code to invite friends</div>
 
       <div className="lobby-player-list">
         {players.map(p => {
           const color = avatarColor(p.displayName);
           return (
-            <div key={p.id} className="lobby-player-chip">
+            <div key={p.id} className="lobby-player-chip" data-testid="lobby-player">
               <div
                 className="player-avatar"
                 style={{ background: color + '22', color, width: 24, height: 24, fontSize: 8 }}
               >
                 {p.displayName[0]?.toUpperCase()}
               </div>
-              {p.displayName}
+              <span data-testid="lobby-player-name">{p.displayName}</span>
               {p.id === room.ownerId && (
                 <span style={{ fontSize: 10, color: '#fbbf24' }}>★</span>
               )}
@@ -453,11 +455,25 @@ function LobbyScreen({ room, sessionId, onStartRound }: LobbyScreenProps) {
         })}
       </div>
 
+      {isOwner && (
+        <div className="lobby-playlist-field">
+          <input
+            className="form-input"
+            type="text"
+            placeholder="Genre or Spotify playlist URL (optional)"
+            value={playlistLabel}
+            onChange={e => setPlaylistLabel(e.target.value)}
+            data-testid="playlist-label-input"
+          />
+        </div>
+      )}
+
       {isOwner ? (
         <button
           className="lobby-start-btn"
           disabled={players.length < 1}
-          onClick={() => onStartRound('original')}
+          onClick={() => onStartRound('original', playlistLabel.trim() || undefined)}
+          data-testid="start-round-btn"
         >
           ▶ Start Round
         </button>
@@ -466,6 +482,10 @@ function LobbyScreen({ room, sessionId, onStartRound }: LobbyScreenProps) {
           Waiting for {room.players[room.ownerId]?.displayName ?? 'host'} to start...
         </div>
       )}
+
+      <button className="lobby-leave-btn" onClick={onLeave} data-testid="leave-btn">
+        ← Leave Room
+      </button>
     </div>
   );
 }
@@ -522,7 +542,7 @@ export interface GameRoomProps {
   roundEnded: { winnerId: string | null } | null;
   myTokens: number;
   sessionId: string;
-  onStartRound: (mode: GameMode) => void;
+  onStartRound: (mode: GameMode, playlistLabel?: string) => void;
   onPlaceCard: (position: number) => void;
   onChallengeCard: () => void;
   onSkipCard: () => void;
@@ -608,7 +628,7 @@ export default function GameRoom({
             Leave
           </button>
         </header>
-        <LobbyScreen room={room} sessionId={sessionId} onStartRound={onStartRound} />
+        <LobbyScreen room={room} sessionId={sessionId} onStartRound={onStartRound} onLeave={onLeave} />
       </div>
     );
   }

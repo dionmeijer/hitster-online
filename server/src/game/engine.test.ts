@@ -2,6 +2,8 @@ import {
   generateRoomCode,
   createRoom,
   addPlayer,
+  markDisconnected,
+  markReconnected,
   isPlacementCorrect,
   resolveFlip,
   advanceTurn,
@@ -10,6 +12,7 @@ import {
   drawCard,
   applySkip,
   timelineLength,
+  buildRoundSummary,
 } from './engine';
 import type { Room, Card, RoundConfig } from '../../../shared/types';
 
@@ -359,5 +362,102 @@ describe('timelineLength', () => {
     const { room: initedRoom } = initRound(room, defaultConfig, deck);
     // After initRound, player1 has 1 starting card
     expect(timelineLength(initedRoom, 'player1')).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// markDisconnected / markReconnected
+// ---------------------------------------------------------------------------
+
+describe('markDisconnected / markReconnected', () => {
+  it('marks a player as disconnected', () => {
+    const room = createRoom('p1', 'Alice', 'Test');
+    const updated = markDisconnected(room, 'p1');
+    expect(updated.players['p1'].isConnected).toBe(false);
+  });
+
+  it('marks a disconnected player as reconnected', () => {
+    const room = createRoom('p1', 'Alice', 'Test');
+    const disc = markDisconnected(room, 'p1');
+    const recon = markReconnected(disc, 'p1');
+    expect(recon.players['p1'].isConnected).toBe(true);
+  });
+
+  it('is a no-op for unknown player id', () => {
+    const room = createRoom('p1', 'Alice', 'Test');
+    const updated = markDisconnected(room, 'nobody');
+    expect(updated).toEqual(room);
+  });
+
+  it('all players disconnected when last player leaves lobby', () => {
+    const room = createRoom('p1', 'Alice', 'Test');
+    const room2 = addPlayer(room, 'p2', 'Bob');
+    const d1 = markDisconnected(room2, 'p1');
+    const d2 = markDisconnected(d1, 'p2');
+    const allGone = Object.values(d2.players).every(p => !p.isConnected);
+    expect(allGone).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildRoundSummary
+// ---------------------------------------------------------------------------
+
+describe('buildRoundSummary', () => {
+  it('returns correct mode and roundNumber', () => {
+    const room = createRoom('p1', 'Alice', 'Test');
+    const deck = Array.from({ length: 5 }, (_, i) => makeCard(`d${i}`, 1990 + i));
+    const { room: initedRoom } = initRound(room, defaultConfig, deck);
+    const summary = buildRoundSummary(initedRoom, 'p1');
+    expect(summary.winnerId).toBe('p1');
+    expect(summary.mode).toBe('original');
+    expect(summary.roundNumber).toBe(1);
+  });
+
+  it('roundNumber increments with round history', () => {
+    const room = createRoom('p1', 'Alice', 'Test');
+    const deck = Array.from({ length: 5 }, (_, i) => makeCard(`d${i}`, 1990 + i));
+    const { room: initedRoom } = initRound(room, defaultConfig, deck);
+    const prevSummary = buildRoundSummary(initedRoom, 'p1');
+    const roomWithHistory = { ...initedRoom, roundHistory: [prevSummary] };
+    const summary2 = buildRoundSummary(roomWithHistory, 'p1');
+    expect(summary2.roundNumber).toBe(2);
+  });
+
+  it('supports null winnerId (cooperative loss / tie)', () => {
+    const room = createRoom('p1', 'Alice', 'Test');
+    const deck = Array.from({ length: 5 }, (_, i) => makeCard(`d${i}`, 1990 + i));
+    const { room: initedRoom } = initRound(room, defaultConfig, deck);
+    const summary = buildRoundSummary(initedRoom, null);
+    expect(summary.winnerId).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// addPlayer
+// ---------------------------------------------------------------------------
+
+describe('addPlayer', () => {
+  it('adds a new player to a lobby room', () => {
+    const room = createRoom('p1', 'Alice', 'Test');
+    const updated = addPlayer(room, 'p2', 'Bob');
+    expect(Object.keys(updated.players)).toHaveLength(2);
+    expect(updated.players['p2'].displayName).toBe('Bob');
+    expect(updated.players['p2'].isConnected).toBe(true);
+  });
+
+  it('reconnects an existing player instead of duplicating', () => {
+    const room = createRoom('p1', 'Alice', 'Test');
+    const disc = markDisconnected(room, 'p1');
+    const recon = addPlayer(disc, 'p1', 'Alice');
+    expect(Object.keys(recon.players)).toHaveLength(1);
+    expect(recon.players['p1'].isConnected).toBe(true);
+  });
+
+  it('throws when room is not in lobby status', () => {
+    const room = createRoom('p1', 'Alice', 'Test');
+    const deck = Array.from({ length: 5 }, (_, i) => makeCard(`d${i}`, 1990 + i));
+    const { room: active } = initRound(room, defaultConfig, deck);
+    expect(() => addPlayer(active, 'p2', 'Bob')).toThrow();
   });
 });

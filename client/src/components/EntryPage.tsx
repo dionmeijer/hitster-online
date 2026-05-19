@@ -40,10 +40,10 @@ function isRoomJoinable(status: string): boolean {
 }
 
 export default function EntryPage({ onConnect, onCreateRoom, onJoinRoom, serverUrl }: EntryPageProps) {
-  const [email, setEmail] = useState('');
-  const [emailDirty, setEmailDirty] = useState(false);
+  const [email, setEmail] = useState(() => sessionStorage.getItem('hitster_email') ?? '');
+  const [emailDirty, setEmailDirty] = useState(() => !!sessionStorage.getItem('hitster_email'));
   const [emailError, setEmailError] = useState(false);
-  const [displayName, setDisplayName] = useState('');
+  const [displayName, setDisplayName] = useState(() => sessionStorage.getItem('hitster_display_name') ?? '');
   const [joinOpen, setJoinOpen] = useState(false);
   const [code, setCode] = useState('');
   const [joinTopic, setJoinTopic] = useState('');
@@ -87,6 +87,7 @@ export default function EntryPage({ onConnect, onCreateRoom, onJoinRoom, serverU
 
   function handleEmailChange(v: string) {
     setEmail(v);
+    sessionStorage.setItem('hitster_email', v);
     setEmailError(false);
     setEmailDirty(true);
   }
@@ -192,7 +193,7 @@ export default function EntryPage({ onConnect, onCreateRoom, onJoinRoom, serverU
               placeholder="Leave blank to use email"
               maxLength={24}
               value={displayName}
-              onChange={e => setDisplayName(e.target.value)}
+              onChange={e => { setDisplayName(e.target.value); sessionStorage.setItem('hitster_display_name', e.target.value); }}
             />
             <div className="preview-row">
               <div className="pr-label">Shown as</div>

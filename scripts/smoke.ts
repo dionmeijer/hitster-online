@@ -157,8 +157,45 @@ async function run(): Promise<void> {
     fail(checks, 'round:ended', `${Date.now() < deadline ? String(e) : 'timed out after ' + TIMEOUT_MS / 1000 + 's'}`);
   }
 
-  // 7. Disconnect cleanly
+  // 7. GET /rooms — room should appear with correct genre and status
+  try {
+    const { ok, body } = await httpGet('/rooms');
+    const rooms = body as Array<{ code: string; genre?: string; status: string; playerCount: number }>;
+    const ourRoom = rooms.find(r => r.code === roomCode);
+    if (!ok) {
+      fail(checks, 'GET /rooms', 'non-2xx response');
+    } else if (!ourRoom) {
+      fail(checks, 'GET /rooms room visible', `room ${roomCode} not found in ${JSON.stringify(rooms.map(r => r.code))}`);
+    } else {
+      pass(checks, 'GET /rooms room visible', `status=${ourRoom.status} players=${ourRoom.playerCount}`);
+      if (ourRoom.genre === 'Test Playlist') {
+        pass(checks, 'GET /rooms genre label', `genre=${ourRoom.genre}`);
+      } else {
+        fail(checks, 'GET /rooms genre label', `expected "Test Playlist" got "${ourRoom.genre}"`);
+      }
+    }
+  } catch (e) {
+    fail(checks, 'GET /rooms', String(e));
+  }
+
+  // 8. Disconnect all → room should disappear within EMPTY_ROOM_TTL_MS (5s in TEST_MODE)
   sockets.forEach(s => s.disconnect());
+
+  try {
+    let gone = false;
+    const deadline2 = Date.now() + 12_000;
+    while (Date.now() < deadline2) {
+      await new Promise(r => setTimeout(r, 1_000));
+      const { ok, body } = await httpGet('/rooms');
+      if (!ok) break;
+      const rooms = body as Array<{ code: string }>;
+      if (!rooms.find(r => r.code === roomCode)) { gone = true; break; }
+    }
+    if (gone) pass(checks, 'room removed from /rooms after all disconnect');
+    else fail(checks, 'room removed from /rooms after all disconnect', 'room still present after 12s');
+  } catch (e) {
+    fail(checks, 'room removed from /rooms after all disconnect', String(e));
+  }
 
   printSummary(checks);
   const allPassed = checks.every(c => c.passed);

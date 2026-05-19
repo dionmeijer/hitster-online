@@ -54,6 +54,10 @@ const pendingChallenges = new Map<string, Challenge[]>();
 // roomCode → challenge window timer
 const challengeTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
+// roomCode → pending empty-room deletion timer
+const pendingDeletes = new Map<string, ReturnType<typeof setTimeout>>();
+const EMPTY_ROOM_TTL_MS = process.env.TEST_MODE === 'true' ? 5_000 : 60_000;
+
 // ---------------------------------------------------------------------------
 // HTTP routes
 // ---------------------------------------------------------------------------
@@ -221,6 +225,10 @@ io.on('connection', (socket) => {
       socket.join(updatedRoom.code);
       socketSession.set(socket.id, { sessionId, roomCode: updatedRoom.code });
 
+      // Cancel any pending deletion for this room
+      const pendingDelete = pendingDeletes.get(updatedRoom.code);
+      if (pendingDelete) { clearTimeout(pendingDelete); pendingDeletes.delete(updatedRoom.code); }
+
       socket.emit('room:joined', { roomCode: updatedRoom.code, room: updatedRoom });
       io.to(updatedRoom.code).emit('room:updated', updatedRoom);
     } catch (err) {
@@ -385,6 +393,20 @@ io.on('connection', (socket) => {
     const updatedRoom = engine.markDisconnected(room, sessionId);
     store.set(updatedRoom);
     io.to(session.roomCode).emit('room:updated', updatedRoom);
+
+    // If all players are gone from a lobby room, schedule deletion
+    const allGone = Object.values(updatedRoom.players).every(p => !p.isConnected);
+    if (allGone && (updatedRoom.status === 'lobby' || updatedRoom.status === 'round_ended')) {
+      const roomCode = session.roomCode;
+      const t = setTimeout(() => {
+        const cur = store.get(roomCode);
+        if (!cur) return;
+        if (Object.values(cur.players).every(p => !p.isConnected)) {
+          store.delete(roomCode);
+        }
+      }, EMPTY_ROOM_TTL_MS);
+      pendingDeletes.set(session.roomCode, t);
+    }
 
     // If it was this player's turn, advance after 15s
     if (
