@@ -123,6 +123,15 @@ export interface ServerToClientEvents {
   /** Round ended */
   'round:ended': (summary: RoundSummary) => void;
 
+  /** Player successfully named the song */
+  'turn:named': (data: { playerId: string; correct: boolean; tokens: number }) => void;
+
+  /** Room was first created — sent only to the creating socket */
+  'room:created': (room: Room) => void;
+
+  /** Round has started */
+  'round:started': (data: { config: RoundConfig; turnOrder: string[]; timelines: Record<string, Timeline> }) => void;
+
   /** Error message */
   'error': (message: string) => void;
 }
@@ -149,4 +158,32 @@ export interface ClientToServerEvents {
   'turn:challenge': (position: number) => void;
   'turn:skip': () => void;        // spend 1 token to skip current card
   'turn:buy': () => void;         // spend 3 tokens to buy a card directly
+  'turn:name': (data: { title: string; artist: string }) => void; // name the song for a token
+}
+
+// ----------------------------
+// Auth / identity
+// ----------------------------
+
+/** Sent by client in socket.handshake.auth */
+export interface SocketAuth {
+  sessionId: string;
+  playerName?: string;
+}
+
+// ----------------------------
+// Lobby / room summary
+// ----------------------------
+
+/** Lightweight summary used by the lobby browser */
+export interface RoomSummary {
+  code: string;
+  topic: string;
+  status: RoomStatus;
+  playerCount: number;
+  genre: string;
+  roundNumber: number;
+  leaderName: string;
+  leaderCards: number;
+  cardsToWin: number;
 }
