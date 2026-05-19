@@ -12,10 +12,12 @@ _What the system does from a player's perspective. No technical detail._
 ---
 
 ### 1.1 Player Onboarding
-- A player opens the game URL and enters only their **name** to participate. No account, email, or login required.
-- After entering their name, the player can either:
+- A player opens the game URL and enters their **email address** (required) and optionally a **display name**.
+- The **display name** is shown to other players. If omitted, the local part of the email address is used as the fallback display name (e.g. `alex` from `alex@example.com`).
+- Email is used to identify a player across reconnects and sessions. It is **never shown to other players**.
+- After completing the form, the player can either:
   - **Create a room** (becoming the room owner), or
-  - **Join a room** by entering a room code.
+  - **Join a room** by entering a 4-character room code.
 
 ### 1.2 Rooms
 - Each room has a unique **room code** and a shareable **join link**.
@@ -120,8 +122,10 @@ _What the system must do technically to support the functional requirements._
 - Clients are stateless — they render what the server tells them. No game logic runs client-side.
 
 ### 2.6 No Authentication
-- No user accounts, sessions, or login flows are required.
-- Players are identified by a session ID (generated on first visit) and their chosen display name.
+- No user accounts, passwords, or OAuth flows are required.
+- Players are identified by their **email address** (entered at onboarding) combined with a **session ID** (UUID generated client-side, stored in `sessionStorage`).
+- The email is stored in `sessionStorage` and re-submitted on reconnect to restore the player's identity within an active room.
+- **Display name** shown in-game is the player's chosen name, or the email local part if no name was provided.
 - Room ownership is tied to the session ID of the creator.
 
 ---
