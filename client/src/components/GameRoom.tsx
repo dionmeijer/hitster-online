@@ -650,7 +650,7 @@ export default function GameRoom({
   const revealedCard = lastFlip?.card ?? null;
 
   return (
-    <div className="game-root">
+    <div className="game-root" data-testid="round-active">
       <div className="scanlines" />
 
       {/* Header */}

@@ -41,8 +41,8 @@ async function startRound(page: Page, playlistLabel?: string) {
   await page.click('[data-testid="start-round-btn"]');
 }
 
-async function waitForRooms(page: Page, timeout = 12_000): Promise<void> {
-  // The room list polls every 10s; wait up to 12s for at least one card
+async function waitForRooms(page: Page, timeout = 6_000): Promise<void> {
+  // The room list polls every 2s; wait up to 6s for at least one card
   await expect(page.locator('.room-card').first()).toBeVisible({ timeout });
 }
 
@@ -83,8 +83,8 @@ test('active game appears in lobby with correct status and participant', async (
     const roomCode = await createRoom(p1, 'Active Game Room');
     await startRound(p1);
 
-    // p1 is now in an active game — wait for turn:started
-    await expect(p1.locator('text=/turn|place|timeline/i').first()).toBeVisible({ timeout: 8_000 });
+    // p1 is now in an active game — wait for game screen to appear
+    await expect(p1.locator('[data-testid="round-active"]')).toBeVisible({ timeout: 8_000 });
 
     // p2 opens the entry page — room browser should show the room as LIVE
     await p2.goto('/');
@@ -146,7 +146,7 @@ test('room with Spotify playlist URL starts successfully in TEST_MODE', async ({
     await startRound(p1, spotifyUrl);
 
     // Round should start (TEST_MODE uses mock tracks regardless of URL)
-    await expect(p1.locator('text=/turn|place|timeline/i').first()).toBeVisible({ timeout: 8_000 });
+    await expect(p1.locator('[data-testid="round-active"]')).toBeVisible({ timeout: 8_000 });
 
     // Room appears in lobby with LIVE status
     await p2.goto('/');

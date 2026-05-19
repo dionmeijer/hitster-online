@@ -74,7 +74,7 @@ export default function EntryPage({ onConnect, onCreateRoom, onJoinRoom, serverU
 
   useEffect(() => {
     void fetchRooms();
-    const interval = setInterval(() => { void fetchRooms(); }, 10000);
+    const interval = setInterval(() => { void fetchRooms(); }, 2000);
     return () => clearInterval(interval);
   }, [fetchRooms]);
 
