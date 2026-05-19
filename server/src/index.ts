@@ -59,8 +59,16 @@ const pendingDeletes = new Map<string, ReturnType<typeof setTimeout>>();
 const EMPTY_ROOM_TTL_MS = process.env.TEST_MODE === 'true' ? 5_000 : 60_000;
 
 // ---------------------------------------------------------------------------
-// HTTP routes
+// HTTP routes — API endpoints must be registered before the SPA catch-all
 // ---------------------------------------------------------------------------
+
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok', rooms: store.getAll().length });
+});
+
+app.get('/rooms', (_req, res) => {
+  res.json(store.getSummaries());
+});
 
 // Serve built React client if available, otherwise redirect to Vite dev server
 const clientDist = join(__dirname, '../../client/dist');
@@ -71,14 +79,6 @@ if (existsSync(clientDist)) {
   const devUrl = process.env.CLIENT_URL || 'http://localhost:5173';
   app.get('/', (_req, res) => res.redirect(devUrl));
 }
-
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', rooms: store.getAll().length });
-});
-
-app.get('/rooms', (_req, res) => {
-  res.json(store.getSummaries());
-});
 
 // ---------------------------------------------------------------------------
 // Helpers

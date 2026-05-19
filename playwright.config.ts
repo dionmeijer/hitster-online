@@ -1,5 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
 
+// Use a dedicated port for the test server so it never conflicts with a
+// developer's local server and always runs with TEST_MODE=true.
+const TEST_SERVER_PORT = 3099;
+
 export default defineConfig({
   testDir: './e2e',
   timeout: 30_000,
@@ -24,16 +28,18 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: 'TEST_MODE=true npm run dev:server',
-      port: 3000,
+      command: 'npm run dev:server',
+      port: TEST_SERVER_PORT,
       reuseExistingServer: !process.env.CI,
       timeout: 15_000,
+      env: { TEST_MODE: 'true', PORT: String(TEST_SERVER_PORT) },
     },
     {
       command: 'npm run dev:client',
       port: 5173,
       reuseExistingServer: !process.env.CI,
       timeout: 30_000,
+      env: { VITE_SERVER_URL: `http://localhost:${TEST_SERVER_PORT}` },
     },
   ],
 });
