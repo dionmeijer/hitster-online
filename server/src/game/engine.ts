@@ -36,14 +36,15 @@ export function generateRoomCode(): string {
 export function createRoom(ownerId: string, displayName: string, topic: string): Room {
   const owner: Player = {
     id: ownerId,
-    name: displayName,
+    displayName,
     isConnected: true,
+    missedTurns: 0,
   };
 
   return {
     code: generateRoomCode(),
     ownerId,
-    description: topic,
+    topic,
     status: 'lobby',
     players: { [ownerId]: owner },
     teams: {},
@@ -63,8 +64,9 @@ export function addPlayer(room: Room, playerId: string, displayName: string): Ro
   }
   const player: Player = {
     id: playerId,
-    name: displayName,
+    displayName,
     isConnected: true,
+    missedTurns: 0,
   };
   return {
     ...room,
@@ -138,6 +140,7 @@ export function initRound(
     status: 'round_active',
     activeRound: {
       config,
+      roundNumber,
       turnOrder: sortedPlayerIds,
       turnIndex: 0,
       timelines,
@@ -145,9 +148,6 @@ export function initRound(
       deckRemaining: remaining.length,
     },
   };
-
-  // Suppress unused variable warning — roundNumber is used for logging / history
-  void roundNumber;
 
   return { room: updatedRoom, deck: remaining };
 }
@@ -201,7 +201,6 @@ export function applyPlacement(room: Room, playerId: string, position: number): 
         phase: 'challenge',
         placedPosition: position,
         challengeDeadline: Date.now() + 10_000,
-        challenges: [],
       },
     },
   };
@@ -248,7 +247,7 @@ export function resolveFlip(
 
   // Handle challenges — if any challenger exists
   let updatedTokens = { ...tokens };
-  for (const challenge of currentTurn.challenges) {
+  for (const challenge of (currentTurn.challenges ?? [])) {
     if (!correct) {
       // Opponent was wrong → challenger steals the card
       const challengerTimeline = updatedTimelines[challenge.challengerId];

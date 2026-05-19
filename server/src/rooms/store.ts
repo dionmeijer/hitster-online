@@ -25,7 +25,7 @@ export class RoomStore {
       const playerCount = players.length;
 
       const config = room.activeRound?.config;
-      const genre = config?.playlistUrl ?? config?.genre ?? '';
+      const genre = config?.playlistLabel ?? '';
       const roundNumber = room.roundHistory.length + (room.status === 'round_active' ? 1 : 0);
       const cardsToWin = config?.cardsToWin ?? 10;
 
@@ -39,19 +39,19 @@ export class RoomStore {
           const cardCount = timeline.cards.length;
           if (cardCount > leaderCards) {
             leaderCards = cardCount;
-            leaderName = room.players[playerId]?.name ?? playerId;
+            leaderName = room.players[playerId]?.displayName ?? playerId;
           }
         }
       }
 
       // If no active round yet, use the room owner as the leader name placeholder
       if (!leaderName && players.length > 0) {
-        leaderName = room.players[room.ownerId]?.name ?? players[0].name;
+        leaderName = room.players[room.ownerId]?.displayName ?? players[0].displayName;
       }
 
       return {
         code: room.code,
-        topic: room.description,
+        topic: room.topic,
         status: room.status,
         playerCount,
         genre,

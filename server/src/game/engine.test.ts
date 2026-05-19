@@ -30,7 +30,6 @@ function makeCard(trackId: string, year: number): Card {
 
 const defaultConfig: RoundConfig = {
   mode: 'original',
-  tokensEnabled: true,
   cardsToWin: 10,
 };
 

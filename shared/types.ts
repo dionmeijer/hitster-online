@@ -80,11 +80,16 @@ export interface ActiveRound {
   deckRemaining: number;
 }
 
+export interface Challenge {
+  challengerId: string;
+}
+
 export interface CurrentTurn {
   activeId: string;          // playerId / teamId whose turn it is
   phase: TurnPhase;
   placedPosition?: number;
   challengeDeadline?: number; // Unix ms
+  challenges: Challenge[];
 }
 
 // ----------------------------
