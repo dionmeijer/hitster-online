@@ -1,0 +1,133 @@
+# Bot profiles for Hitster Online
+#
+# Each profile defines the personality and skill of one bot player.
+# The runner (index.ts) reads this file and instantiates one bot per entry,
+# or a subset when --count N is passed.
+#
+# Field reference:
+#   knowledge         0.0–1.0  Base chance of placing the card in the right spot
+#   genre_affinities  list     Genres the bot knows well (+0.15 per match, max 1.0)
+#   naming_willingness 0.0–1.0 Chance of attempting to name title+artist for a token
+#   challenge_rate    0.0–1.0  Chance of shouting HITSTER! when a wrong placement is suspected
+#   reaction_time_ms  min/max  Simulated thinking delay in milliseconds
+#   token_strategy    hoard | spend | balanced
+#   join_willingness  0.0–1.0  Chance of joining a room that already has active players
+
+bots:
+
+  - name: "Casual Carl"
+    avatar_color: "#60a5fa"
+    knowledge: 0.35
+    genre_affinities:
+      - "90s Pop"
+      - "Classic Rock"
+    naming_willingness: 0.20
+    challenge_rate: 0.10
+    reaction_time_ms:
+      min: 3000
+      max: 7000
+    token_strategy: "spend"
+    join_willingness: 0.90
+
+  - name: "Expert Eva"
+    avatar_color: "#4ade80"
+    knowledge: 0.85
+    genre_affinities:
+      - "All"
+    naming_willingness: 0.88
+    challenge_rate: 0.65
+    reaction_time_ms:
+      min: 800
+      max: 2200
+    token_strategy: "balanced"
+    join_willingness: 1.0
+
+  - name: "90s Kid"
+    avatar_color: "#f472b6"
+    knowledge: 0.50
+    genre_affinities:
+      - "90s Pop"
+      - "90s Rock"
+      - "Britpop"
+      - "Grunge"
+    naming_willingness: 0.70
+    challenge_rate: 0.30
+    reaction_time_ms:
+      min: 1500
+      max: 4000
+    token_strategy: "balanced"
+    join_willingness: 0.75
+
+  - name: "Token Hoarder"
+    avatar_color: "#fbbf24"
+    knowledge: 0.60
+    genre_affinities:
+      - "Pop"
+      - "Dance"
+    naming_willingness: 0.55
+    challenge_rate: 0.15
+    reaction_time_ms:
+      min: 1200
+      max: 3500
+    token_strategy: "hoard"
+    join_willingness: 0.60
+
+  - name: "Wild Card"
+    avatar_color: "#f87171"
+    knowledge: 0.25
+    genre_affinities: []
+    naming_willingness: 0.10
+    challenge_rate: 0.80
+    reaction_time_ms:
+      min: 500
+      max: 1500
+    token_strategy: "spend"
+    join_willingness: 1.0
+
+  - name: "Slow Sam"
+    avatar_color: "#a78bfa"
+    knowledge: 0.55
+    genre_affinities:
+      - "Jazz"
+      - "Soul"
+      - "Blues"
+    naming_willingness: 0.40
+    challenge_rate: 0.20
+    reaction_time_ms:
+      min: 6000
+      max: 12000
+    token_strategy: "balanced"
+    join_willingness: 0.50
+
+  - name: "Pop Oracle"
+    avatar_color: "#fb923c"
+    knowledge: 0.78
+    genre_affinities:
+      - "Pop"
+      - "2000s Pop"
+      - "Teen Pop"
+      - "Dance Pop"
+    naming_willingness: 0.92
+    challenge_rate: 0.45
+    reaction_time_ms:
+      min: 1000
+      max: 2800
+    token_strategy: "balanced"
+    join_willingness: 0.85
+
+  - name: "Rock Purist"
+    avatar_color: "#34d399"
+    knowledge: 0.70
+    genre_affinities:
+      - "Classic Rock"
+      - "Hard Rock"
+      - "Heavy Metal"
+      - "Punk"
+      - "Alternative"
+    naming_willingness: 0.60
+    challenge_rate: 0.50
+    reaction_time_ms:
+      min: 1500
+      max: 4500
+    token_strategy: "balanced"
+    join_willingness: 0.70

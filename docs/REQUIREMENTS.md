@@ -299,6 +299,59 @@ The server requires the following configuration at deploy time:
 
 ---
 
+## Part 6 — Testing
+
+### 6.1 Unit Tests
+- All game logic in `server/src/game/` is written as pure functions and covered by Jest unit tests.
+- Tests live alongside source files as `*.test.ts`.
+- Key areas: placement validation, token accounting, HITSTER! resolution, win detection, tie-breaking, disconnect handling, deck exhaustion.
+- Run with `npm test` from `server/`.
+
+### 6.2 Manual Multiplayer Testing
+- Open 2–4 browser tabs at `localhost:5173`. Each tab acts as an independent player.
+- Sufficient for visual / UX verification during development.
+
+### 6.3 Bot Players
+- A bot harness lives at `/bots/` in the project root (not inside `server/` or `client/`).
+- Bots are real Socket.io clients — they connect to the running server and participate in a game exactly as human players do.
+- Bots are **a first-class demo tool**: `npm start` inside `/bots/` fills a room with configured bot players so the game can be shown end-to-end without needing human participants.
+- Bots and the "open 4 tabs" approach are complementary: bots drive the logic, tabs verify the UI.
+
+#### 6.3.1 Bot Profiles
+- Each bot's behaviour is defined by a **profile** in `/bots/profiles.yaml`.
+- Multiple profiles can be defined in the same file; the runner picks N profiles to fill a room.
+- Profile fields:
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | string | Display name shown in-game |
+| `avatar_color` | hex string | Colour used for the bot's avatar chip |
+| `knowledge` | 0.0 – 1.0 | Base probability of placing a card in the correct chronological position |
+| `genre_affinities` | string[] | Genres the bot knows well; matched against the room's playlist label. Each matching affinity adds `+0.15` to effective knowledge, capped at 1.0 |
+| `naming_willingness` | 0.0 – 1.0 | Probability the bot attempts to name the title + artist on any given turn to earn a token |
+| `challenge_rate` | 0.0 – 1.0 | Probability the bot shouts HITSTER! when another player places a card it believes is wrong |
+| `reaction_time_ms` | `{ min, max }` | Random delay range before the bot acts, simulating human thinking time |
+| `token_strategy` | `"hoard"` \| `"spend"` \| `"balanced"` | How the bot decides to use tokens: hoard = save for buy; spend = skip freely; balanced = default |
+| `join_willingness` | 0.0 – 1.0 | Probability the bot joins a room that already has active players (vs. waiting for a fresh lobby). At 1.0 it always joins; at 0.0 it only joins empty lobbies |
+
+#### 6.3.2 Bot Runner
+- `npm start` in `/bots/` reads `profiles.yaml`, connects the listed bots to `SERVER_URL` (default `http://localhost:3000`), and creates or joins a room.
+- Pass `--room XXXX` to join an existing room; omit to create a new one.
+- Pass `--count N` to spawn only N bots from the profiles list (round-robins if N > profiles).
+- Bots log every action to stdout with a timestamp and their display name.
+
+#### 6.3.3 Bot Behaviour Model
+On each turn a bot:
+1. Waits `reaction_time_ms` (random within range).
+2. Rolls against `knowledge` (adjusted for genre affinity) to decide the correct vs. a random position.
+3. Emits `turn:placed` with the chosen position.
+4. Independently rolls against `naming_willingness` and, if successful, emits a name attempt.
+
+During other players' turns:
+- If the placing player appears to have placed incorrectly (bot uses its own knowledge roll to judge), rolls against `challenge_rate` to decide whether to challenge.
+
+---
+
 ## Appendix A — Repository & Licence
 
 | Item | Value |
