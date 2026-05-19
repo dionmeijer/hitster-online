@@ -206,7 +206,44 @@ test('multiple rooms are all visible in the lobby at the same time', async ({ br
 });
 
 // ---------------------------------------------------------------------------
-// 6. Leave room → room removed from lobby when no players remain
+// 6a. Start round button works — transitions lobby to active game
+// ---------------------------------------------------------------------------
+
+test('start round button transitions lobby to active game', async ({ page }) => {
+  await fillEmailAndName(page, 'starter@example.com', 'StarterBot');
+  await createRoom(page, 'Start Button Test');
+
+  // Verify we are in the lobby
+  await expect(page.locator('[data-testid="lobby-room-code"]')).toBeVisible();
+
+  // Click Start Round
+  await page.click('[data-testid="start-round-btn"]');
+
+  // Should transition to active game within 8s
+  await expect(page.locator('[data-testid="round-active"]')).toBeVisible({ timeout: 8_000 });
+});
+
+// ---------------------------------------------------------------------------
+// 6b. Start round button shows loading state while connecting
+// ---------------------------------------------------------------------------
+
+test('start round button disables while starting', async ({ page }) => {
+  await fillEmailAndName(page, 'disabler@example.com', 'DisablerBot');
+  await createRoom(page, 'Disable Test');
+
+  await expect(page.locator('[data-testid="start-round-btn"]')).toBeEnabled();
+  await page.click('[data-testid="start-round-btn"]');
+
+  // After click: button is either disabled/loading OR we're already in the game
+  await expect(async () => {
+    const inGame = await page.locator('[data-testid="round-active"]').isVisible();
+    if (inGame) return; // already transitioned — acceptable
+    await expect(page.locator('[data-testid="start-round-btn"]')).toBeDisabled();
+  }).toPass({ timeout: 5_000 });
+});
+
+// ---------------------------------------------------------------------------
+// 7. Leave room → room removed from lobby when no players remain
 // ---------------------------------------------------------------------------
 
 test('room disappears from lobby after last player leaves', async ({ browser }: { browser: Browser }) => {

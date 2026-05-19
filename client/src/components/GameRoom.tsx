@@ -423,12 +423,23 @@ interface LobbyScreenProps {
   sessionId: string;
   onStartRound: (mode: GameMode, playlistLabel?: string) => void;
   onLeave: () => void;
+  socketError?: string | null;
 }
 
-function LobbyScreen({ room, sessionId, onStartRound, onLeave }: LobbyScreenProps) {
+function LobbyScreen({ room, sessionId, onStartRound, onLeave, socketError }: LobbyScreenProps) {
   const isOwner = room.ownerId === sessionId;
   const players = Object.values(room.players);
   const [playlistLabel, setPlaylistLabel] = useState('');
+  const [starting, setStarting] = useState(false);
+
+  useEffect(() => {
+    if (socketError) setStarting(false);
+  }, [socketError]);
+
+  function handleStart() {
+    setStarting(true);
+    onStartRound('original', playlistLabel.trim() || undefined);
+  }
 
   return (
     <div className="lobby-screen">
@@ -468,14 +479,18 @@ function LobbyScreen({ room, sessionId, onStartRound, onLeave }: LobbyScreenProp
         </div>
       )}
 
+      {socketError && (
+        <div className="server-error-msg">{socketError}</div>
+      )}
+
       {isOwner ? (
         <button
           className="lobby-start-btn"
-          disabled={players.length < 1}
-          onClick={() => onStartRound('original', playlistLabel.trim() || undefined)}
+          disabled={players.length < 1 || starting}
+          onClick={handleStart}
           data-testid="start-round-btn"
         >
-          ▶ Start Round
+          {starting ? 'Starting…' : '▶ Start Round'}
         </button>
       ) : (
         <div className="lobby-waiting">
@@ -542,6 +557,7 @@ export interface GameRoomProps {
   roundEnded: { winnerId: string | null } | null;
   myTokens: number;
   sessionId: string;
+  socketError?: string | null;
   onStartRound: (mode: GameMode, playlistLabel?: string) => void;
   onPlaceCard: (position: number) => void;
   onChallengeCard: () => void;
@@ -560,6 +576,7 @@ export default function GameRoom({
   roundEnded,
   myTokens,
   sessionId,
+  socketError,
   onStartRound,
   onPlaceCard,
   onChallengeCard,
@@ -628,7 +645,7 @@ export default function GameRoom({
             Leave
           </button>
         </header>
-        <LobbyScreen room={room} sessionId={sessionId} onStartRound={onStartRound} onLeave={onLeave} />
+        <LobbyScreen room={room} sessionId={sessionId} onStartRound={onStartRound} onLeave={onLeave} socketError={socketError} />
       </div>
     );
   }

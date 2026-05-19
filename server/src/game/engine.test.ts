@@ -461,3 +461,46 @@ describe('addPlayer', () => {
     expect(() => addPlayer(active, 'p2', 'Bob')).toThrow();
   });
 });
+
+// ---------------------------------------------------------------------------
+// initRound — deck size validation (server emits error when too few tracks)
+// ---------------------------------------------------------------------------
+
+// Note: minimum deck size is enforced in the socket handler (index.ts), not in the engine.
+// These tests cover engine behaviour for round initialisation.
+describe('initRound deck size and card distribution', () => {
+  it('distributes 1 starting card to each player', () => {
+    let room = createRoom('p1', 'Alice', 'Test');
+    room = addPlayer(room, 'p2', 'Bob');
+    const deck = Array.from({ length: 15 }, (_, i) => makeCard(`t${i}`, 1980 + i));
+    const { room: started } = initRound(room, defaultConfig, deck);
+    expect(started.activeRound?.timelines['p1'].cards).toHaveLength(1);
+    expect(started.activeRound?.timelines['p2'].cards).toHaveLength(1);
+  });
+
+  it('remaining deck excludes starting cards', () => {
+    let room = createRoom('p1', 'Alice', 'Test');
+    room = addPlayer(room, 'p2', 'Bob');
+    const deck = Array.from({ length: 15 }, (_, i) => makeCard(`t${i}`, 1980 + i));
+    const { deck: remaining } = initRound(room, defaultConfig, deck);
+    // 2 players × 1 starting card = 2 consumed
+    expect(remaining).toHaveLength(13);
+  });
+
+  it('sets room status to round_active', () => {
+    let room = createRoom('p1', 'Alice', 'Test');
+    room = addPlayer(room, 'p2', 'Bob');
+    const deck = Array.from({ length: 15 }, (_, i) => makeCard(`t${i}`, 1980 + i));
+    const { room: started } = initRound(room, defaultConfig, deck);
+    expect(started.status).toBe('round_active');
+  });
+
+  it('stores playlistLabel as genre in config', () => {
+    let room = createRoom('p1', 'Alice', 'Test');
+    room = addPlayer(room, 'p2', 'Bob');
+    const deck = Array.from({ length: 15 }, (_, i) => makeCard(`t${i}`, 1980 + i));
+    const config: RoundConfig = { ...defaultConfig, playlistLabel: "90's rock" };
+    const { room: started } = initRound(room, config, deck);
+    expect(started.activeRound?.config.playlistLabel).toBe("90's rock");
+  });
+});

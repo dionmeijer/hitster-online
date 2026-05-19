@@ -37,13 +37,13 @@ export default function App() {
       roundEnded={game.roundEnded}
       myTokens={game.myTokens}
       sessionId={sessionId}
+      socketError={game.socketError}
       onStartRound={game.startRound}
       onPlaceCard={game.placeCard}
       onChallengeCard={game.challengeCard}
       onSkipCard={game.skipCard}
       onNameSong={game.nameSong}
       onLeave={() => {
-        // Reset room state by disconnecting and reconnecting
         window.location.reload();
       }}
     />

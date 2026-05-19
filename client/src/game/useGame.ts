@@ -61,6 +61,7 @@ export function useGame(): GameState {
 
     socket.on('round:started', ({ room: r }) => {
       setRoom(r);
+      setSocketError(null);
       setCurrentCard(null);
       setActivePlayerId(null);
       setPreviewUrl(null);
