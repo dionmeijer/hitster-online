@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hitster — Design Variants</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Inter',sans-serif;background:#0f0f0f;color:#f0f0f0;min-height:100vh;padding:40px 32px;}
+  h1{font-size:32px;font-weight:800;margin-bottom:6px;}
+  h1 span{color:#6366f1;}
+  .sub{font-size:15px;color:#6b7280;margin-bottom:40px;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px;}
+  .card{background:#1a1a1a;border:1px solid #2a2a2a;border-radius:12px;overflow:hidden;cursor:pointer;text-decoration:none;color:inherit;transition:all 0.2s;display:block;}
+  .card:hover{border-color:#6366f1;transform:translateY(-4px);box-shadow:0 12px 40px rgba(99,102,241,0.15);}
+  .preview{height:160px;display:flex;align-items:center;justify-content:center;font-size:48px;}
+  .info{padding:16px;}
+  .version{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#6366f1;margin-bottom:4px;}
+  .name{font-size:16px;font-weight:700;margin-bottom:6px;}
+  .desc{font-size:12px;color:#6b7280;line-height:1.5;}
+  .tag{display:inline-block;background:#2a2a2a;font-size:10px;padding:2px 8px;border-radius:10px;margin-top:8px;margin-right:4px;color:#9ca3af;}
+</style>
+</head>
+<body>
+<h1>Hitster <span>Design Variants</span></h1>
+<p class="sub">10 gameplay screen concepts — click to open in a new tab. Each is interactive with a working timeline, card placement, and HITSTER! challenge timer.</p>
+
+<div class="grid">
+  <a class="card" href="v1-dark-arcade.html" target="_blank">
+    <div class="preview" style="background:#0a0a0f;color:#a78bfa;">🕹️</div>
+    <div class="info">
+      <div class="version">v1</div>
+      <div class="name">Dark Arcade</div>
+      <div class="desc">CRT scanlines, neon purple glow, pixelated accents. High-energy gaming aesthetic with bright waveform and glowing borders.</div>
+      <div class="tag">Dark</div><div class="tag">Neon</div><div class="tag">Gaming</div>
+    </div>
+  </a>
+
+  <a class="card" href="v2-clean-minimal.html" target="_blank">
+    <div class="preview" style="background:#f8f9fa;color:#6366f1;">✨</div>
+    <div class="info">
+      <div class="version">v2</div>
+      <div class="name">Clean Minimal</div>
+      <div class="desc">White background, soft shadows, indigo accents. Professional and approachable — closest to a modern SaaS product.</div>
+      <div class="tag">Light</div><div class="tag">Minimal</div><div class="tag">Modern</div>
+    </div>
+  </a>
+
+  <a class="card" href="v3-synthwave.html" target="_blank">
+    <div class="preview" style="background:#0d0018;color:#ff00ff;">🌅</div>
+    <div class="info">
+      <div class="version">v3</div>
+      <div class="name">Synthwave</div>
+      <div class="desc">Retrowave grid, magenta/cyan gradients, Orbitron font. Evokes the 80s digital nostalgia that fits the decade-spanning gameplay.</div>
+      <div class="tag">Dark</div><div class="tag">Retro</div><div class="tag">80s</div>
+    </div>
+  </a>
+
+  <a class="card" href="v4-vinyl.html" target="_blank">
+    <div class="preview" style="background:#1a0e04;color:#d4a853;">🎵</div>
+    <div class="info">
+      <div class="version">v4</div>
+      <div class="name">Vinyl Record</div>
+      <div class="desc">Warm dark browns, spinning vinyl disc animation, golden tones. Record-shop atmosphere with grain texture overlay.</div>
+      <div class="tag">Dark</div><div class="tag">Warm</div><div class="tag">Analog</div>
+    </div>
+  </a>
+
+  <a class="card" href="v5-glassmorphism.html" target="_blank">
+    <div class="preview" style="background:linear-gradient(135deg,#667eea,#f093fb);color:#fff;">🪟</div>
+    <div class="info">
+      <div class="version">v5</div>
+      <div class="name">Glassmorphism</div>
+      <div class="desc">Blurred glass panels over a vibrant gradient with floating orbs. Trendy, immersive, colorful — the most visually striking version.</div>
+      <div class="tag">Gradient</div><div class="tag">Glass</div><div class="tag">Vivid</div>
+    </div>
+  </a>
+
+  <a class="card" href="v6-boardgame.html" target="_blank">
+    <div class="preview" style="background:#2d5a27;color:#d4a853;">🎲</div>
+    <div class="info">
+      <div class="version">v6</div>
+      <div class="name">Board Game</div>
+      <div class="desc">Green felt left/blue felt right, warm card stock, physical card shadows. Closest to the analog Hitster experience.</div>
+      <div class="tag">Warm</div><div class="tag">Physical</div><div class="tag">Tabletop</div>
+    </div>
+  </a>
+
+  <a class="card" href="v7-spotify-dark.html" target="_blank">
+    <div class="preview" style="background:#121212;color:#1db954;">🎧</div>
+    <div class="info">
+      <div class="version">v7</div>
+      <div class="name">Spotify Dark</div>
+      <div class="desc">Black background, Spotify green accents, music app conventions. Players will instantly understand the UI from day-to-day use.</div>
+      <div class="tag">Dark</div><div class="tag">Familiar</div><div class="tag">Music</div>
+    </div>
+  </a>
+
+  <a class="card" href="v8-neon-pop.html" target="_blank">
+    <div class="preview" style="background:#fff;color:#ff2d55;">🎨</div>
+    <div class="info">
+      <div class="version">v8</div>
+      <div class="name">Neon Pop</div>
+      <div class="desc">White background, hard block shadows, Apple system-color accents. Clean and punchy — confident graphic design energy.</div>
+      <div class="tag">Light</div><div class="tag">Bold</div><div class="tag">Punchy</div>
+    </div>
+  </a>
+
+  <a class="card" href="v9-magazine.html" target="_blank">
+    <div class="preview" style="background:#fafaf7;color:#e8c840;">📰</div>
+    <div class="info">
+      <div class="version">v9</div>
+      <div class="name">Editorial Magazine</div>
+      <div class="desc">Bebas Neue display font, serif body text, IBM Plex Mono for stats. Music magazine / Rolling Stone aesthetic with strong typography.</div>
+      <div class="tag">Light</div><div class="tag">Editorial</div><div class="tag">Typography</div>
+    </div>
+  </a>
+
+  <a class="card" href="v10-card-game.html" target="_blank">
+    <div class="preview" style="background:linear-gradient(135deg,#1e3a5f,#152e1a);color:#ffd700;">🃏</div>
+    <div class="info">
+      <div class="version">v10</div>
+      <div class="name">Card Game Night</div>
+      <div class="desc">Green felt table, visible card shadows and shuffling, score-track progress indicators. Party game energy — the most "fun" feeling variant.</div>
+      <div class="tag">Dark</div><div class="tag">Playful</div><div class="tag">Party</div>
+    </div>
+  </a>
+</div>
+</body>
+</html>

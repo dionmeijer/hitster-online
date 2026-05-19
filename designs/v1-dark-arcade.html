@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hitster — v1 Dark Arcade</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@400;600;700&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0a0a0f; color: #e0e0ff; font-family: 'Rajdhani', sans-serif; min-height: 100vh; overflow-x: hidden; }
+
+  .scanlines { position: fixed; inset: 0; background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.08) 2px, rgba(0,0,0,0.08) 4px); pointer-events: none; z-index: 100; }
+
+  header { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; border-bottom: 2px solid #7c3aed; background: #0f0f1a; }
+  .logo { font-family: 'Press Start 2P', monospace; font-size: 14px; color: #a78bfa; text-shadow: 0 0 20px #7c3aed; }
+  .room-code { font-family: 'Press Start 2P', monospace; font-size: 10px; color: #4ade80; background: #052e16; border: 1px solid #4ade80; padding: 6px 12px; }
+  .tokens { display: flex; gap: 6px; align-items: center; }
+  .token { width: 22px; height: 22px; border-radius: 50%; background: #fbbf24; border: 2px solid #d97706; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #0a0a0f; font-weight: 700; }
+  .token.empty { background: #1f1f2e; border-color: #374151; }
+
+  .main { display: grid; grid-template-columns: 240px 1fr 240px; gap: 0; height: calc(100vh - 53px); }
+
+  /* LEFT PANEL */
+  .panel { background: #0f0f1a; border-right: 1px solid #1e1e3a; padding: 16px; overflow-y: auto; }
+  .panel-title { font-family: 'Press Start 2P', monospace; font-size: 8px; color: #6366f1; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 2px; }
+  .player { display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid #1e1e3a; margin-bottom: 8px; transition: all 0.2s; }
+  .player.active { border-color: #7c3aed; background: #1a0a2e; box-shadow: 0 0 12px rgba(124,58,237,0.3); }
+  .player-avatar { width: 32px; height: 32px; border-radius: 2px; display: flex; align-items: center; justify-content: center; font-family: 'Press Start 2P', monospace; font-size: 10px; }
+  .player-info { flex: 1; }
+  .player-name { font-weight: 700; font-size: 14px; }
+  .player-score { font-size: 12px; color: #6b7280; }
+  .player-tokens-row { display: flex; gap: 3px; margin-top: 4px; }
+  .pt { width: 10px; height: 10px; border-radius: 50%; background: #fbbf24; }
+  .pt.e { background: #1f2937; }
+
+  /* CENTER */
+  .center { background: #0a0a0f; display: flex; flex-direction: column; }
+
+  .now-playing { background: linear-gradient(135deg, #1a0a2e, #0f0f1a); border-bottom: 2px solid #7c3aed; padding: 20px 32px; display: flex; align-items: center; gap: 24px; }
+  .album-art { width: 80px; height: 80px; border: 3px solid #7c3aed; box-shadow: 0 0 20px rgba(124,58,237,0.5); flex-shrink: 0; position: relative; overflow: hidden; background: #1e1e3a; }
+  .album-art img { width: 100%; height: 100%; object-fit: cover; }
+  .album-art .blur-cover { position: absolute; inset: 0; backdrop-filter: blur(20px); background: rgba(124,58,237,0.3); display: flex; align-items: center; justify-content: center; font-size: 28px; }
+  .song-info { flex: 1; }
+  .song-label { font-family: 'Press Start 2P', monospace; font-size: 7px; color: #6366f1; margin-bottom: 6px; }
+  .song-title { font-size: 22px; font-weight: 700; color: #e0e0ff; }
+  .song-artist { font-size: 16px; color: #a78bfa; }
+  .song-year { font-size: 28px; font-weight: 700; color: #4ade80; font-family: 'Press Start 2P', monospace; }
+
+  .waveform { display: flex; align-items: center; gap: 3px; height: 40px; padding: 0 32px; background: #0f0f1a; border-bottom: 1px solid #1e1e3a; }
+  .waveform-bar { flex: 1; background: #7c3aed; border-radius: 2px; transition: height 0.15s; }
+  .progress-bar { height: 4px; background: #1e1e3a; margin: 0; position: relative; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, #7c3aed, #a78bfa); width: 0%; transition: width 0.1s linear; }
+
+  .timeline-section { flex: 1; padding: 24px 32px; overflow-y: auto; }
+  .timeline-label { font-family: 'Press Start 2P', monospace; font-size: 8px; color: #6b7280; margin-bottom: 16px; }
+  .timeline { display: flex; align-items: center; gap: 0; overflow-x: auto; padding-bottom: 12px; }
+  .card { width: 100px; min-width: 100px; height: 140px; border: 2px solid #374151; background: #0f0f1a; border-radius: 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 8px; text-align: center; position: relative; cursor: pointer; transition: all 0.2s; }
+  .card:hover { border-color: #7c3aed; box-shadow: 0 0 16px rgba(124,58,237,0.4); transform: translateY(-4px); }
+  .card.placed { border-color: #4ade80; }
+  .card.face-up { border-color: #374151; }
+  .card-year { font-family: 'Press Start 2P', monospace; font-size: 11px; color: #4ade80; margin-bottom: 4px; }
+  .card-title { font-size: 10px; font-weight: 700; line-height: 1.2; }
+  .card-artist { font-size: 9px; color: #6b7280; }
+  .card-face-down { font-size: 32px; }
+
+  .drop-zone { width: 24px; min-width: 24px; height: 140px; display: flex; align-items: center; justify-content: center; cursor: pointer; border-radius: 4px; transition: all 0.2s; }
+  .drop-zone:hover { background: rgba(124,58,237,0.2); }
+  .drop-zone-line { width: 3px; height: 80px; background: #1e1e3a; border-radius: 2px; transition: all 0.2s; }
+  .drop-zone:hover .drop-zone-line { background: #7c3aed; box-shadow: 0 0 10px #7c3aed; height: 120px; }
+
+  .new-card { width: 100px; min-width: 100px; height: 140px; border: 3px dashed #7c3aed; background: rgba(124,58,237,0.1); border-radius: 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 8px; text-align: center; cursor: pointer; animation: pulse-border 2s infinite; }
+  @keyframes pulse-border { 0%,100%{box-shadow:0 0 0 0 rgba(124,58,237,0.4)} 50%{box-shadow:0 0 0 8px rgba(124,58,237,0)} }
+  .new-card-icon { font-size: 28px; margin-bottom: 6px; }
+  .new-card-label { font-family: 'Press Start 2P', monospace; font-size: 7px; color: #7c3aed; }
+
+  .actions { padding: 16px 32px; background: #0f0f1a; border-top: 2px solid #1e1e3a; display: flex; gap: 12px; align-items: center; }
+  .btn { padding: 10px 20px; border: 2px solid; font-family: 'Rajdhani', sans-serif; font-size: 15px; font-weight: 700; cursor: pointer; text-transform: uppercase; letter-spacing: 1px; transition: all 0.15s; }
+  .btn-confirm { background: #4ade80; border-color: #16a34a; color: #0a0a0f; }
+  .btn-confirm:hover { background: #86efac; box-shadow: 0 0 20px rgba(74,222,128,0.5); }
+  .btn-skip { background: transparent; border-color: #fbbf24; color: #fbbf24; }
+  .btn-skip:hover { background: rgba(251,191,36,0.1); }
+  .btn-hitster { background: #ef4444; border-color: #dc2626; color: #fff; font-family: 'Press Start 2P', monospace; font-size: 10px; padding: 10px 16px; animation: hitster-pulse 1.5s infinite; display: none; }
+  @keyframes hitster-pulse { 0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,0.6)} 50%{box-shadow:0 0 0 12px rgba(239,68,68,0)} }
+  .btn-hitster.visible { display: block; }
+
+  .turn-info { margin-left: auto; font-family: 'Press Start 2P', monospace; font-size: 8px; color: #6b7280; }
+  .turn-info span { color: #a78bfa; }
+
+  /* RIGHT PANEL */
+  .right-panel { background: #0f0f1a; border-left: 1px solid #1e1e3a; padding: 16px; }
+  .log { font-size: 12px; color: #6b7280; }
+  .log-entry { padding: 6px 0; border-bottom: 1px solid #1e1e3a; }
+  .log-entry .highlight { color: #a78bfa; }
+  .log-entry .correct { color: #4ade80; }
+  .log-entry .wrong { color: #f87171; }
+
+  .challenge-timer { display: none; text-align: center; padding: 12px; background: rgba(239,68,68,0.1); border: 1px solid #ef4444; margin-bottom: 12px; }
+  .challenge-timer.active { display: block; }
+  .timer-label { font-family: 'Press Start 2P', monospace; font-size: 7px; color: #ef4444; margin-bottom: 6px; }
+  .timer-count { font-family: 'Press Start 2P', monospace; font-size: 24px; color: #ef4444; }
+</style>
+</head>
+<body>
+<div class="scanlines"></div>
+
+<header>
+  <div class="logo">HITSTER</div>
+  <div class="room-code">ROOM: XK7P</div>
+  <div style="display:flex;align-items:center;gap:16px;">
+    <span style="font-size:12px;color:#6b7280;">YOUR TOKENS</span>
+    <div class="tokens">
+      <div class="token">🪙</div>
+      <div class="token">🪙</div>
+      <div class="token empty"></div>
+      <div class="token empty"></div>
+      <div class="token empty"></div>
+    </div>
+  </div>
+</header>
+
+<div class="main">
+  <!-- LEFT: Players -->
+  <div class="panel">
+    <div class="panel-title">Players</div>
+
+    <div class="player active">
+      <div class="player-avatar" style="background:#1a0a2e;color:#a78bfa;">Y</div>
+      <div class="player-info">
+        <div class="player-name">You <span style="color:#4ade80;font-size:11px;">▶</span></div>
+        <div class="player-score">4 cards</div>
+        <div class="player-tokens-row"><div class="pt"></div><div class="pt"></div><div class="pt e"></div><div class="pt e"></div><div class="pt e"></div></div>
+      </div>
+    </div>
+
+    <div class="player">
+      <div class="player-avatar" style="background:#0a1a0a;color:#4ade80;">S</div>
+      <div class="player-info">
+        <div class="player-name">Sarah</div>
+        <div class="player-score">3 cards</div>
+        <div class="player-tokens-row"><div class="pt"></div><div class="pt"></div><div class="pt"></div><div class="pt e"></div><div class="pt e"></div></div>
+      </div>
+    </div>
+
+    <div class="player">
+      <div class="player-avatar" style="background:#1a0f00;color:#fbbf24;">M</div>
+      <div class="player-info">
+        <div class="player-name">Mike</div>
+        <div class="player-score">5 cards</div>
+        <div class="player-tokens-row"><div class="pt"></div><div class="pt e"></div><div class="pt e"></div><div class="pt e"></div><div class="pt e"></div></div>
+      </div>
+    </div>
+
+    <div class="player">
+      <div class="player-avatar" style="background:#1a0a0a;color:#f87171;">J</div>
+      <div class="player-info">
+        <div class="player-name">Jess</div>
+        <div class="player-score">3 cards</div>
+        <div class="player-tokens-row"><div class="pt"></div><div class="pt"></div><div class="pt"></div><div class="pt"></div><div class="pt e"></div></div>
+      </div>
+    </div>
+
+    <div style="margin-top:24px;">
+      <div class="panel-title">Round</div>
+      <div style="font-size:13px;color:#6b7280;line-height:1.8;">
+        Mode: <span style="color:#a78bfa;">Original</span><br>
+        Deck: <span style="color:#a78bfa;">42 left</span><br>
+        Target: <span style="color:#4ade80;">10 cards</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- CENTER: Game -->
+  <div class="center">
+    <div class="now-playing">
+      <div class="album-art">
+        <div class="blur-cover" id="albumCover">🎵</div>
+      </div>
+      <div class="song-info">
+        <div class="song-label" id="songLabel">NOW PLAYING — PLACE THIS CARD</div>
+        <div class="song-title" id="songTitle" style="display:none">Mr. Brightside</div>
+        <div class="song-artist" id="songArtist" style="display:none">The Killers</div>
+        <div style="display:flex;align-items:center;gap:12px;margin-top:8px;">
+          <div class="song-year" id="songYear" style="display:none">2003</div>
+          <div id="playingLabel" style="font-size:13px;color:#6b7280;">Song is playing for all...</div>
+        </div>
+      </div>
+      <div style="text-align:center;">
+        <div style="font-family:'Press Start 2P',monospace;font-size:7px;color:#6b7280;margin-bottom:4px;">TIME LEFT</div>
+        <div style="font-family:'Press Start 2P',monospace;font-size:28px;color:#e0e0ff;" id="songTimer">0:28</div>
+      </div>
+    </div>
+
+    <div class="waveform" id="waveform"></div>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+
+    <div class="timeline-section">
+      <div class="timeline-label">YOUR TIMELINE — Click a gap to place the new card</div>
+      <div class="timeline" id="timeline">
+        <div class="drop-zone" onclick="placeCard(0)"><div class="drop-zone-line"></div></div>
+        <div class="card face-up">
+          <div class="card-year">1979</div>
+          <div class="card-title">Don't Stop Me Now</div>
+          <div class="card-artist">Queen</div>
+        </div>
+        <div class="drop-zone" onclick="placeCard(1)"><div class="drop-zone-line"></div></div>
+        <div class="card face-up">
+          <div class="card-year">1991</div>
+          <div class="card-title">Smells Like Teen Spirit</div>
+          <div class="card-artist">Nirvana</div>
+        </div>
+        <div class="drop-zone" onclick="placeCard(2)"><div class="drop-zone-line"></div></div>
+        <div class="card face-up">
+          <div class="card-year">1999</div>
+          <div class="card-title">...Baby One More Time</div>
+          <div class="card-artist">Britney Spears</div>
+        </div>
+        <div class="drop-zone" onclick="placeCard(3)"><div class="drop-zone-line"></div></div>
+        <div class="card face-up">
+          <div class="card-year">2007</div>
+          <div class="card-title">Umbrella</div>
+          <div class="card-artist">Rihanna</div>
+        </div>
+        <div class="drop-zone" onclick="placeCard(4)"><div class="drop-zone-line"></div></div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-confirm" onclick="confirmPlace()" id="confirmBtn" disabled style="opacity:0.4;">CONFIRM PLACE</button>
+      <button class="btn btn-skip" onclick="skipCard()">SKIP (1🪙)</button>
+      <button class="btn btn-hitster" id="hitsterBtn" onclick="hitster()">HITSTER!</button>
+      <div class="turn-info">Turn <span>12</span> / Your turn</div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Log -->
+  <div class="right-panel">
+    <div class="panel-title">Game Log</div>
+
+    <div class="challenge-timer" id="challengeTimer">
+      <div class="timer-label">CHALLENGE WINDOW</div>
+      <div class="timer-count" id="challengeCount">10</div>
+    </div>
+
+    <div class="log" id="gameLog">
+      <div class="log-entry">Mike placed <span class="highlight">Bohemian Rhapsody</span> — <span class="correct">✓ Correct!</span></div>
+      <div class="log-entry">Jess placed <span class="highlight">Shape of You</span> — <span class="wrong">✗ Wrong</span></div>
+      <div class="log-entry">Sarah named the song — <span class="correct">+1 🪙</span></div>
+      <div class="log-entry">You placed <span class="highlight">Purple Rain</span> — <span class="correct">✓ Correct!</span></div>
+      <div class="log-entry">Mike challenged — <span class="wrong">Lost 1 🪙</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Waveform
+  const wf = document.getElementById('waveform');
+  for(let i=0;i<60;i++){
+    const bar = document.createElement('div');
+    bar.className='waveform-bar';
+    bar.style.height = Math.random()*28+4+'px';
+    wf.appendChild(bar);
+  }
+
+  // Animate waveform
+  setInterval(()=>{
+    document.querySelectorAll('.waveform-bar').forEach(b=>{
+      b.style.height = Math.random()*28+4+'px';
+    });
+  }, 150);
+
+  // Progress bar
+  let prog = 0;
+  let totalTime = 28;
+  let elapsed = 0;
+  const fillEl = document.getElementById('progressFill');
+  const timerEl = document.getElementById('songTimer');
+
+  const progInt = setInterval(()=>{
+    elapsed += 0.1;
+    prog = Math.min((elapsed/totalTime)*100, 100);
+    fillEl.style.width = prog+'%';
+    let rem = Math.max(totalTime - elapsed, 0);
+    timerEl.textContent = '0:'+String(Math.ceil(rem)).padStart(2,'0');
+    if(elapsed >= totalTime) { clearInterval(progInt); revealCard(); }
+  }, 100);
+
+  let selectedPos = null;
+  let placed = false;
+
+  function placeCard(pos) {
+    if(placed) return;
+    selectedPos = pos;
+    document.querySelectorAll('.drop-zone').forEach((dz,i)=>{
+      dz.style.background = i===pos ? 'rgba(74,222,128,0.2)' : '';
+      dz.querySelector('.drop-zone-line').style.background = i===pos ? '#4ade80' : '';
+    });
+    document.getElementById('confirmBtn').disabled = false;
+    document.getElementById('confirmBtn').style.opacity = '1';
+  }
+
+  function confirmPlace() {
+    if(selectedPos===null||placed) return;
+    placed = true;
+    // Insert the new card at the selected position
+    const timeline = document.getElementById('timeline');
+    const dropZones = timeline.querySelectorAll('.drop-zone');
+    const targetDZ = dropZones[selectedPos];
+
+    const newCard = document.createElement('div');
+    newCard.className = 'card';
+    newCard.style.border = '2px solid #fbbf24';
+    newCard.style.background = 'rgba(251,191,36,0.1)';
+    newCard.innerHTML = '<div class="card-face-down">?</div><div style="font-size:9px;color:#fbbf24;margin-top:4px;">Placed!</div>';
+
+    timeline.insertBefore(newCard, targetDZ.nextSibling);
+
+    document.getElementById('confirmBtn').disabled = true;
+    document.getElementById('confirmBtn').style.opacity='0.4';
+
+    // Show hitster button for 10s
+    document.getElementById('hitsterBtn').classList.add('visible');
+    document.getElementById('challengeTimer').classList.add('active');
+    let ct = 10;
+    document.getElementById('challengeCount').textContent = ct;
+    const ctInt = setInterval(()=>{
+      ct--;
+      document.getElementById('challengeCount').textContent = ct;
+      if(ct<=0){
+        clearInterval(ctInt);
+        flipCard(newCard);
+      }
+    },1000);
+  }
+
+  function flipCard(card) {
+    document.getElementById('hitsterBtn').classList.remove('visible');
+    document.getElementById('challengeTimer').classList.remove('active');
+    // 2003 is between 1999 and 2007 — correct!
+    if(selectedPos === 3) {
+      card.innerHTML = '<div class="card-year">2003</div><div class="card-title">Mr. Brightside</div><div class="card-artist">The Killers</div>';
+      card.style.border = '2px solid #4ade80';
+      card.style.background = '';
+      addLog('You placed <span class="highlight">Mr. Brightside</span> — <span class="correct">✓ Correct!</span>');
+    } else {
+      card.innerHTML = '<div class="card-year">2003</div><div class="card-title">Mr. Brightside</div><div class="card-artist">The Killers</div>';
+      card.style.border = '2px solid #f87171';
+      card.style.background = 'rgba(248,113,113,0.1)';
+      addLog('You placed <span class="highlight">Mr. Brightside</span> — <span class="wrong">✗ Wrong!</span>');
+    }
+    revealCard();
+  }
+
+  function revealCard(){
+    document.getElementById('albumCover').innerHTML = '🎵';
+    document.getElementById('songTitle').style.display='block';
+    document.getElementById('songArtist').style.display='block';
+    document.getElementById('songYear').style.display='block';
+    document.getElementById('playingLabel').style.display='none';
+    document.getElementById('songLabel').textContent = 'REVEALED';
+  }
+
+  function skipCard() {
+    addLog('You skipped — spent <span class="highlight">1 🪙</span>');
+  }
+
+  function hitster() {
+    document.getElementById('hitsterBtn').classList.remove('visible');
+    addLog('You shouted <span class="highlight">HITSTER!</span>');
+  }
+
+  function addLog(html) {
+    const log = document.getElementById('gameLog');
+    const entry = document.createElement('div');
+    entry.className = 'log-entry';
+    entry.innerHTML = html;
+    log.insertBefore(entry, log.firstChild);
+  }
+</script>
+</body>
+</html>

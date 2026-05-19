@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hitster — v6 Board Game</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700;900&family=Lato:wght@300;400;700;900&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Lato',sans-serif;background:#f5f0e8;color:#2c1810;min-height:100vh;}
+
+  /* Wood texture background */
+  body::before{content:'';position:fixed;inset:0;opacity:0.06;
+    background-image:repeating-linear-gradient(90deg,transparent,transparent 2px,rgba(139,90,43,0.3) 2px,rgba(139,90,43,0.3) 4px);
+    pointer-events:none;}
+
+  header{background:#2c1810;padding:12px 28px;display:flex;align-items:center;justify-content:space-between;border-bottom:4px solid #8b4513;}
+  .logo{font-family:'Merriweather',serif;font-size:22px;font-weight:900;color:#d4a853;letter-spacing:1px;}
+  .hdr-right{display:flex;align-items:center;gap:20px;}
+  .room-stamp{background:#d4a853;color:#2c1810;font-weight:900;font-size:12px;padding:5px 12px;border-radius:2px;letter-spacing:1px;}
+  .tok-area{display:flex;align-items:center;gap:8px;}
+  .tok-coin{width:24px;height:24px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#ffd700,#b8860b);box-shadow:inset 0 -2px 4px rgba(0,0,0,0.3),0 2px 4px rgba(0,0,0,0.4);font-size:12px;display:flex;align-items:center;justify-content:center;}
+  .tok-coin.e{background:radial-gradient(circle at 40% 35%,#8b7355,#5a4a35);opacity:0.4;}
+
+  .layout{display:grid;grid-template-columns:200px 1fr 180px;height:calc(100vh - 56px);}
+
+  /* Felt / mat side panels */
+  .side-panel{background:#2d5a27;padding:18px;overflow-y:auto;border-right:4px solid #1a3a15;}
+  .side-panel.right-p{background:#1a3560;border-right:none;border-left:4px solid #0d1e3a;}
+  .panel-header{font-family:'Merriweather',serif;font-size:12px;color:rgba(255,255,255,0.7);text-transform:uppercase;letter-spacing:2px;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,0.15);}
+
+  .pl-tile{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:10px;margin-bottom:8px;transition:all 0.2s;}
+  .pl-tile.active-turn{background:rgba(255,255,255,0.18);border-color:rgba(212,168,83,0.5);box-shadow:0 0 12px rgba(212,168,83,0.2);}
+  .plt-row{display:flex;align-items:center;gap:8px;}
+  .plt-av{width:30px;height:30px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:13px;color:#fff;}
+  .plt-name{font-weight:700;font-size:13px;color:#fff;}
+  .plt-score{font-size:11px;color:rgba(255,255,255,0.5);}
+  .plt-toks{display:flex;gap:3px;margin-top:4px;}
+  .ptt2{width:8px;height:8px;border-radius:50%;background:#ffd700;}
+  .ptt2.e{background:rgba(255,255,255,0.15);}
+  .turn-marker{font-size:10px;background:#d4a853;color:#2c1810;padding:1px 6px;border-radius:3px;font-weight:900;margin-left:auto;}
+
+  /* Center - main board */
+  .board{display:flex;flex-direction:column;background:#f5f0e8;}
+
+  /* Card playing area - like a mat */
+  .card-mat{background:#2d5a27;padding:18px 28px;border-bottom:4px solid #1a3a15;display:flex;gap:20px;align-items:center;}
+  .card-shadow{width:84px;height:108px;border-radius:8px;box-shadow:4px 4px 0 rgba(0,0,0,0.4),0 8px 24px rgba(0,0,0,0.5);flex-shrink:0;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:36px;
+    background:linear-gradient(135deg,#2a1810,#1a0a00);}
+  .card-back-pattern{position:absolute;inset:0;background:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(212,168,83,0.08) 4px,rgba(212,168,83,0.08) 8px);}
+  .card-face{position:absolute;inset:0;background:linear-gradient(135deg,#fffbf0,#f5ead8);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px;text-align:center;backdrop-filter:blur(8px);display:none;}
+  .card-shadow .blurred{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px;text-align:center;}
+
+  .track-meta{flex:1;color:#f5ead8;}
+  .tm-label{font-size:11px;color:rgba(245,234,216,0.5);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;}
+  .tm-title{font-family:'Merriweather',serif;font-size:20px;font-weight:900;display:none;}
+  .tm-artist{font-size:14px;color:#d4a853;display:none;}
+  .tm-mystery{font-size:14px;color:rgba(245,234,216,0.4);font-style:italic;}
+  .tm-year{font-family:'Merriweather',serif;font-size:40px;font-weight:900;color:#d4a853;display:none;}
+
+  .timer-box{background:rgba(0,0,0,0.3);border:2px solid #d4a853;border-radius:6px;padding:10px 16px;text-align:center;flex-shrink:0;}
+  .tb-num{font-family:'Merriweather',serif;font-size:28px;font-weight:900;color:#d4a853;}
+  .tb-lbl{font-size:9px;color:rgba(245,234,216,0.5);text-transform:uppercase;letter-spacing:1px;}
+
+  /* Audio indicator */
+  .audio-strip{height:32px;background:#1a3a15;border-bottom:2px solid #2d5a27;display:flex;align-items:center;gap:2px;padding:0 28px;}
+  .ab{flex:1;background:#4ade80;border-radius:1px;opacity:0.6;transition:height 0.12s;}
+  .prog-strip{height:4px;background:#d4e0d4;}
+  .prog-fill-strip{height:100%;background:#2d5a27;width:0%;transition:width 0.1s linear;}
+
+  /* Timeline - physical cards on table */
+  .table-area{flex:1;padding:20px 28px;overflow-y:auto;background:#f5f0e8;}
+  .timeline-lbl{font-family:'Merriweather',serif;font-size:12px;color:#8b6553;text-transform:uppercase;letter-spacing:2px;margin-bottom:16px;}
+  .timeline{display:flex;align-items:flex-end;overflow-x:auto;padding-bottom:12px;gap:0;}
+
+  .board-card{width:90px;min-width:90px;height:124px;border-radius:6px;box-shadow:3px 3px 0 rgba(0,0,0,0.2),0 4px 12px rgba(0,0,0,0.1);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px;text-align:center;cursor:pointer;transition:all 0.2s;
+    background:linear-gradient(180deg,#fffbf0,#f5ead8);border:1px solid #d4b896;}
+  .board-card:hover{transform:translateY(-6px) rotate(-1deg);box-shadow:6px 6px 0 rgba(0,0,0,0.2),0 8px 20px rgba(0,0,0,0.15);}
+  .board-card.correct-card{border-color:#16a34a;background:linear-gradient(180deg,#f0fdf4,#dcfce7);}
+  .board-card.wrong-card{border-color:#dc2626;background:linear-gradient(180deg,#fef2f2,#fee2e2);}
+  .bc-yr{font-family:'Merriweather',serif;font-size:16px;font-weight:900;color:#2c1810;}
+  .bc-title{font-size:9px;font-weight:700;color:#5a3a1a;margin-top:5px;line-height:1.3;}
+  .bc-artist{font-size:8px;color:#8b6553;margin-top:3px;}
+  .bc-fd{font-size:28px;}
+
+  .card-slot{width:22px;min-width:22px;height:124px;display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:4px;transition:background 0.2s;}
+  .card-slot:hover,.card-slot.sel{background:rgba(212,168,83,0.15);}
+  .slot-line{width:3px;height:50px;background:#d4b896;border-radius:2px;transition:all 0.2s;}
+  .card-slot:hover .slot-line,.card-slot.sel .slot-line{height:100px;background:#d4a853;box-shadow:0 0 8px rgba(212,168,83,0.5);}
+
+  /* Action row */
+  .action-row{padding:14px 28px;background:#2c1810;border-top:4px solid #8b4513;display:flex;gap:10px;align-items:center;}
+  .ab-btn{padding:10px 20px;border-radius:4px;font-family:'Lato',sans-serif;font-size:13px;font-weight:700;cursor:pointer;border:none;text-transform:uppercase;letter-spacing:0.5px;transition:all 0.15s;}
+  .ab-btn.confirm{background:#d4a853;color:#2c1810;}
+  .ab-btn.confirm:hover:not(:disabled){background:#e8c068;box-shadow:0 4px 12px rgba(212,168,83,0.4);}
+  .ab-btn.confirm:disabled{opacity:0.4;cursor:not-allowed;}
+  .ab-btn.skip{background:transparent;border:2px solid #8b6553;color:#d4b896;}
+  .ab-btn.skip:hover{border-color:#d4b896;color:#fff;}
+  .ab-btn.hitster{background:#dc2626;color:#fff;font-family:'Merriweather',serif;display:none;animation:shake 0.5s infinite;}
+  .ab-btn.hitster.on{display:block;}
+  @keyframes shake{0%,100%{transform:rotate(0)}25%{transform:rotate(-1deg)}75%{transform:rotate(1deg)}}
+  .spacer{flex:1;}
+
+  /* Right log panel */
+  .log-entry2{font-size:11px;color:rgba(255,255,255,0.5);padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.07);line-height:1.5;}
+  .log-entry2 .hi2{color:rgba(255,255,255,0.85);font-weight:700;}
+  .log-entry2 .ok2{color:#4ade80;}
+  .log-entry2 .bad2{color:#f87171;}
+
+  .ch-card{display:none;background:rgba(220,38,38,0.15);border:2px solid rgba(220,38,38,0.4);border-radius:8px;padding:14px;text-align:center;margin-bottom:14px;}
+  .ch-card.on{display:block;}
+  .cc-lbl{font-size:10px;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;}
+  .cc-num{font-family:'Merriweather',serif;font-size:30px;font-weight:900;color:#f87171;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">♦ Hitster</div>
+  <div class="hdr-right">
+    <div class="room-stamp">ROOM XK7P</div>
+    <div class="tok-area">
+      <span style="font-size:12px;color:#8b7355;">Tokens:</span>
+      <div class="tok-coin">🪙</div><div class="tok-coin">🪙</div><div class="tok-coin e">🪙</div><div class="tok-coin e">🪙</div><div class="tok-coin e">🪙</div>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+  <div class="side-panel">
+    <div class="panel-header">Scoreboard</div>
+
+    <div class="pl-tile active-turn">
+      <div class="plt-row">
+        <div class="plt-av" style="background:#6d28d9;">Y</div>
+        <div style="flex:1;">
+          <div class="plt-name">You</div>
+          <div class="plt-score">4 cards on table</div>
+          <div class="plt-toks"><div class="ptt2"></div><div class="ptt2"></div><div class="ptt2 e"></div><div class="ptt2 e"></div><div class="ptt2 e"></div></div>
+        </div>
+        <div class="turn-marker">TURN</div>
+      </div>
+    </div>
+
+    <div class="pl-tile">
+      <div class="plt-row">
+        <div class="plt-av" style="background:#059669;">S</div>
+        <div><div class="plt-name">Sarah</div><div class="plt-score">3 cards</div><div class="plt-toks"><div class="ptt2"></div><div class="ptt2"></div><div class="ptt2"></div><div class="ptt2 e"></div><div class="ptt2 e"></div></div></div>
+      </div>
+    </div>
+    <div class="pl-tile">
+      <div class="plt-row">
+        <div class="plt-av" style="background:#b45309;">M</div>
+        <div><div class="plt-name">Mike</div><div class="plt-score">5 cards</div><div class="plt-toks"><div class="ptt2"></div><div class="ptt2 e"></div><div class="ptt2 e"></div><div class="ptt2 e"></div><div class="ptt2 e"></div></div></div>
+      </div>
+    </div>
+    <div class="pl-tile">
+      <div class="plt-row">
+        <div class="plt-av" style="background:#b91c1c;">J</div>
+        <div><div class="plt-name">Jess</div><div class="plt-score">3 cards</div><div class="plt-toks"><div class="ptt2"></div><div class="ptt2"></div><div class="ptt2"></div><div class="ptt2"></div><div class="ptt2 e"></div></div></div>
+      </div>
+    </div>
+
+    <div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.15);">
+      <div class="panel-header">Game Info</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.6);line-height:2.2;">
+        Mode: <span style="color:#d4a853;font-weight:700;">Original</span><br>
+        Deck left: <span style="color:#fff;font-weight:700;">42</span><br>
+        Win at: <span style="color:#4ade80;font-weight:700;">10 cards</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="board">
+    <div class="card-mat">
+      <div class="card-shadow">
+        <div class="card-back-pattern"></div>
+        <div class="blurred" id="cardFront" style="font-size:36px;">🎵</div>
+      </div>
+      <div class="track-meta">
+        <div class="tm-label" id="tmLabel">Current card — make your guess</div>
+        <div class="tm-title" id="tmTitle">Mr. Brightside</div>
+        <div class="tm-artist" id="tmArtist">The Killers</div>
+        <div class="tm-mystery" id="tmMystery">Listen carefully... where does it belong?</div>
+        <div class="tm-year" id="tmYear">2003</div>
+      </div>
+      <div class="timer-box">
+        <div class="tb-num" id="tbNum">0:28</div>
+        <div class="tb-lbl">Remaining</div>
+      </div>
+    </div>
+
+    <div class="audio-strip" id="audioStrip"></div>
+    <div class="prog-strip"><div class="prog-fill-strip" id="pFillStrip"></div></div>
+
+    <div class="table-area">
+      <div class="timeline-lbl">Your Cards — Tap a gap to insert</div>
+      <div class="timeline" id="timeline">
+        <div class="card-slot" onclick="cs(0)" id="cs0"><div class="slot-line"></div></div>
+        <div class="board-card"><div class="bc-yr">1979</div><div class="bc-title">Don't Stop Me Now</div><div class="bc-artist">Queen</div></div>
+        <div class="card-slot" onclick="cs(1)" id="cs1"><div class="slot-line"></div></div>
+        <div class="board-card"><div class="bc-yr">1991</div><div class="bc-title">Smells Like Teen Spirit</div><div class="bc-artist">Nirvana</div></div>
+        <div class="card-slot" onclick="cs(2)" id="cs2"><div class="slot-line"></div></div>
+        <div class="board-card"><div class="bc-yr">1999</div><div class="bc-title">...Baby One More Time</div><div class="bc-artist">Britney Spears</div></div>
+        <div class="card-slot" onclick="cs(3)" id="cs3"><div class="slot-line"></div></div>
+        <div class="board-card"><div class="bc-yr">2007</div><div class="bc-title">Umbrella</div><div class="bc-artist">Rihanna</div></div>
+        <div class="card-slot" onclick="cs(4)" id="cs4"><div class="slot-line"></div></div>
+      </div>
+    </div>
+
+    <div class="action-row">
+      <button class="ab-btn confirm" id="confBtn" disabled onclick="boardConfirm()">Place Card</button>
+      <button class="ab-btn skip" onclick="boardSkip()">Skip (1 token)</button>
+      <button class="ab-btn hitster" id="hitBtn" onclick="boardHitster()">HITSTER!</button>
+      <div class="spacer"></div>
+      <span style="font-size:12px;color:#8b6553;text-transform:uppercase;letter-spacing:1px;">Turn 12</span>
+    </div>
+  </div>
+
+  <div class="side-panel right-p">
+    <div class="panel-header">Play Log</div>
+    <div class="ch-card" id="chCard">
+      <div class="cc-lbl">Challenge Window</div>
+      <div class="cc-num" id="ccNum">10</div>
+    </div>
+    <div id="logArea">
+      <div class="log-entry2">Mike → <span class="hi2">Bohemian Rhapsody</span> <span class="ok2">✓ Correct</span></div>
+      <div class="log-entry2">Jess → <span class="hi2">Shape of You</span> <span class="bad2">✗ Wrong</span></div>
+      <div class="log-entry2">Sarah named it → <span class="ok2">+1 🪙</span></div>
+      <div class="log-entry2">You → <span class="hi2">Purple Rain</span> <span class="ok2">✓ Correct</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const as=document.getElementById('audioStrip');
+  for(let i=0;i<50;i++){const b=document.createElement('div');b.className='ab';b.style.height=Math.random()*18+4+'px';as.appendChild(b);}
+  setInterval(()=>document.querySelectorAll('.ab').forEach(b=>b.style.height=Math.random()*18+4+'px'),140);
+
+  let elapsed=0,tt=28,placed=false,sel=null;
+  const pFill=document.getElementById('pFillStrip');
+  const tbNum=document.getElementById('tbNum');
+  const ii=setInterval(()=>{
+    elapsed+=0.1;pFill.style.width=(elapsed/tt*100)+'%';
+    const r=Math.max(tt-elapsed,0);tbNum.textContent='0:'+String(Math.ceil(r)).padStart(2,'0');
+    if(elapsed>=tt){clearInterval(ii);boardReveal();}
+  },100);
+
+  function cs(i){if(placed)return;sel=i;document.querySelectorAll('.card-slot').forEach((s,j)=>s.classList.toggle('sel',j===i));document.getElementById('confBtn').disabled=false;}
+  function boardConfirm(){
+    if(placed||sel===null)return;placed=true;
+    const tl=document.getElementById('timeline');const slots=tl.querySelectorAll('.card-slot');
+    const nc=document.createElement('div');nc.className='board-card';nc.style.borderColor='#d4a853';nc.style.transform='rotate(-2deg)';
+    nc.innerHTML='<div class="bc-fd">🎵</div><div style="font-size:9px;color:#8b6553;margin-top:5px;">Placed!</div>';
+    tl.insertBefore(nc,slots[sel].nextSibling);
+    document.getElementById('confBtn').disabled=true;
+    document.getElementById('hitBtn').classList.add('on');
+    document.getElementById('chCard').classList.add('on');
+    let ct=10;document.getElementById('ccNum').textContent=ct;
+    const ci=setInterval(()=>{ct--;document.getElementById('ccNum').textContent=ct;if(ct<=0){clearInterval(ci);boardFlip(nc);}},1000);
+  }
+  function boardFlip(card){
+    document.getElementById('hitBtn').classList.remove('on');document.getElementById('chCard').classList.remove('on');
+    const ok=(sel===3);
+    card.innerHTML='<div class="bc-yr">2003</div><div class="bc-title">Mr. Brightside</div><div class="bc-artist">The Killers</div>';
+    card.className='board-card '+(ok?'correct-card':'wrong-card');
+    card.style.transform='';
+    addLog('You → <span class="hi2">Mr. Brightside</span> '+(ok?'<span class="ok2">✓ Correct</span>':'<span class="bad2">✗ Wrong</span>'));
+    boardReveal();
+  }
+  function boardReveal(){
+    document.getElementById('cardFront').style.fontSize='14px';
+    document.getElementById('cardFront').textContent='';
+    document.getElementById('tmMystery').style.display='none';
+    document.getElementById('tmTitle').style.display='block';
+    document.getElementById('tmArtist').style.display='block';
+    document.getElementById('tmYear').style.display='block';
+    document.getElementById('tmLabel').textContent='Revealed!';
+  }
+  function boardSkip(){addLog('You skipped — <span class="hi2">1 token</span> spent');}
+  function boardHitster(){document.getElementById('hitBtn').classList.remove('on');addLog('<span class="bad2">HITSTER!</span> You challenged!');}
+  function addLog(html){const l=document.getElementById('logArea');const e=document.createElement('div');e.className='log-entry2';e.innerHTML=html;l.insertBefore(e,l.firstChild);}
+</script>
+</body>
+</html>

@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hitster — v3 Synthwave</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600;700&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Exo 2',sans-serif;background:#0d0018;color:#f0e6ff;min-height:100vh;overflow-x:hidden;}
+
+  /* Grid background */
+  body::before{content:'';position:fixed;inset:0;background:
+    linear-gradient(rgba(255,0,255,0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,0,255,0.05) 1px, transparent 1px);
+  background-size:40px 40px;pointer-events:none;z-index:0;}
+
+  /* Horizon glow */
+  body::after{content:'';position:fixed;bottom:0;left:0;right:0;height:200px;
+    background:linear-gradient(to top, rgba(255,0,128,0.15), transparent);
+    pointer-events:none;z-index:0;}
+
+  .everything{position:relative;z-index:1;}
+
+  header{padding:14px 28px;display:flex;align-items:center;justify-content:space-between;
+    background:linear-gradient(135deg,rgba(120,0,200,0.4),rgba(200,0,100,0.2));
+    border-bottom:2px solid;border-image:linear-gradient(90deg,#ff00ff,#00ffff) 1;
+    backdrop-filter:blur(10px);}
+  .logo{font-family:'Orbitron',monospace;font-size:20px;font-weight:900;
+    background:linear-gradient(135deg,#ff00ff,#00ffff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+    text-shadow:none;filter:drop-shadow(0 0 12px rgba(255,0,255,0.5));}
+  .hdr-info{display:flex;gap:20px;align-items:center;}
+  .hdr-pill{font-family:'Orbitron',monospace;font-size:9px;padding:5px 12px;border:1px solid;border-image:linear-gradient(90deg,#ff00ff,#00ffff) 1;color:#00ffff;background:rgba(0,255,255,0.05);}
+  .token-bar{display:flex;gap:5px;}
+  .tok{width:18px;height:18px;border-radius:50%;background:linear-gradient(135deg,#ffd700,#ff8c00);border:none;box-shadow:0 0 8px #ffd700;}
+  .tok.empty{background:rgba(255,255,255,0.1);box-shadow:none;border:1px solid rgba(255,255,255,0.1);}
+
+  .game-grid{display:grid;grid-template-columns:220px 1fr 200px;height:calc(100vh - 57px);}
+
+  .side{padding:20px;border-right:1px solid rgba(255,0,255,0.2);background:rgba(13,0,24,0.7);backdrop-filter:blur(10px);}
+  .side-title{font-family:'Orbitron',monospace;font-size:8px;color:#ff00ff;letter-spacing:3px;text-transform:uppercase;margin-bottom:16px;text-shadow:0 0 10px #ff00ff;}
+
+  .p-card{padding:10px;border:1px solid rgba(255,255,255,0.05);margin-bottom:8px;border-radius:4px;background:rgba(255,255,255,0.03);transition:all 0.2s;}
+  .p-card.active{border-color:rgba(255,0,255,0.5);background:rgba(255,0,255,0.05);box-shadow:0 0 16px rgba(255,0,255,0.15) inset;}
+  .p-flex{display:flex;align-items:center;gap:10px;}
+  .p-ava{width:34px;height:34px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;border:1px solid rgba(255,255,255,0.1);}
+  .p-name{font-weight:700;font-size:14px;}
+  .p-cards{font-size:11px;color:rgba(240,230,255,0.5);}
+  .p-toks{display:flex;gap:3px;margin-top:5px;}
+  .p-t{width:8px;height:8px;border-radius:50%;background:linear-gradient(135deg,#ffd700,#ff8c00);}
+  .p-t.e{background:rgba(255,255,255,0.1);}
+
+  /* Center */
+  .center-area{display:flex;flex-direction:column;background:rgba(13,0,24,0.5);}
+
+  .np{padding:20px 28px;border-bottom:1px solid rgba(255,0,255,0.2);display:flex;gap:20px;align-items:center;
+    background:linear-gradient(135deg,rgba(120,0,200,0.15),rgba(0,0,100,0.1));}
+  .art-frame{width:78px;height:78px;border:2px solid;border-image:linear-gradient(135deg,#ff00ff,#00ffff) 1;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:32px;background:#0d0018;flex-shrink:0;}
+  .art-cover{position:absolute;inset:0;backdrop-filter:blur(16px);background:rgba(255,0,255,0.1);display:flex;align-items:center;justify-content:center;font-size:28px;}
+  .np-text{flex:1;}
+  .np-sub{font-family:'Orbitron',monospace;font-size:7px;letter-spacing:2px;color:#ff00ff;margin-bottom:6px;}
+  .np-t{font-size:22px;font-weight:700;color:#f0e6ff;display:none;}
+  .np-a{font-size:14px;color:#c084fc;display:none;}
+  .np-blind{font-size:14px;color:rgba(240,230,255,0.4);font-style:italic;}
+  .np-yr{font-family:'Orbitron',monospace;font-size:32px;font-weight:900;background:linear-gradient(135deg,#00ffff,#ff00ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;display:none;}
+  .timer-wrap{text-align:center;}
+  .timer-num{font-family:'Orbitron',monospace;font-size:32px;font-weight:900;color:#00ffff;text-shadow:0 0 20px #00ffff;}
+  .timer-lbl{font-size:10px;color:rgba(0,255,255,0.5);letter-spacing:2px;}
+
+  .vis{height:44px;display:flex;align-items:center;gap:2px;padding:0 28px;background:rgba(0,0,0,0.3);border-bottom:1px solid rgba(0,255,255,0.1);}
+  .vb{flex:1;border-radius:2px;background:linear-gradient(to top,#ff00ff,#00ffff);transition:height 0.12s;}
+  .prog{height:3px;background:rgba(255,255,255,0.1);}
+  .prog-fill{height:100%;background:linear-gradient(90deg,#ff00ff,#00ffff);width:0%;transition:width 0.1s linear;}
+
+  .tl-wrap{flex:1;padding:24px 28px;overflow-y:auto;}
+  .tl-lbl{font-family:'Orbitron',monospace;font-size:7px;color:rgba(255,255,255,0.3);letter-spacing:2px;margin-bottom:18px;}
+  .timeline{display:flex;align-items:center;overflow-x:auto;padding-bottom:12px;}
+
+  .sw-card{width:96px;min-width:96px;height:136px;border:1px solid rgba(255,255,255,0.1);background:linear-gradient(135deg,rgba(255,0,255,0.05),rgba(0,100,200,0.05));border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px;text-align:center;cursor:pointer;transition:all 0.2s;}
+  .sw-card:hover{border-color:#ff00ff;box-shadow:0 0 20px rgba(255,0,255,0.3);transform:translateY(-4px);}
+  .sw-card.ok{border-color:#00ff88;box-shadow:0 0 12px rgba(0,255,136,0.3);}
+  .sw-card.bad{border-color:#ff0055;box-shadow:0 0 12px rgba(255,0,85,0.3);}
+  .sw-yr{font-family:'Orbitron',monospace;font-size:13px;font-weight:700;color:#00ffff;margin-bottom:4px;}
+  .sw-title{font-size:10px;font-weight:600;line-height:1.3;}
+  .sw-artist{font-size:9px;color:rgba(240,230,255,0.5);margin-top:3px;}
+  .sw-fd{font-size:32px;}
+
+  .sw-gap{width:22px;min-width:22px;height:136px;display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:4px;transition:background 0.2s;}
+  .sw-gap:hover,.sw-gap.sel{background:rgba(255,0,255,0.1);}
+  .sw-gap-line{width:2px;height:60px;background:rgba(255,255,255,0.1);transition:all 0.2s;border-radius:1px;}
+  .sw-gap:hover .sw-gap-line,.sw-gap.sel .sw-gap-line{background:#ff00ff;height:110px;box-shadow:0 0 10px #ff00ff;}
+
+  .act-bar{padding:14px 28px;display:flex;gap:10px;align-items:center;border-top:1px solid rgba(255,0,255,0.2);background:rgba(13,0,24,0.8);}
+  .sw-btn{padding:10px 18px;border:1px solid;font-family:'Exo 2',sans-serif;font-size:14px;font-weight:700;cursor:pointer;background:transparent;transition:all 0.15s;border-radius:3px;}
+  .sw-btn.primary{border-color:#ff00ff;color:#ff00ff;}
+  .sw-btn.primary:hover:not(:disabled){background:rgba(255,0,255,0.1);box-shadow:0 0 16px rgba(255,0,255,0.3);}
+  .sw-btn.primary:disabled{border-color:rgba(255,0,255,0.2);color:rgba(255,0,255,0.2);cursor:not-allowed;}
+  .sw-btn.sec{border-color:rgba(255,255,255,0.2);color:rgba(240,230,255,0.6);}
+  .sw-btn.sec:hover{border-color:rgba(255,255,255,0.4);color:#f0e6ff;}
+  .sw-btn.danger{border-color:#ff0055;color:#ff0055;font-family:'Orbitron',monospace;font-size:10px;display:none;animation:glow-red 1.5s infinite;}
+  .sw-btn.danger.on{display:block;}
+  @keyframes glow-red{0%,100%{box-shadow:0 0 0 rgba(255,0,85,0)}50%{box-shadow:0 0 16px rgba(255,0,85,0.6)}}
+  .spacer{flex:1;}
+
+  .right-side{padding:20px;border-left:1px solid rgba(255,0,255,0.2);background:rgba(13,0,24,0.7);backdrop-filter:blur(10px);}
+  .ch-box{display:none;border:1px solid #ff0055;background:rgba(255,0,85,0.05);padding:12px;text-align:center;margin-bottom:14px;border-radius:4px;}
+  .ch-box.on{display:block;}
+  .ch-lbl{font-family:'Orbitron',monospace;font-size:7px;color:#ff0055;letter-spacing:2px;margin-bottom:6px;}
+  .ch-num{font-family:'Orbitron',monospace;font-size:28px;color:#ff0055;text-shadow:0 0 16px #ff0055;}
+  .log-item{font-size:11px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.04);color:rgba(240,230,255,0.6);line-height:1.5;}
+  .log-item .hi{color:#c084fc;}
+  .log-item .ok{color:#00ff88;}
+  .log-item .bad{color:#ff0055;}
+</style>
+</head>
+<body>
+<div class="everything">
+
+<header>
+  <div class="logo">HITSTER</div>
+  <div class="hdr-info">
+    <div class="hdr-pill">ROOM XK7P</div>
+    <div class="hdr-pill">YOUR TURN</div>
+    <div class="token-bar">
+      <div class="tok"></div><div class="tok"></div><div class="tok empty"></div><div class="tok empty"></div><div class="tok empty"></div>
+    </div>
+  </div>
+</header>
+
+<div class="game-grid">
+  <div class="side">
+    <div class="side-title">Players</div>
+
+    <div class="p-card active">
+      <div class="p-flex">
+        <div class="p-ava" style="background:rgba(255,0,255,0.1);color:#ff00ff;">Y</div>
+        <div>
+          <div class="p-name">You <span style="color:#ff00ff;font-size:11px;">▶</span></div>
+          <div class="p-cards">4 cards</div>
+          <div class="p-toks"><div class="p-t"></div><div class="p-t"></div><div class="p-t e"></div><div class="p-t e"></div><div class="p-t e"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="p-card">
+      <div class="p-flex">
+        <div class="p-ava" style="background:rgba(0,255,136,0.1);color:#00ff88;">S</div>
+        <div>
+          <div class="p-name">Sarah</div>
+          <div class="p-cards">3 cards</div>
+          <div class="p-toks"><div class="p-t"></div><div class="p-t"></div><div class="p-t"></div><div class="p-t e"></div><div class="p-t e"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="p-card">
+      <div class="p-flex">
+        <div class="p-ava" style="background:rgba(255,200,0,0.1);color:#ffd700;">M</div>
+        <div>
+          <div class="p-name">Mike</div>
+          <div class="p-cards">5 cards</div>
+          <div class="p-toks"><div class="p-t"></div><div class="p-t e"></div><div class="p-t e"></div><div class="p-t e"></div><div class="p-t e"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="p-card">
+      <div class="p-flex">
+        <div class="p-ava" style="background:rgba(0,200,255,0.1);color:#00ffff;">J</div>
+        <div>
+          <div class="p-name">Jess</div>
+          <div class="p-cards">3 cards</div>
+          <div class="p-toks"><div class="p-t"></div><div class="p-t"></div><div class="p-t"></div><div class="p-t"></div><div class="p-t e"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:20px;">
+      <div class="side-title">Config</div>
+      <div style="font-size:12px;color:rgba(240,230,255,0.5);line-height:2;">
+        Mode: <span style="color:#c084fc;">Original</span><br>
+        Deck: <span style="color:#00ffff;">42 left</span><br>
+        Win: <span style="color:#00ff88;">10 cards</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="center-area">
+    <div class="np">
+      <div class="art-frame">
+        🎵
+        <div class="art-cover" id="artCover">🎵</div>
+      </div>
+      <div class="np-text">
+        <div class="np-sub" id="npSub">NOW PLAYING — PLACE THIS CARD</div>
+        <div class="np-t" id="npT">Mr. Brightside</div>
+        <div class="np-a" id="npA">The Killers</div>
+        <div class="np-blind" id="npBlind">Song identity hidden until you place it...</div>
+        <div class="np-yr" id="npYr">2003</div>
+      </div>
+      <div class="timer-wrap">
+        <div class="timer-num" id="tNum">0:28</div>
+        <div class="timer-lbl">REMAINING</div>
+      </div>
+    </div>
+
+    <div class="vis" id="visArea"></div>
+    <div class="prog"><div class="prog-fill" id="progFill"></div></div>
+
+    <div class="tl-wrap">
+      <div class="tl-lbl">YOUR TIMELINE // CLICK A GAP TO PLACE</div>
+      <div class="timeline" id="timeline">
+        <div class="sw-gap" onclick="sg(0)" id="g0"><div class="sw-gap-line"></div></div>
+        <div class="sw-card">
+          <div class="sw-yr">1979</div>
+          <div class="sw-title">Don't Stop Me Now</div>
+          <div class="sw-artist">Queen</div>
+        </div>
+        <div class="sw-gap" onclick="sg(1)" id="g1"><div class="sw-gap-line"></div></div>
+        <div class="sw-card">
+          <div class="sw-yr">1991</div>
+          <div class="sw-title">Smells Like Teen Spirit</div>
+          <div class="sw-artist">Nirvana</div>
+        </div>
+        <div class="sw-gap" onclick="sg(2)" id="g2"><div class="sw-gap-line"></div></div>
+        <div class="sw-card">
+          <div class="sw-yr">1999</div>
+          <div class="sw-title">...Baby One More Time</div>
+          <div class="sw-artist">Britney Spears</div>
+        </div>
+        <div class="sw-gap" onclick="sg(3)" id="g3"><div class="sw-gap-line"></div></div>
+        <div class="sw-card">
+          <div class="sw-yr">2007</div>
+          <div class="sw-title">Umbrella</div>
+          <div class="sw-artist">Rihanna</div>
+        </div>
+        <div class="sw-gap" onclick="sg(4)" id="g4"><div class="sw-gap-line"></div></div>
+      </div>
+    </div>
+
+    <div class="act-bar">
+      <button class="sw-btn primary" id="confBtn" disabled onclick="confirmPlace()">CONFIRM PLACE</button>
+      <button class="sw-btn sec" onclick="skipCard()">SKIP (1 TOKEN)</button>
+      <button class="sw-btn danger" id="hitBtn" onclick="doHitster()">HITSTER!</button>
+      <div class="spacer"></div>
+      <span style="font-family:'Orbitron',monospace;font-size:8px;color:rgba(255,255,255,0.3);">TURN 12</span>
+    </div>
+  </div>
+
+  <div class="right-side">
+    <div class="side-title">Log</div>
+    <div class="ch-box" id="chBox">
+      <div class="ch-lbl">CHALLENGE WINDOW</div>
+      <div class="ch-num" id="chNum">10</div>
+    </div>
+    <div id="logArea">
+      <div class="log-item">Mike → <span class="hi">Bohemian Rhapsody</span> <span class="ok">✓</span></div>
+      <div class="log-item">Jess → <span class="hi">Shape of You</span> <span class="bad">✗</span></div>
+      <div class="log-item">Sarah named song <span class="ok">+1🪙</span></div>
+      <div class="log-item">You → <span class="hi">Purple Rain</span> <span class="ok">✓</span></div>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<script>
+  const vis=document.getElementById('visArea');
+  for(let i=0;i<50;i++){const b=document.createElement('div');b.className='vb';b.style.height=Math.random()*28+4+'px';vis.appendChild(b);}
+  setInterval(()=>document.querySelectorAll('.vb').forEach(b=>b.style.height=Math.random()*28+4+'px'),130);
+
+  let elapsed=0,totalTime=28,placed=false,selGap=null;
+  const progFill=document.getElementById('progFill');
+  const tNum=document.getElementById('tNum');
+  const iid=setInterval(()=>{
+    elapsed+=0.1;
+    progFill.style.width=(elapsed/totalTime*100)+'%';
+    const r=Math.max(totalTime-elapsed,0);
+    tNum.textContent='0:'+String(Math.ceil(r)).padStart(2,'0');
+    if(elapsed>=totalTime){clearInterval(iid);doReveal();}
+  },100);
+
+  function sg(i){
+    if(placed)return;
+    selGap=i;
+    document.querySelectorAll('.sw-gap').forEach((g,j)=>g.classList.toggle('sel',j===i));
+    document.getElementById('confBtn').disabled=false;
+  }
+
+  function confirmPlace(){
+    if(placed||selGap===null)return;
+    placed=true;
+    const tl=document.getElementById('timeline');
+    const gaps=tl.querySelectorAll('.sw-gap');
+    const nc=document.createElement('div');
+    nc.className='sw-card';
+    nc.style.border='1px dashed #ffd700';
+    nc.style.background='rgba(255,215,0,0.05)';
+    nc.innerHTML='<div class="sw-fd">🎵</div><div style="font-size:9px;color:#ffd700;margin-top:5px;">PLACED</div>';
+    tl.insertBefore(nc,gaps[selGap].nextSibling);
+    document.getElementById('confBtn').disabled=true;
+    document.getElementById('hitBtn').classList.add('on');
+    document.getElementById('chBox').classList.add('on');
+    let ct=10;document.getElementById('chNum').textContent=ct;
+    const ci=setInterval(()=>{
+      ct--;document.getElementById('chNum').textContent=ct;
+      if(ct<=0){clearInterval(ci);flipCard(nc);}
+    },1000);
+  }
+
+  function flipCard(card){
+    document.getElementById('hitBtn').classList.remove('on');
+    document.getElementById('chBox').classList.remove('on');
+    const ok=(selGap===3);
+    card.innerHTML='<div class="sw-yr">2003</div><div class="sw-title">Mr. Brightside</div><div class="sw-artist">The Killers</div>';
+    card.className='sw-card '+(ok?'ok':'bad');
+    addLog('You → <span class="hi">Mr. Brightside</span> '+(ok?'<span class="ok">✓</span>':'<span class="bad">✗</span>'));
+    doReveal();
+  }
+
+  function doReveal(){
+    document.getElementById('artCover').style.display='none';
+    document.getElementById('npBlind').style.display='none';
+    document.getElementById('npT').style.display='block';
+    document.getElementById('npA').style.display='block';
+    document.getElementById('npYr').style.display='block';
+    document.getElementById('npSub').textContent='REVEALED';
+  }
+
+  function skipCard(){addLog('You skipped — <span class="hi">spent 1 token</span>');}
+  function doHitster(){document.getElementById('hitBtn').classList.remove('on');addLog('<span class="bad">HITSTER!</span> You challenged');}
+  function addLog(html){const l=document.getElementById('logArea');const e=document.createElement('div');e.className='log-item';e.innerHTML=html;l.insertBefore(e,l.firstChild);}
+</script>
+</body>
+</html>

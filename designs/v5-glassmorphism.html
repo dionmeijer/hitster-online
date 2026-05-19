@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hitster — v5 Glassmorphism</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600;700;800;900&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Nunito',sans-serif;min-height:100vh;overflow-x:hidden;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 30%, #f093fb 60%, #f5576c 100%);
+  }
+
+  /* Floating orbs */
+  .orb{position:fixed;border-radius:50%;filter:blur(60px);opacity:0.5;pointer-events:none;animation:float 8s ease-in-out infinite;}
+  .orb1{width:400px;height:400px;background:#a855f7;top:-100px;left:-100px;animation-delay:0s;}
+  .orb2{width:300px;height:300px;background:#ec4899;bottom:0;right:-50px;animation-delay:-4s;}
+  .orb3{width:250px;height:250px;background:#3b82f6;bottom:100px;left:30%;animation-delay:-2s;}
+  @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-30px)}}
+
+  .app{position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column;}
+
+  /* Glass mixin */
+  .glass{background:rgba(255,255,255,0.12);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.2);}
+  .glass-dark{background:rgba(0,0,0,0.15);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.1);}
+
+  header{padding:12px 28px;display:flex;align-items:center;justify-content:space-between;}
+  header.glass{border-bottom:1px solid rgba(255,255,255,0.2);border-radius:0;}
+  .logo{font-size:22px;font-weight:900;color:#fff;letter-spacing:-0.5px;text-shadow:0 2px 10px rgba(0,0,0,0.2);}
+  .header-chips{display:flex;gap:10px;align-items:center;}
+  .chip{padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;color:#fff;}
+  .tok-dots{display:flex;gap:5px;}
+  .td{width:12px;height:12px;border-radius:50%;background:rgba(255,215,0,0.9);box-shadow:0 0 6px rgba(255,215,0,0.5);}
+  .td.e{background:rgba(255,255,255,0.2);box-shadow:none;}
+
+  .main{flex:1;display:grid;grid-template-columns:220px 1fr 200px;gap:12px;padding:12px 16px;max-height:calc(100vh - 56px);overflow:hidden;}
+
+  .side-glass{border-radius:20px;padding:18px;overflow-y:auto;}
+
+  .s-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:rgba(255,255,255,0.6);margin-bottom:14px;}
+
+  .pl{display:flex;align-items:center;gap:10px;padding:10px;border-radius:12px;margin-bottom:6px;background:rgba(255,255,255,0.06);transition:all 0.2s;cursor:default;}
+  .pl.active{background:rgba(255,255,255,0.18);box-shadow:0 4px 16px rgba(0,0,0,0.1);}
+  .av{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:#fff;flex-shrink:0;}
+  .pd{flex:1;}
+  .pn{font-weight:700;font-size:13px;color:#fff;}
+  .pc{font-size:11px;color:rgba(255,255,255,0.5);margin-top:1px;}
+  .pt-row{display:flex;gap:3px;margin-top:4px;}
+  .ptd{width:7px;height:7px;border-radius:50%;background:rgba(255,215,0,0.8);}
+  .ptd.e{background:rgba(255,255,255,0.15);}
+  .badge{background:rgba(255,255,255,0.25);color:#fff;font-size:9px;font-weight:800;padding:2px 7px;border-radius:10px;white-space:nowrap;}
+
+  .center-glass{border-radius:20px;display:flex;flex-direction:column;overflow:hidden;}
+
+  .np-area{padding:18px 22px;border-bottom:1px solid rgba(255,255,255,0.1);display:flex;gap:16px;align-items:center;}
+  .art-glass{width:76px;height:76px;border-radius:14px;overflow:hidden;position:relative;display:flex;align-items:center;justify-content:center;font-size:30px;flex-shrink:0;background:rgba(255,255,255,0.1);}
+  .art-overlay{position:absolute;inset:0;backdrop-filter:blur(10px);background:rgba(255,255,255,0.05);display:flex;align-items:center;justify-content:center;border-radius:14px;}
+  .np-info{flex:1;}
+  .np-tag{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,0.6);margin-bottom:4px;}
+  .np-title{font-size:20px;font-weight:800;color:#fff;display:none;}
+  .np-artist{font-size:13px;color:rgba(255,255,255,0.7);display:none;}
+  .np-mystery{font-size:13px;color:rgba(255,255,255,0.4);font-style:italic;}
+  .np-yr{font-size:36px;font-weight:900;color:#fff;display:none;}
+  .timer-pill{padding:8px 16px;border-radius:30px;background:rgba(255,255,255,0.15);text-align:center;flex-shrink:0;}
+  .timer-num{font-size:24px;font-weight:900;color:#fff;}
+  .timer-lbl{font-size:9px;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:1px;}
+
+  .vis-row{height:40px;display:flex;align-items:center;gap:3px;padding:0 22px;border-bottom:1px solid rgba(255,255,255,0.08);}
+  .vbar{flex:1;border-radius:4px;background:rgba(255,255,255,0.3);transition:height 0.12s;}
+  .prog-line{height:3px;background:rgba(255,255,255,0.1);}
+  .prog-line-fill{height:100%;background:rgba(255,255,255,0.6);width:0%;transition:width 0.1s linear;border-radius:2px;}
+
+  .tl-wrap{flex:1;padding:18px 22px;overflow-y:auto;}
+  .tl-lbl{font-size:11px;color:rgba(255,255,255,0.5);font-weight:600;margin-bottom:14px;}
+  .timeline{display:flex;align-items:center;overflow-x:auto;padding-bottom:8px;}
+
+  .g-card{width:90px;min-width:90px;height:126px;border-radius:14px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.2);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px;text-align:center;cursor:pointer;box-shadow:0 4px 20px rgba(0,0,0,0.1);transition:all 0.2s;}
+  .g-card:hover{background:rgba(255,255,255,0.25);transform:translateY(-4px);box-shadow:0 8px 32px rgba(0,0,0,0.15);}
+  .g-card.ok{background:rgba(16,185,129,0.2);border-color:rgba(16,185,129,0.4);}
+  .g-card.bad{background:rgba(239,68,68,0.2);border-color:rgba(239,68,68,0.4);}
+  .gc-yr{font-size:18px;font-weight:900;color:#fff;}
+  .gc-t{font-size:9px;font-weight:700;color:rgba(255,255,255,0.8);margin-top:5px;line-height:1.3;}
+  .gc-a{font-size:8px;color:rgba(255,255,255,0.5);margin-top:3px;}
+  .gc-fd{font-size:30px;}
+
+  .gap-g{width:18px;min-width:18px;height:126px;display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:8px;transition:background 0.2s;}
+  .gap-g:hover,.gap-g.sel{background:rgba(255,255,255,0.1);}
+  .gap-g-line{width:2px;height:50px;background:rgba(255,255,255,0.2);transition:all 0.2s;border-radius:2px;}
+  .gap-g:hover .gap-g-line,.gap-g.sel .gap-g-line{height:100px;background:rgba(255,255,255,0.7);box-shadow:0 0 8px rgba(255,255,255,0.4);}
+
+  .actions-glass{padding:14px 22px;border-top:1px solid rgba(255,255,255,0.1);display:flex;gap:8px;align-items:center;}
+  .gbtn{padding:9px 18px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;border:none;transition:all 0.15s;color:#fff;}
+  .gbtn.primary{background:rgba(255,255,255,0.25);}
+  .gbtn.primary:hover:not(:disabled){background:rgba(255,255,255,0.35);box-shadow:0 4px 16px rgba(0,0,0,0.1);}
+  .gbtn.primary:disabled{opacity:0.3;cursor:not-allowed;}
+  .gbtn.sec{background:rgba(255,255,255,0.1);}
+  .gbtn.sec:hover{background:rgba(255,255,255,0.18);}
+  .gbtn.hit{background:linear-gradient(135deg,#f5576c,#f093fb);display:none;animation:shine 1.5s infinite;}
+  .gbtn.hit.on{display:block;}
+  @keyframes shine{0%,100%{box-shadow:0 0 0 rgba(245,87,108,0)}50%{box-shadow:0 0 20px rgba(245,87,108,0.6)}}
+  .spacer{flex:1;}
+
+  .right-glass{border-radius:20px;padding:18px;overflow-y:auto;}
+  .ch-glass{display:none;border-radius:12px;background:rgba(239,68,68,0.2);border:1px solid rgba(239,68,68,0.3);padding:12px;text-align:center;margin-bottom:12px;}
+  .ch-glass.on{display:block;}
+  .cg-lbl{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,0.7);}
+  .cg-num{font-size:30px;font-weight:900;color:#fff;margin:4px 0;}
+  .log-g{font-size:11px;color:rgba(255,255,255,0.5);padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.06);line-height:1.5;}
+  .log-g .hi{color:rgba(255,255,255,0.85);font-weight:700;}
+  .log-g .ok{color:#6ee7b7;}
+  .log-g .bad{color:#fca5a5;}
+</style>
+</head>
+<body>
+<div class="orb orb1"></div>
+<div class="orb orb2"></div>
+<div class="orb orb3"></div>
+
+<div class="app">
+  <header class="glass">
+    <div class="logo">Hitster ✨</div>
+    <div class="header-chips">
+      <div class="chip glass">Your turn</div>
+      <div class="chip glass">Room XK7P</div>
+      <div class="tok-dots">
+        <div class="td"></div><div class="td"></div><div class="td e"></div><div class="td e"></div><div class="td e"></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="main">
+    <div class="side-glass glass">
+      <div class="s-title">Players</div>
+
+      <div class="pl active">
+        <div class="av" style="background:linear-gradient(135deg,#a78bfa,#7c3aed);">Y</div>
+        <div class="pd">
+          <div class="pn">You</div>
+          <div class="pc">4 cards</div>
+          <div class="pt-row"><div class="ptd"></div><div class="ptd"></div><div class="ptd e"></div><div class="ptd e"></div><div class="ptd e"></div></div>
+        </div>
+        <div class="badge">Turn</div>
+      </div>
+
+      <div class="pl">
+        <div class="av" style="background:linear-gradient(135deg,#34d399,#059669);">S</div>
+        <div class="pd"><div class="pn">Sarah</div><div class="pc">3 cards</div><div class="pt-row"><div class="ptd"></div><div class="ptd"></div><div class="ptd"></div><div class="ptd e"></div><div class="ptd e"></div></div></div>
+      </div>
+      <div class="pl">
+        <div class="av" style="background:linear-gradient(135deg,#fbbf24,#d97706);">M</div>
+        <div class="pd"><div class="pn">Mike</div><div class="pc">5 cards</div><div class="pt-row"><div class="ptd"></div><div class="ptd e"></div><div class="ptd e"></div><div class="ptd e"></div><div class="ptd e"></div></div></div>
+      </div>
+      <div class="pl">
+        <div class="av" style="background:linear-gradient(135deg,#f87171,#dc2626);">J</div>
+        <div class="pd"><div class="pn">Jess</div><div class="pc">3 cards</div><div class="pt-row"><div class="ptd"></div><div class="ptd"></div><div class="ptd"></div><div class="ptd"></div><div class="ptd e"></div></div></div>
+      </div>
+
+      <div style="margin-top:16px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.1);">
+        <div class="s-title">Round</div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.6);line-height:2;">
+          Mode: <span style="color:#fff;font-weight:700;">Original</span><br>
+          Deck: <span style="color:#fff;font-weight:700;">42 left</span><br>
+          Win: <span style="color:#6ee7b7;font-weight:700;">10 cards</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="center-glass glass">
+      <div class="np-area">
+        <div class="art-glass">
+          🎵
+          <div class="art-overlay" id="artOv">🎵</div>
+        </div>
+        <div class="np-info">
+          <div class="np-tag" id="npTag">Now playing — place this</div>
+          <div class="np-title" id="npTitle">Mr. Brightside</div>
+          <div class="np-artist" id="npArtist">The Killers</div>
+          <div class="np-mystery" id="npMystery">Guess where it fits...</div>
+          <div class="np-yr" id="npYr">2003</div>
+        </div>
+        <div class="timer-pill glass">
+          <div class="timer-num" id="tNum">0:28</div>
+          <div class="timer-lbl">left</div>
+        </div>
+      </div>
+
+      <div class="vis-row" id="visRow"></div>
+      <div class="prog-line"><div class="prog-line-fill" id="plFill"></div></div>
+
+      <div class="tl-wrap">
+        <div class="tl-lbl">Your timeline — tap a gap to place</div>
+        <div class="timeline" id="timeline">
+          <div class="gap-g" onclick="gg(0)" id="gg0"><div class="gap-g-line"></div></div>
+          <div class="g-card"><div class="gc-yr">1979</div><div class="gc-t">Don't Stop Me Now</div><div class="gc-a">Queen</div></div>
+          <div class="gap-g" onclick="gg(1)" id="gg1"><div class="gap-g-line"></div></div>
+          <div class="g-card"><div class="gc-yr">1991</div><div class="gc-t">Smells Like Teen Spirit</div><div class="gc-a">Nirvana</div></div>
+          <div class="gap-g" onclick="gg(2)" id="gg2"><div class="gap-g-line"></div></div>
+          <div class="g-card"><div class="gc-yr">1999</div><div class="gc-t">...Baby One More Time</div><div class="gc-a">Britney Spears</div></div>
+          <div class="gap-g" onclick="gg(3)" id="gg3"><div class="gap-g-line"></div></div>
+          <div class="g-card"><div class="gc-yr">2007</div><div class="gc-t">Umbrella</div><div class="gc-a">Rihanna</div></div>
+          <div class="gap-g" onclick="gg(4)" id="gg4"><div class="gap-g-line"></div></div>
+        </div>
+      </div>
+
+      <div class="actions-glass">
+        <button class="gbtn primary" id="confBtn" disabled onclick="gConfirm()">Confirm placement</button>
+        <button class="gbtn sec" onclick="gSkip()">Skip (1 token)</button>
+        <button class="gbtn hit" id="hitBtn" onclick="gHitster()">HITSTER! 🎯</button>
+        <div class="spacer"></div>
+        <span style="font-size:11px;color:rgba(255,255,255,0.4);">Turn 12</span>
+      </div>
+    </div>
+
+    <div class="right-glass glass">
+      <div class="s-title">Activity</div>
+      <div class="ch-glass" id="chG">
+        <div class="cg-lbl">Challenge!</div>
+        <div class="cg-num" id="cgNum">10</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.6);">seconds</div>
+      </div>
+      <div id="logArea">
+        <div class="log-g">Mike → <span class="hi">Bohemian Rhapsody</span> <span class="ok">✓</span></div>
+        <div class="log-g">Jess → <span class="hi">Shape of You</span> <span class="bad">✗</span></div>
+        <div class="log-g">Sarah named it <span class="ok">+1🪙</span></div>
+        <div class="log-g">You → <span class="hi">Purple Rain</span> <span class="ok">✓</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const vr=document.getElementById('visRow');
+  for(let i=0;i<45;i++){const b=document.createElement('div');b.className='vbar';b.style.height=Math.random()*20+4+'px';vr.appendChild(b);}
+  setInterval(()=>document.querySelectorAll('.vbar').forEach(b=>b.style.height=Math.random()*20+4+'px'),140);
+
+  let elapsed=0,tt=28,placed=false,sel=null;
+  const fill=document.getElementById('plFill');
+  const tNum=document.getElementById('tNum');
+  const ii=setInterval(()=>{
+    elapsed+=0.1;fill.style.width=(elapsed/tt*100)+'%';
+    const r=Math.max(tt-elapsed,0);tNum.textContent='0:'+String(Math.ceil(r)).padStart(2,'0');
+    if(elapsed>=tt){clearInterval(ii);gReveal();}
+  },100);
+
+  function gg(i){if(placed)return;sel=i;document.querySelectorAll('.gap-g').forEach((g,j)=>g.classList.toggle('sel',j===i));document.getElementById('confBtn').disabled=false;}
+  function gConfirm(){
+    if(placed||sel===null)return;placed=true;
+    const tl=document.getElementById('timeline');const gaps=tl.querySelectorAll('.gap-g');
+    const nc=document.createElement('div');nc.className='g-card';nc.style.background='rgba(255,255,255,0.2)';
+    nc.innerHTML='<div class="gc-fd">🎵</div><div style="font-size:9px;color:rgba(255,255,255,0.7);margin-top:6px;">Placed!</div>';
+    tl.insertBefore(nc,gaps[sel].nextSibling);
+    document.getElementById('confBtn').disabled=true;
+    document.getElementById('hitBtn').classList.add('on');
+    document.getElementById('chG').classList.add('on');
+    let ct=10;document.getElementById('cgNum').textContent=ct;
+    const ci=setInterval(()=>{ct--;document.getElementById('cgNum').textContent=ct;if(ct<=0){clearInterval(ci);gFlip(nc);}},1000);
+  }
+  function gFlip(card){
+    document.getElementById('hitBtn').classList.remove('on');document.getElementById('chG').classList.remove('on');
+    const ok=(sel===3);
+    card.innerHTML='<div class="gc-yr">2003</div><div class="gc-t">Mr. Brightside</div><div class="gc-a">The Killers</div>';
+    card.className='g-card '+(ok?'ok':'bad');
+    addLog('You → <span class="hi">Mr. Brightside</span> '+(ok?'<span class="ok">✓</span>':'<span class="bad">✗</span>'));
+    gReveal();
+  }
+  function gReveal(){
+    document.getElementById('artOv').style.display='none';
+    document.getElementById('npMystery').style.display='none';
+    document.getElementById('npTitle').style.display='block';
+    document.getElementById('npArtist').style.display='block';
+    document.getElementById('npYr').style.display='block';
+    document.getElementById('npTag').textContent='Revealed';
+  }
+  function gSkip(){addLog('You skipped — <span class="hi">spent 1 token</span>');}
+  function gHitster(){document.getElementById('hitBtn').classList.remove('on');addLog('<span class="bad">HITSTER!</span> You challenged');}
+  function addLog(html){const l=document.getElementById('logArea');const e=document.createElement('div');e.className='log-g';e.innerHTML=html;l.insertBefore(e,l.firstChild);}
+</script>
+</body>
+</html>
