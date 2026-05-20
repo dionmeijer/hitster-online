@@ -5,6 +5,7 @@ export function useGame() {
     const [currentCard, setCurrentCard] = useState(null);
     const [activePlayerId, setActivePlayerId] = useState(null);
     const [previewUrl, setPreviewUrl] = useState(null);
+    const [streamUrl, setStreamUrl] = useState(null);
     const [playAt, setPlayAt] = useState(null);
     const [timelineLength, setTimelineLength] = useState(0);
     const [lastFlip, setLastFlip] = useState(null);
@@ -40,6 +41,7 @@ export function useGame() {
             setCurrentCard(null);
             setActivePlayerId(null);
             setPreviewUrl(null);
+            setStreamUrl(null);
             setPlayAt(null);
             setLastFlip(null);
             setRoundEnded(null);
@@ -48,10 +50,11 @@ export function useGame() {
                 setMyTokens(r.activeRound.tokens[tokenKey]);
             }
         });
-        socket.on('turn:started', ({ activePlayerId: pid, card, previewUrl: url, playAt: pa, timelineLength: tl }) => {
+        socket.on('turn:started', ({ activePlayerId: pid, card, previewUrl: url, streamUrl: su, playAt: pa, timelineLength: tl }) => {
             setActivePlayerId(pid);
             setCurrentCard(card);
             setPreviewUrl(url);
+            setStreamUrl(su ?? null);
             setPlayAt(pa);
             setTimelineLength(tl);
             setLastFlip(null);
@@ -263,6 +266,7 @@ export function useGame() {
         currentCard,
         activePlayerId,
         previewUrl,
+        streamUrl,
         playAt,
         timelineLength,
         lastFlip,

@@ -41,7 +41,7 @@ export interface Card {
 }
 
 /** Hidden card — sent to clients when the turn starts. Year/title/artist hidden until flip. */
-export type CardHidden = Pick<Card, 'trackId' | 'previewUrl' | 'albumArt'>;
+export type CardHidden = Pick<Card, 'trackId' | 'previewUrl' | 'albumArt' | 'streamUrl'>;
 
 export interface Timeline {
   ownerId: string;   // playerId or teamId
@@ -140,8 +140,9 @@ export interface ServerToClientEvents {
     activePlayerId: string;
     card: CardHidden;
     previewUrl: string;
-    playAt: number;        // Unix ms — start audio at exactly this time
-    timelineLength: number; // number of cards already on the active player's timeline
+    streamUrl: string | null;  // 30s MP3 for headless <audio> playback; null when unavailable
+    playAt: number;            // Unix ms — start audio at exactly this time
+    timelineLength: number;    // number of cards already on the active player's timeline
   }) => void;
 
   /** Broadcast after active player places their card */

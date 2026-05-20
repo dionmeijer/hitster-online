@@ -203,6 +203,7 @@ function startTurn(roomCode: string): void {
     activePlayerId: activeId,
     card: hidden,
     previewUrl: hidden.previewUrl,
+    streamUrl: hidden.streamUrl ?? null,
     playAt: Date.now() + 600,
     timelineLength: timelineLen,
   });

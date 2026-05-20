@@ -31,6 +31,7 @@ export default function App() {
       currentCard={game.currentCard}
       activePlayerId={game.activePlayerId}
       previewUrl={game.previewUrl}
+      streamUrl={game.streamUrl}
       playAt={game.playAt}
       timelineLength={game.timelineLength}
       lastFlip={game.lastFlip}

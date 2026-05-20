@@ -128,13 +128,14 @@ function PlayerList({ room, activePlayerId, sessionId }: PlayerListProps) {
 
 interface AudioPlayerProps {
   previewUrl: string | null;
+  streamUrl: string | null;
   playAt: number | null;
   currentCard: CardHidden | null;
   revealedCard: Card | null;
   isFlipped: boolean;
 }
 
-function AudioPlayer({ previewUrl, playAt, currentCard, revealedCard, isFlipped }: AudioPlayerProps) {
+function AudioPlayer({ previewUrl, streamUrl, playAt, currentCard, revealedCard, isFlipped }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const waveformRef = useRef<HTMLDivElement>(null);
   const waveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -142,7 +143,8 @@ function AudioPlayer({ previewUrl, playAt, currentCard, revealedCard, isFlipped 
   const [timeLeft, setTimeLeft] = useState(30);
   const [progress, setProgress] = useState(0);
   const [showEmbed, setShowEmbed] = useState(false);
-  const spotifyOnly = previewUrl !== null && isSpotifyTrackPageUrl(previewUrl);
+  // Use MP3 stream when available; fall back to Spotify embed when not
+  const spotifyOnly = streamUrl === null && previewUrl !== null && isSpotifyTrackPageUrl(previewUrl);
 
   // Waveform animation
   useEffect(() => {
@@ -186,14 +188,14 @@ function AudioPlayer({ previewUrl, playAt, currentCard, revealedCard, isFlipped 
     };
   }, [spotifyOnly, playAt, currentCard?.trackId]);
 
-  // Audio scheduling (MP3 previews only — Spotify track pages open externally)
+  // Audio scheduling (MP3 stream via headless <audio> element)
   useEffect(() => {
-    if (!previewUrl || !playAt || spotifyOnly) return;
+    if (!streamUrl || !playAt) return;
 
     const audio = audioRef.current;
     if (!audio) return;
 
-    audio.src = previewUrl;
+    audio.src = streamUrl;
     audio.load();
 
     const now = Date.now();
@@ -233,7 +235,7 @@ function AudioPlayer({ previewUrl, playAt, currentCard, revealedCard, isFlipped 
       setTimeLeft(30);
       setProgress(0);
     };
-  }, [previewUrl, playAt, spotifyOnly]);
+  }, [streamUrl, playAt]);
 
   const albumArt = isFlipped
     ? (revealedCard?.albumArt ?? currentCard?.albumArt ?? null)
@@ -849,6 +851,7 @@ export interface GameRoomProps {
   currentCard: CardHidden | null;
   activePlayerId: string | null;
   previewUrl: string | null;
+  streamUrl: string | null;
   playAt: number | null;
   timelineLength: number;
   lastFlip: { card: Card; correct: boolean } | null;
@@ -879,6 +882,7 @@ export default function GameRoom({
   currentCard,
   activePlayerId,
   previewUrl,
+  streamUrl,
   playAt,
   lastFlip,
   roundEnded,
@@ -1071,6 +1075,7 @@ export default function GameRoom({
           )}
           <AudioPlayer
             previewUrl={previewUrl}
+            streamUrl={streamUrl}
             playAt={playAt}
             currentCard={currentCard}
             revealedCard={revealedCard}

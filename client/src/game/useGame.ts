@@ -7,6 +7,7 @@ export interface GameState {
   currentCard: CardHidden | null;
   activePlayerId: string | null;
   previewUrl: string | null;
+  streamUrl: string | null;
   playAt: number | null;
   timelineLength: number;
   lastFlip: { card: Card; correct: boolean } | null;
@@ -40,6 +41,7 @@ export function useGame(): GameState {
   const [currentCard, setCurrentCard] = useState<CardHidden | null>(null);
   const [activePlayerId, setActivePlayerId] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [playAt, setPlayAt] = useState<number | null>(null);
   const [timelineLength, setTimelineLength] = useState(0);
   const [lastFlip, setLastFlip] = useState<{ card: Card; correct: boolean } | null>(null);
@@ -80,6 +82,7 @@ export function useGame(): GameState {
       setCurrentCard(null);
       setActivePlayerId(null);
       setPreviewUrl(null);
+      setStreamUrl(null);
       setPlayAt(null);
       setLastFlip(null);
       setRoundEnded(null);
@@ -89,10 +92,11 @@ export function useGame(): GameState {
       }
     });
 
-    socket.on('turn:started', ({ activePlayerId: pid, card, previewUrl: url, playAt: pa, timelineLength: tl }) => {
+    socket.on('turn:started', ({ activePlayerId: pid, card, previewUrl: url, streamUrl: su, playAt: pa, timelineLength: tl }) => {
       setActivePlayerId(pid);
       setCurrentCard(card);
       setPreviewUrl(url);
+      setStreamUrl(su ?? null);
       setPlayAt(pa);
       setTimelineLength(tl);
       setLastFlip(null);
@@ -329,6 +333,7 @@ export function useGame(): GameState {
     currentCard,
     activePlayerId,
     previewUrl,
+    streamUrl,
     playAt,
     timelineLength,
     lastFlip,
