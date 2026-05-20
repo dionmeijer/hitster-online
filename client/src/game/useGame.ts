@@ -26,6 +26,7 @@ export interface GameState {
   createTeam: (name: string) => void;
   joinTeam: (teamId: string) => void;
   leaveTeam: () => void;
+  endGame: () => void;
 }
 
 export function useGame(): GameState {
@@ -245,6 +246,10 @@ export function useGame(): GameState {
     socket.emit('team:leave');
   }, []);
 
+  const endGame = useCallback(() => {
+    socket.emit('room:end');
+  }, []);
+
   return {
     room,
     currentCard,
@@ -269,5 +274,6 @@ export function useGame(): GameState {
     createTeam,
     joinTeam,
     leaveTeam,
+    endGame,
   };
 }
