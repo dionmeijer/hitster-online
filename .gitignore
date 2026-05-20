@@ -15,6 +15,13 @@ build/
 # TypeScript
 *.tsbuildinfo
 
+# Test coverage
+coverage/
+
+# Compiled JS artifacts alongside TS sources
+client/src/**/*.js
+server/src/**/*.js
+
 # Logs
 *.log
 npm-debug.log*
