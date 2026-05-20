@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import type { Card } from '../../../shared/types';
 import { cardStreamUrl, fetchEmbedPreviewStream } from '../spotify';
 
@@ -103,6 +103,16 @@ export default function TrackPreviewModal({ cards, onClose }: TrackPreviewModalP
     },
     [activeTrackId, loadingTrackId, playCard, stopPlayback],
   );
+
+  const cardsKey = cards.map((c) => c.trackId).join(',');
+
+  useEffect(() => {
+    if (!cardsKey) return;
+    const first =
+      cards.find((c) => cardStreamUrl(c) !== null) ?? cards[0];
+    void playCard(first);
+    return () => stopPlayback();
+  }, [cardsKey, cards, playCard, stopPlayback]);
 
   return (
     <div className="modal-overlay" onClick={handleClose} data-testid="track-preview-modal">

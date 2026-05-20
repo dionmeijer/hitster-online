@@ -116,10 +116,10 @@ body {
 .form-col {
   background: #0f0f1a;
   border-right: 2px solid #1e1e3a;
-  padding: 40px 36px;
+  padding: 24px 36px 32px;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   overflow-y: auto;
 }
 
@@ -337,7 +337,7 @@ body {
 
 /* ── Room browser ── */
 .rooms-col {
-  padding: 32px 28px;
+  padding: 24px 28px 32px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -567,6 +567,29 @@ body {
   padding: 6px 12px;
 }
 
+.game-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.header-leave-btn {
+  background: none;
+  border: 1px solid #374151;
+  color: #6b7280;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.header-leave-btn:hover {
+  border-color: #6b7280;
+  color: #9ca3af;
+}
+
 .token-row {
   display: flex;
   gap: 6px;
@@ -664,32 +687,6 @@ body {
 .sidebar-turn-status--you .sidebar-turn-who {
   color: #fbbf24;
 }
-.sidebar-turn-index {
-  color: #a78bfa;
-  letter-spacing: 0;
-  text-transform: none;
-  white-space: nowrap;
-}
-.sidebar-turn-status--you .sidebar-turn-index {
-  color: #fbbf24;
-}
-.sidebar-turn-num {
-  color: #e0e0ff;
-}
-.sidebar-turn-status--you .sidebar-turn-num {
-  color: #fff;
-}
-.sidebar-turn-timer {
-  margin-top: 8px;
-  font-size: 7px;
-  color: #6b7280;
-  font-family: 'Rajdhani', sans-serif;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: none;
-  text-align: center;
-}
-
 .player-item {
   display: flex;
   align-items: center;
@@ -935,14 +932,6 @@ body {
   gap: 12px;
   flex-shrink: 0;
 }
-.timeline-placement-with-hitster {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 12px;
-  width: 100px;
-  flex-shrink: 0;
-}
 .timeline-section.timeline-has-pending .timeline-track {
   padding-bottom: 8px;
 }
@@ -1046,34 +1035,52 @@ body {
 .timeline-placement-column {
   display: flex;
   flex-direction: column;
-  align-items: stretch;
+  align-items: center;
   flex-shrink: 0;
   width: 100px;
-  gap: 12px;
+  gap: 8px;
 }
-.timeline-hitster-below {
+.timeline-challenge-panel {
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  gap: 10px;
-  width: 100%;
-  padding-top: 2px;
+  align-items: center;
+  gap: 6px;
+  width: 100px;
+  box-sizing: border-box;
 }
-.timeline-hitster-timer {
+.timeline-challenge-timer {
   font-family: 'Press Start 2P', monospace;
   font-size: 8px;
   color: #fbbf24;
   text-align: center;
   line-height: 1.4;
-}
-.btn-hitster-timeline {
   width: 100%;
+}
+.btn-challenge-timeline {
+  width: 100px;
   box-sizing: border-box;
-  padding: 10px 6px;
-  font-size: 8px;
-  line-height: 1.3;
-  letter-spacing: 0;
+  padding: 10px 8px;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+  text-align: center;
   white-space: nowrap;
+  text-transform: uppercase;
+  color: #fff;
+  background: #dc2626;
+  border: 2px solid #ef4444;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.btn-challenge-timeline:hover:not(:disabled) {
+  background: #ef4444;
+  border-color: #f87171;
+}
+.btn-challenge-timeline:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 .timeline-section.timeline-has-hitster-slot .timeline-track--watch,
 .timeline-section.timeline-has-hitster-slot .timeline-track {
@@ -1210,6 +1217,21 @@ body {
 }
 
 /* ── Actions bar ── */
+.token-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+.token-panel-label {
+  font-size: 12px;
+  color: #6b7280;
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
 .actions-bar {
   padding: 16px 32px;
   background: #0f0f1a;
@@ -1217,6 +1239,7 @@ body {
   display: flex;
   gap: 12px;
   align-items: center;
+  justify-content: center;
   flex-shrink: 0;
   flex-wrap: wrap;
 }
@@ -1327,15 +1350,27 @@ body {
 /* ── Challenge timer ── */
 .challenge-timer-box--compact {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: 6px;
+  padding: 10px 12px;
   margin-bottom: 8px;
   flex-shrink: 0;
+  text-align: center;
+  background: rgba(239, 68, 68, 0.12);
+  border: 2px solid #dc2626;
+  border-radius: 4px;
 }
 .challenge-timer-box--compact .challenge-timer-count {
-  font-size: 18px;
+  font-size: 20px;
+  line-height: 1.3;
+  order: -1;
+}
+.challenge-timer-box--compact .challenge-timer-label {
+  margin-bottom: 0;
+  line-height: 1.5;
+  max-width: 100%;
+  word-break: break-word;
 }
 .challenge-timer-box {
   text-align: center;
@@ -1347,13 +1382,13 @@ body {
 .challenge-timer-label {
   font-family: 'Press Start 2P', monospace;
   font-size: 7px;
-  color: #ef4444;
+  color: #fbbf24;
   margin-bottom: 6px;
 }
 .challenge-timer-count {
   font-family: 'Press Start 2P', monospace;
   font-size: 24px;
-  color: #ef4444;
+  color: #fbbf24;
 }
 
 /* ── Flip reveal at placed card ── */
@@ -1378,10 +1413,10 @@ body {
   transform: translateX(-50%);
   z-index: 5;
   font-family: 'Press Start 2P', monospace;
-  font-size: 8px;
+  font-size: 9px;
   line-height: 1.4;
   white-space: nowrap;
-  animation: flip-badge-pop 0.45s ease-out;
+  animation: flip-badge-pop 0.9s ease-out;
 }
 
 .flip-reveal-badge--correct {
@@ -1405,22 +1440,23 @@ body {
 .flip-reveal-slot--correct .flip-reveal-ring {
   border: 2px solid #4ade80;
   box-shadow: 0 0 28px rgba(74, 222, 128, 0.55), inset 0 0 20px rgba(74, 222, 128, 0.12);
-  animation: flip-glow-pulse 1.1s ease-in-out infinite;
+  animation: flip-glow-pulse 1.2s ease-in-out infinite;
 }
 
 .flip-reveal-slot--wrong .flip-reveal-ring {
   border: 2px solid #ef4444;
   box-shadow: 0 0 24px rgba(239, 68, 68, 0.5);
-  animation: flip-shake 0.55s ease-in-out;
+  animation: flip-shake 0.6s ease-in-out 2;
 }
 
 .flip-reveal-card--correct {
-  animation: flip-card-pop 0.55s ease-out;
+  animation: flip-card-pop 1.2s ease-out;
   box-shadow: 0 0 20px rgba(74, 222, 128, 0.35);
 }
 
 .flip-reveal-card--wrong {
-  animation: flip-card-wrong 0.9s ease-out forwards;
+  animation: flip-card-wrong 1.2s ease-out forwards;
+  box-shadow: 0 0 18px rgba(239, 68, 68, 0.4);
 }
 
 @keyframes flip-badge-pop {
@@ -1448,9 +1484,9 @@ body {
 }
 
 @keyframes flip-card-wrong {
-  0% { transform: scale(1); opacity: 1; filter: none; }
-  40% { transform: scale(1.02); opacity: 1; filter: saturate(0.6); }
-  100% { transform: scale(0.92) translateY(8px); opacity: 0.35; filter: grayscale(0.8); }
+  0% { transform: scale(0.88) rotateY(90deg); opacity: 0.4; filter: none; }
+  55% { transform: scale(1.03); opacity: 1; filter: none; }
+  100% { transform: scale(1); opacity: 1; filter: none; }
 }
 
 /* ── Win screen ── */

@@ -9,5 +9,8 @@ export const CHALLENGE_WINDOW_MS = 3_000;
 /** Max game-log lines kept per round (newest dropped). */
 export const GAME_LOG_MAX_ENTRIES = 50;
 
+/** How long the inline flip reveal (card + badge) stays visible (ms). */
+export const FLIP_REVEAL_DISPLAY_MS = 2_000;
+
 /** Max time to listen and place before the turn is auto-skipped (ms). Server may shorten in TEST_MODE. */
 export const TURN_PLACE_TIMEOUT_MS = 30_000;

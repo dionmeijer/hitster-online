@@ -17,7 +17,6 @@ function hydrateTurnFromRoom(r) {
 export function useGame() {
     const [room, setRoom] = useState(null);
     const [currentCard, setCurrentCard] = useState(null);
-    const [observerCard, setObserverCard] = useState(null);
     const [activePlayerId, setActivePlayerId] = useState(null);
     const [previewUrl, setPreviewUrl] = useState(null);
     const [streamUrl, setStreamUrl] = useState(null);
@@ -49,7 +48,6 @@ export function useGame() {
             setPreviewUrl(hydrated.previewUrl);
             setStreamUrl(hydrated.streamUrl);
             setPlayAt(null);
-            setObserverCard(null);
             setTurnEndsAt(null);
         });
         socket.on('room:updated', (r) => {
@@ -63,7 +61,6 @@ export function useGame() {
             setRoom(r);
             setSocketError(null);
             setCurrentCard(null);
-            setObserverCard(null);
             setActivePlayerId(null);
             setPreviewUrl(null);
             setStreamUrl(null);
@@ -76,10 +73,9 @@ export function useGame() {
                 setMyTokens(r.activeRound.tokens[tokenKey]);
             }
         });
-        socket.on('turn:started', ({ activePlayerId: pid, card, observerCard: obs, previewUrl: url, streamUrl: su, playAt: pa, timelineLength: tl, turnEndsAt: te }) => {
+        socket.on('turn:started', ({ activePlayerId: pid, card, previewUrl: url, streamUrl: su, playAt: pa, timelineLength: tl, turnEndsAt: te }) => {
             setActivePlayerId(pid);
             setCurrentCard(card);
-            setObserverCard(obs);
             setPreviewUrl(url);
             setStreamUrl(su ?? null);
             setPlayAt(pa > Date.now() ? pa : null);
@@ -160,7 +156,6 @@ export function useGame() {
                 challengeResults,
             });
             setCurrentCard(null);
-            setObserverCard(null);
             setTurnEndsAt(null);
             setRoom((prev) => {
                 if (!prev || !prev.activeRound)
@@ -211,7 +206,6 @@ export function useGame() {
         socket.on('round:ended', ({ winnerId }) => {
             setRoundEnded({ winnerId });
             setCurrentCard(null);
-            setObserverCard(null);
             setActivePlayerId(null);
             setPreviewUrl(null);
             setStreamUrl(null);
@@ -331,7 +325,6 @@ export function useGame() {
     return {
         room,
         currentCard,
-        observerCard,
         activePlayerId,
         previewUrl,
         streamUrl,

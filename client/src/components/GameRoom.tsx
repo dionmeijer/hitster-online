@@ -4,6 +4,7 @@ import {
   CARDS_TO_WIN_MAX,
   CARDS_TO_WIN_MIN,
   CHALLENGE_WINDOW_MS,
+  FLIP_REVEAL_DISPLAY_MS,
 } from '../../../shared/constants';
 import type { Room, Card, CardHidden, GameMode, Player, Team } from '../../../shared/types';
 import TrackPreviewModal from './TrackPreviewModal';
@@ -78,8 +79,6 @@ interface PlayerListProps {
   activePlayerId: string | null;
   activeTurnLabel: string;
   isMyTurn: boolean;
-  turnIndex: number;
-  turnSecondsLeft: number | null;
   sessionId: string;
 }
 
@@ -88,8 +87,6 @@ function PlayerList({
   activePlayerId,
   activeTurnLabel,
   isMyTurn,
-  turnIndex,
-  turnSecondsLeft,
   sessionId,
 }: PlayerListProps) {
   const players = Object.values(room.players).filter((p) => !p.isSpectator);
@@ -151,13 +148,7 @@ function PlayerList({
             <div className="sidebar-turn-who">
               {isMyTurn ? 'your turn' : `${activeTurnLabel}'s turn`}
             </div>
-            <div className="sidebar-turn-index">
-              Turn <span className="sidebar-turn-num">{turnIndex + 1}</span>
-            </div>
           </div>
-          {turnSecondsLeft !== null && turnSecondsLeft > 0 && (
-            <div className="sidebar-turn-timer">{turnSecondsLeft}s to place</div>
-          )}
         </div>
       )}
 
@@ -221,7 +212,6 @@ interface AudioPlayerProps {
   currentCard: CardHidden | null;
   revealedCard: Card | null;
   isFlipped: boolean;
-  observerCard: Card | null;
   isActivePlayer: boolean;
 }
 
@@ -232,7 +222,6 @@ function AudioPlayer({
   currentCard,
   revealedCard,
   isFlipped,
-  observerCard,
   isActivePlayer,
 }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -351,12 +340,13 @@ function AudioPlayer({
     return isActivePlayer ? 'Starting preview…' : 'Starting preview for all…';
   })();
 
-  const albumArt = isFlipped
-    ? (revealedCard?.albumArt ?? currentCard?.albumArt ?? null)
-    : (currentCard?.albumArt ?? null);
-
   const showDetails = isFlipped && revealedCard;
-  const showObserverDetails = !isActivePlayer && observerCard && !isFlipped;
+  const albumArt =
+    showDetails && revealedCard
+      ? revealedCard.albumArt
+      : isActivePlayer && !isFlipped
+        ? (currentCard?.albumArt ?? null)
+        : null;
 
   return (
     <>
@@ -374,7 +364,11 @@ function AudioPlayer({
 
         <div className="song-info">
           <div className="song-label">
-            {isFlipped ? 'REVEALED' : 'NOW PLAYING — PLACE THIS CARD'}
+            {isFlipped
+              ? 'REVEALED'
+              : isActivePlayer
+                ? 'NOW PLAYING — PLACE THIS CARD'
+                : 'NOW PLAYING'}
           </div>
           {showDetails && revealedCard ? (
             <>
@@ -384,16 +378,8 @@ function AudioPlayer({
                 <div className="song-year">{revealedCard.releaseYear}</div>
               </div>
             </>
-          ) : showObserverDetails && observerCard ? (
-            <>
-              <div className="song-title">{observerCard.title}</div>
-              <div className="song-artist">{observerCard.artist}</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
-                <div className="song-year">{observerCard.releaseYear}</div>
-              </div>
-            </>
           ) : (
-            <div style={{ fontSize: 13, color: '#6b7280', marginTop: 8 }}>
+            <div style={{ fontSize: 13, color: '#6b7280', marginTop: 8 }} data-testid="now-playing-status">
               {statusMessage}
             </div>
           )}
@@ -441,9 +427,9 @@ function ChallengeBar({ deadline }: ChallengeBarProps) {
   if (!deadline) return null;
 
   return (
-    <div className="challenge-timer-box challenge-timer-box--compact">
-      <div className="challenge-timer-label">Challenge</div>
+    <div className="challenge-timer-box challenge-timer-box--compact" aria-live="polite">
       <div className="challenge-timer-count">{seconds}s</div>
+      <div className="challenge-timer-label">Challenge window</div>
     </div>
   );
 }
@@ -797,14 +783,12 @@ function LobbyScreen({ room, sessionId, onStartRound, onCreateTeam, onJoinTeam, 
 
 interface TokenPanelProps {
   myTokens: number;
-  canSkip: boolean;
-  onSkip: () => void;
 }
 
-function TokenPanel({ myTokens, canSkip, onSkip }: TokenPanelProps) {
+function TokenPanel({ myTokens }: TokenPanelProps) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-      <span style={{ fontSize: 12, color: '#6b7280' }}>YOUR TOKENS</span>
+    <div className="token-panel-header">
+      <span className="token-panel-label">YOUR TOKENS</span>
       <div className="token-row">
         {Array.from({ length: 5 }, (_, i) => (
           <div key={i} className={`token-circle${i >= myTokens ? ' empty' : ''}`}>
@@ -812,15 +796,6 @@ function TokenPanel({ myTokens, canSkip, onSkip }: TokenPanelProps) {
           </div>
         ))}
       </div>
-      {canSkip && (
-        <button
-          className="action-btn btn-skip-action"
-          disabled={myTokens < 1}
-          onClick={onSkip}
-        >
-          SKIP (1🪙)
-        </button>
-      )}
     </div>
   );
 }
@@ -830,12 +805,10 @@ function TokenPanel({ myTokens, canSkip, onSkip }: TokenPanelProps) {
 export interface GameRoomProps {
   room: Room;
   currentCard: CardHidden | null;
-  observerCard: Card | null;
   activePlayerId: string | null;
   previewUrl: string | null;
   streamUrl: string | null;
   playAt: number | null;
-  turnEndsAt: number | null;
   timelineLength: number;
   lastFlip: {
     card: Card;
@@ -869,12 +842,10 @@ export interface GameRoomProps {
 export default function GameRoom({
   room,
   currentCard,
-  observerCard,
   activePlayerId,
   previewUrl,
   streamUrl,
   playAt,
-  turnEndsAt,
   lastFlip,
   roundEnded,
   myTokens,
@@ -899,7 +870,12 @@ export default function GameRoom({
 }: GameRoomProps) {
   const [selectedPosition, setSelectedPosition] = useState<number | null>(null);
   const [showFlipResult, setShowFlipResult] = useState(false);
-  const [turnSecondsLeft, setTurnSecondsLeft] = useState<number | null>(null);
+  const [flipRevealSnapshot, setFlipRevealSnapshot] = useState<{
+    position: number;
+    card: Card;
+    correct: boolean;
+    timelineEntityId: string;
+  } | null>(null);
   const [hasChallenged, setHasChallenged] = useState(false);
   const [nameSongTitle, setNameSongTitle] = useState('');
   const [nameSongArtist, setNameSongArtist] = useState('');
@@ -948,14 +924,14 @@ export default function GameRoom({
       : 'TIMELINE';
   const mainCards = watchingOther ? activeCards : myCards;
   const mainTimelineEntityId = watchingOther ? activeEntityId : timelineKey;
-  const flipEntityId =
-    lastFlip && round ? activeEntityIdFromRoom(room, lastFlip.activePlayerId) : null;
   const flipReveal =
-    showFlipResult && lastFlip && flipEntityId === mainTimelineEntityId
+    showFlipResult &&
+    flipRevealSnapshot &&
+    flipRevealSnapshot.timelineEntityId === mainTimelineEntityId
       ? {
-          position: lastFlip.placedPosition,
-          card: lastFlip.card,
-          correct: lastFlip.correct,
+          position: flipRevealSnapshot.position,
+          card: flipRevealSnapshot.card,
+          correct: flipRevealSnapshot.correct,
         }
       : null;
 
@@ -964,19 +940,6 @@ export default function GameRoom({
     [round?.gameLog],
   );
 
-  useEffect(() => {
-    if (!turnEndsAt || currentTurn?.phase !== 'place') {
-      setTurnSecondsLeft(null);
-      return;
-    }
-    const tick = () => {
-      setTurnSecondsLeft(Math.max(0, Math.ceil((turnEndsAt - Date.now()) / 1000)));
-    };
-    tick();
-    const id = setInterval(tick, 250);
-    return () => clearInterval(id);
-  }, [turnEndsAt, currentTurn?.phase]);
-
   // Reset challenge flag when a new place phase starts
   useEffect(() => {
     if (currentTurn?.phase === 'place') {
@@ -984,17 +947,28 @@ export default function GameRoom({
     }
   }, [resolvedActivePlayerId, currentTurn?.phase]);
 
-  // Show flip result when lastFlip changes
+  // Show flip result for FLIP_REVEAL_DISPLAY_MS (survives turn:started clearing lastFlip)
   useEffect(() => {
-    if (!lastFlip) return;
+    if (!lastFlip || !round) return;
+    const timelineEntityId = activeEntityIdFromRoom(room, lastFlip.activePlayerId);
+    setFlipRevealSnapshot({
+      position: lastFlip.placedPosition,
+      card: lastFlip.card,
+      correct: lastFlip.correct,
+      timelineEntityId,
+    });
     setShowFlipResult(true);
     setSelectedPosition(null);
   }, [lastFlip]);
 
   useEffect(() => {
     if (!showFlipResult) return;
-    const timer = setTimeout(() => setShowFlipResult(false), 3500);
-    const handler = () => setShowFlipResult(false);
+    const dismiss = () => {
+      setShowFlipResult(false);
+      setFlipRevealSnapshot(null);
+    };
+    const timer = setTimeout(dismiss, FLIP_REVEAL_DISPLAY_MS);
+    const handler = () => dismiss();
     window.addEventListener('keydown', handler);
     return () => {
       clearTimeout(timer);
@@ -1074,10 +1048,7 @@ export default function GameRoom({
         <header className="game-header">
           <HitsterLogo />
           <div className="room-code-badge">ROOM: {room.code}</div>
-          <button
-            style={{ background: 'none', border: '1px solid #374151', color: '#6b7280', padding: '6px 12px', cursor: 'pointer', fontFamily: 'Rajdhani, sans-serif', fontSize: 13 }}
-            onClick={onLeave}
-          >
+          <button type="button" className="header-leave-btn" onClick={onLeave} data-testid="leave-btn">
             Leave
           </button>
         </header>
@@ -1111,13 +1082,12 @@ export default function GameRoom({
       <header className="game-header">
         <HitsterLogo />
         <div className="room-code-badge">ROOM: {room.code}</div>
-        {!isSpectator && (
-          <TokenPanel
-            myTokens={myTokens}
-            canSkip={isActivePlayer && !isInChallengePhase && currentCard !== null}
-            onSkip={onSkipCard}
-          />
-        )}
+        <div className="game-header-actions">
+          {!isSpectator && <TokenPanel myTokens={myTokens} />}
+          <button type="button" className="header-leave-btn" onClick={onLeave} data-testid="leave-btn">
+            Leave
+          </button>
+        </div>
       </header>
 
       <div className="game-main">
@@ -1127,8 +1097,6 @@ export default function GameRoom({
           activePlayerId={resolvedActivePlayerId}
           activeTurnLabel={activeName}
           isMyTurn={isActivePlayer && !isSpectator}
-          turnIndex={round?.turnIndex ?? 0}
-          turnSecondsLeft={turnSecondsLeft}
           sessionId={sessionId}
         />
 
@@ -1154,7 +1122,6 @@ export default function GameRoom({
             currentCard={currentCard}
             revealedCard={revealedCard}
             isFlipped={isFlipped}
-            observerCard={observerCard}
             isActivePlayer={isActivePlayer}
           />
 

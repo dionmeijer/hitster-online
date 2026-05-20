@@ -4,6 +4,7 @@ import {
   addPlayer,
   markDisconnected,
   markReconnected,
+  allParticipantsOffline,
   isPlacementCorrect,
   resolveFlip,
   advanceTurn,
@@ -592,8 +593,14 @@ describe('markDisconnected / markReconnected', () => {
     const room2 = addPlayer(room, 'p2', 'Bob');
     const d1 = markDisconnected(room2, 'p1');
     const d2 = markDisconnected(d1, 'p2');
-    const allGone = Object.values(d2.players).every(p => !p.isConnected);
-    expect(allGone).toBe(true);
+    expect(allParticipantsOffline(d2)).toBe(true);
+  });
+
+  it('allParticipantsOffline is false when any player is connected', () => {
+    const room = createRoom('p1', 'Alice', 'Test');
+    const room2 = addPlayer(room, 'p2', 'Bob');
+    const d1 = markDisconnected(room2, 'p1');
+    expect(allParticipantsOffline(d1)).toBe(false);
   });
 
   it('resets missedTurns to 0', () => {

@@ -164,8 +164,6 @@ export interface ServerToClientEvents {
   'turn:started': (data: {
     activePlayerId: string;
     card: CardHidden;
-    /** Full track for non-placing players (active player UI ignores this). */
-    observerCard: Card;
     previewUrl: string;
     /** 30s MP3 for in-browser playback (API preview_url and/or embed-resolved). */
     streamUrl: string | null;

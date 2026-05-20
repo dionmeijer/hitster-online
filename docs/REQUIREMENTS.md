@@ -42,6 +42,7 @@ _What the system does from a player's perspective. No technical detail._
 - Players can join a room at any point while it is in the **lobby** state (before a round starts).
 - Only the room owner can configure rounds and start the game.
 - Maximum **12 players** or **6 teams** per room.
+- When **every participant is offline** (no open Socket.io connection), the room is removed from the server after a short grace period (~60s; 5s in test mode), including mid-round and game-over rooms.
 
 ### 1.3 Teams
 - Any player in the lobby can create a team and invite others to join.
@@ -70,7 +71,7 @@ Before each round, the room owner sets:
 #### Turn Structure
 Each turn has three phases:
 
-**REVEAL** — A new card is drawn from the deck and the song starts playing for all players simultaneously (synchronised via a server-issued `playAt` timestamp). The placing player does not see the song's title, artist, or year until after they have placed the card. All other players see the song details immediately.
+**REVEAL** — A new card is drawn from the deck and the song starts playing for all players simultaneously (synchronised via a server-issued `playAt` timestamp). No player sees the song's title, artist, or year until the card is flipped after placement; only the active player sees blurred album art while placing.
 
 **PLACE** — The placing player selects a position on their timeline. The card is placed face-down. A **10-second challenge window** then opens for all non-placing players.
 

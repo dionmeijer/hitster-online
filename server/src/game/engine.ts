@@ -89,6 +89,12 @@ export function markDisconnected(room: Room, playerId: string): Room {
   };
 }
 
+/** True when the room has players and every one is disconnected (socket gone). */
+export function allParticipantsOffline(room: Room): boolean {
+  const players = Object.values(room.players);
+  return players.length > 0 && players.every((p) => !p.isConnected);
+}
+
 /** Mark player reconnected */
 export function markReconnected(room: Room, playerId: string): Room {
   if (!room.players[playerId]) return room;

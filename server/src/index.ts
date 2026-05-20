@@ -24,6 +24,7 @@ import {
   CARDS_TO_WIN_MAX,
   CARDS_TO_WIN_MIN,
   CHALLENGE_WINDOW_MS as DEFAULT_CHALLENGE_WINDOW_MS,
+  FLIP_REVEAL_DISPLAY_MS as DEFAULT_FLIP_REVEAL_DISPLAY_MS,
   TURN_PLACE_TIMEOUT_MS as DEFAULT_TURN_PLACE_TIMEOUT_MS,
 } from '../../shared/constants';
 import type { Socket } from 'socket.io';
@@ -70,6 +71,8 @@ const spotify = createSpotifyClient();
 // In TEST_MODE the challenge window is much shorter to keep tests fast
 const CHALLENGE_WINDOW_MS =
   process.env.TEST_MODE === 'true' ? 500 : DEFAULT_CHALLENGE_WINDOW_MS;
+const FLIP_REVEAL_DISPLAY_MS =
+  process.env.TEST_MODE === 'true' ? 300 : DEFAULT_FLIP_REVEAL_DISPLAY_MS;
 
 // socketId → { sessionId, roomCode }
 const socketSession = new Map<string, { sessionId: string; roomCode: string }>();
@@ -85,6 +88,7 @@ const pendingChallenges = new Map<string, Challenge[]>();
 
 // roomCode → challenge window timer
 const challengeTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const flipAdvanceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 // roomCode → pending empty-room deletion timer
 const pendingDeletes = new Map<string, ReturnType<typeof setTimeout>>();
@@ -162,9 +166,43 @@ function clearChallengeTimer(roomCode: string): void {
   if (t !== undefined) { clearTimeout(t); challengeTimers.delete(roomCode); }
 }
 
+function clearFlipAdvanceTimer(roomCode: string): void {
+  const t = flipAdvanceTimers.get(roomCode);
+  if (t !== undefined) { clearTimeout(t); flipAdvanceTimers.delete(roomCode); }
+}
+
 function clearPlaceTurnTimer(roomCode: string): void {
   const t = placeTurnTimers.get(roomCode);
   if (t !== undefined) { clearTimeout(t); placeTurnTimers.delete(roomCode); }
+}
+
+function purgeRoomRuntime(roomCode: string): void {
+  clearPlaceTurnTimer(roomCode);
+  clearChallengeTimer(roomCode);
+  clearFlipAdvanceTimer(roomCode);
+  pendingCards.delete(roomCode);
+  pendingChallenges.delete(roomCode);
+  liveDecks.delete(roomCode);
+  const pendingDelete = pendingDeletes.get(roomCode);
+  if (pendingDelete !== undefined) {
+    clearTimeout(pendingDelete);
+    pendingDeletes.delete(roomCode);
+  }
+}
+
+function scheduleEmptyRoomDeletion(roomCode: string): void {
+  const existing = pendingDeletes.get(roomCode);
+  if (existing !== undefined) clearTimeout(existing);
+
+  const t = setTimeout(() => {
+    pendingDeletes.delete(roomCode);
+    const cur = store.get(roomCode);
+    if (!cur || !engine.allParticipantsOffline(cur)) return;
+    purgeRoomRuntime(roomCode);
+    store.delete(roomCode);
+    console.log(`[room] deleted ${roomCode} (all participants offline)`);
+  }, EMPTY_ROOM_TTL_MS);
+  pendingDeletes.set(roomCode, t);
 }
 
 function autoSkipActiveTurn(
@@ -245,7 +283,6 @@ function buildTurnStartedPayload(
   room: Room,
   activeId: string,
   hidden: CardHidden,
-  observerCard: Card,
   streamUrl: string | null,
   turnEndsAt: number,
   playAt: number,
@@ -253,7 +290,6 @@ function buildTurnStartedPayload(
   return {
     activePlayerId: activeId,
     card: hidden,
-    observerCard,
     previewUrl: hidden.previewUrl,
     streamUrl,
     playAt,
@@ -270,8 +306,7 @@ async function emitTurnSnapshot(
   const ar = room.activeRound;
   if (room.status !== 'round_active' || !ar?.currentCard || !ar.currentTurn) return;
 
-  const observerCard = pendingCards.get(room.code);
-  if (!observerCard) return;
+  if (!pendingCards.get(room.code)) return;
 
   const activeId = ar.currentTurn.activeId;
   const streamUrl = await resolveTurnStreamUrl(ar.currentCard);
@@ -283,7 +318,6 @@ async function emitTurnSnapshot(
       room,
       activeId,
       ar.currentCard,
-      observerCard,
       streamUrl,
       Date.now() + TURN_PLACE_TIMEOUT_MS,
       inPlacePhase ? Date.now() + 600 : 0,
@@ -351,7 +385,7 @@ async function startTurn(roomCode: string): Promise<void> {
 
   io.to(roomCode).emit(
     'turn:started',
-    buildTurnStartedPayload(room, activeId, hidden, card, streamUrl, turnEndsAt, Date.now() + 600),
+    buildTurnStartedPayload(room, activeId, hidden, streamUrl, turnEndsAt, Date.now() + 600),
   );
 }
 
@@ -426,10 +460,17 @@ function resolveAndAdvance(roomCode: string): void {
     return;
   }
 
-  const advancedRoom = engine.advanceTurn(flippedWithLog);
-  store.set(advancedRoom);
-  io.to(roomCode).emit('room:updated', advancedRoom);
-  startTurn(roomCode);
+  clearFlipAdvanceTimer(roomCode);
+  const timer = setTimeout(() => {
+    flipAdvanceTimers.delete(roomCode);
+    const current = store.get(roomCode);
+    if (!current?.activeRound || current.status !== 'round_active') return;
+    const advancedRoom = engine.advanceTurn(flippedWithLog);
+    store.set(advancedRoom);
+    io.to(roomCode).emit('room:updated', advancedRoom);
+    void startTurn(roomCode);
+  }, FLIP_REVEAL_DISPLAY_MS);
+  flipAdvanceTimers.set(roomCode, timer);
 }
 
 // ---------------------------------------------------------------------------
@@ -811,28 +852,18 @@ io.on('connection', (socket) => {
     store.set(updatedRoom);
     io.to(session.roomCode).emit('room:updated', updatedRoom);
 
-    // If all players are gone from a lobby room, schedule deletion
-    const allGone = Object.values(updatedRoom.players).every(p => !p.isConnected);
-    if (allGone && (updatedRoom.status === 'lobby' || updatedRoom.status === 'round_ended')) {
-      const roomCode = session.roomCode;
-      const t = setTimeout(() => {
-        const cur = store.get(roomCode);
-        if (!cur) return;
-        if (Object.values(cur.players).every(p => !p.isConnected)) {
-          store.delete(roomCode);
-        }
-      }, EMPTY_ROOM_TTL_MS);
-      pendingDeletes.set(session.roomCode, t);
-    }
-
-    // Auto-skip only while they must listen and place — not during the challenge window
-    const currentTurn = updatedRoom.activeRound?.currentTurn;
-    if (
-      updatedRoom.status === 'round_active' &&
-      updatedRoom.activeRound?.turnOrder[updatedRoom.activeRound.turnIndex] === sessionId &&
-      currentTurn?.phase === 'place'
-    ) {
-      scheduleDisconnectSkip(session.roomCode, sessionId);
+    if (engine.allParticipantsOffline(updatedRoom)) {
+      scheduleEmptyRoomDeletion(session.roomCode);
+    } else {
+      // Auto-skip only while they must listen and place — not during the challenge window
+      const currentTurn = updatedRoom.activeRound?.currentTurn;
+      if (
+        updatedRoom.status === 'round_active' &&
+        updatedRoom.activeRound?.turnOrder[updatedRoom.activeRound.turnIndex] === sessionId &&
+        currentTurn?.phase === 'place'
+      ) {
+        scheduleDisconnectSkip(session.roomCode, sessionId);
+      }
     }
   });
 });

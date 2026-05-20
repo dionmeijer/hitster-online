@@ -385,8 +385,8 @@ test('mid-round joiner sees active timeline and now playing', async ({ browser }
 
     await expect(p2.locator('[data-testid="watch-timeline"]')).toBeVisible({ timeout: 15_000 });
     await expect(p2.locator('[data-testid="watch-timeline"]')).toContainText("HOSTSPEC'S TIMELINE");
-    await expect(p2.locator('.now-playing .song-title')).toBeVisible({ timeout: 15_000 });
-    await expect(p2.locator('.now-playing .song-title')).not.toHaveText('');
+    await expect(p2.locator('[data-testid="now-playing-status"]')).toBeVisible({ timeout: 15_000 });
+    await expect(p2.locator('.now-playing .song-title')).toHaveCount(0);
   } finally {
     await ctx1.close();
     await ctx2.close();

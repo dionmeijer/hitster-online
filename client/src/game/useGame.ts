@@ -5,7 +5,6 @@ import type { Room, Card, CardHidden, GameMode } from '../../../shared/types';
 export interface GameState {
   room: Room | null;
   currentCard: CardHidden | null;
-  observerCard: Card | null;
   activePlayerId: string | null;
   previewUrl: string | null;
   streamUrl: string | null;
@@ -67,7 +66,6 @@ function hydrateTurnFromRoom(r: Room): {
 export function useGame(): GameState {
   const [room, setRoom] = useState<Room | null>(null);
   const [currentCard, setCurrentCard] = useState<CardHidden | null>(null);
-  const [observerCard, setObserverCard] = useState<Card | null>(null);
   const [activePlayerId, setActivePlayerId] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
@@ -102,7 +100,6 @@ export function useGame(): GameState {
       setPreviewUrl(hydrated.previewUrl);
       setStreamUrl(hydrated.streamUrl);
       setPlayAt(null);
-      setObserverCard(null);
       setTurnEndsAt(null);
     });
 
@@ -118,7 +115,6 @@ export function useGame(): GameState {
       setRoom(r);
       setSocketError(null);
       setCurrentCard(null);
-      setObserverCard(null);
       setActivePlayerId(null);
       setPreviewUrl(null);
       setStreamUrl(null);
@@ -132,10 +128,9 @@ export function useGame(): GameState {
       }
     });
 
-    socket.on('turn:started', ({ activePlayerId: pid, card, observerCard: obs, previewUrl: url, streamUrl: su, playAt: pa, timelineLength: tl, turnEndsAt: te }) => {
+    socket.on('turn:started', ({ activePlayerId: pid, card, previewUrl: url, streamUrl: su, playAt: pa, timelineLength: tl, turnEndsAt: te }) => {
       setActivePlayerId(pid);
       setCurrentCard(card);
-      setObserverCard(obs);
       setPreviewUrl(url);
       setStreamUrl(su ?? null);
       setPlayAt(pa > Date.now() ? pa : null);
@@ -225,7 +220,6 @@ export function useGame(): GameState {
         challengeResults,
       });
       setCurrentCard(null);
-      setObserverCard(null);
       setTurnEndsAt(null);
       setRoom((prev) => {
         if (!prev || !prev.activeRound) return prev;
@@ -276,7 +270,6 @@ export function useGame(): GameState {
     socket.on('round:ended', ({ winnerId }) => {
       setRoundEnded({ winnerId });
       setCurrentCard(null);
-      setObserverCard(null);
       setActivePlayerId(null);
       setPreviewUrl(null);
       setStreamUrl(null);
@@ -420,7 +413,6 @@ export function useGame(): GameState {
   return {
     room,
     currentCard,
-    observerCard,
     activePlayerId,
     previewUrl,
     streamUrl,

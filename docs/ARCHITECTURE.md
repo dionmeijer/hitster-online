@@ -65,7 +65,7 @@ liveDecks      — remaining deck (Card[]) for each active room
 pendingCards   — card drawn this turn, not yet resolved
 pendingChallenges — challenges collected during challenge window
 challengeTimers   — setTimeout handle for each challenge window
-pendingDeletes    — scheduled empty-room cleanup
+pendingDeletes    — delete room after EMPTY_ROOM_TTL when every player is offline (any room status)
 disconnectTimers  — per-player auto-skip timers
 ```
 

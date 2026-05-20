@@ -80,13 +80,38 @@ function DraggablePendingCard() {
   );
 }
 
+interface ChallengeUnderCardProps {
+  challengeSeconds: number;
+  hasChallenged: boolean;
+  onChallenge: () => void;
+}
+
+function ChallengeUnderCard({ challengeSeconds, hasChallenged, onChallenge }: ChallengeUnderCardProps) {
+  return (
+    <div className="timeline-challenge-panel">
+      <span className="timeline-challenge-timer" aria-live="polite">
+        {challengeSeconds}s
+      </span>
+      <button
+        type="button"
+        className="action-btn btn-challenge-timeline"
+        onClick={onChallenge}
+        disabled={hasChallenged || challengeSeconds <= 0}
+        data-testid="challenge-btn"
+      >
+        {hasChallenged ? 'Challenged ✓' : 'Challenge'}
+      </button>
+    </div>
+  );
+}
+
 interface GapDropZoneProps {
   index: number;
   canPlace: boolean;
   isSelected: boolean;
   isPlaced: boolean;
   showFaceDown: boolean;
-  showHitsterBelow: boolean;
+  showChallengeBelow: boolean;
   challengeSeconds: number;
   onChallenge?: () => void;
   hasChallenged?: boolean;
@@ -99,7 +124,7 @@ function GapDropZone({
   isSelected,
   isPlaced,
   showFaceDown,
-  showHitsterBelow,
+  showChallengeBelow,
   challengeSeconds,
   onChallenge,
   hasChallenged,
@@ -112,23 +137,16 @@ function GapDropZone({
 
   if (showFaceDown) {
     return (
-      <div className={showHitsterBelow ? 'timeline-placement-with-hitster' : 'timeline-placement-column'}>
+      <div className="timeline-placement-column">
         <div className="timeline-gap-slot timeline-gap-slot--filled">
           <FaceDownCard className={isPlaced ? 'placed-in-gap' : 'selected-in-gap'} />
         </div>
-        {showHitsterBelow && onChallenge && (
-          <div className="timeline-hitster-below">
-            <span className="timeline-hitster-timer">{challengeSeconds}s</span>
-            <button
-              type="button"
-              className="action-btn btn-hitster btn-hitster-timeline"
-              onClick={onChallenge}
-              disabled={hasChallenged || challengeSeconds <= 0}
-              data-testid="hitster-btn"
-            >
-              {hasChallenged ? 'Challenge ✓' : 'Challenge'}
-            </button>
-          </div>
+        {showChallengeBelow && onChallenge && (
+          <ChallengeUnderCard
+            challengeSeconds={challengeSeconds}
+            hasChallenged={hasChallenged ?? false}
+            onChallenge={onChallenge}
+          />
         )}
       </div>
     );
@@ -237,20 +255,13 @@ export function TimelineView({
 
   const isWatchTimeline = readOnly && showPlacementToAll;
 
-  const renderHitsterControls = () =>
+  const renderChallengeControls = () =>
     showHitsterUnderPlacement && onChallenge ? (
-      <div className="timeline-hitster-below">
-        <span className="timeline-hitster-timer">{challengeSeconds}s</span>
-        <button
-          type="button"
-          className="action-btn btn-hitster btn-hitster-timeline"
-          onClick={onChallenge}
-          disabled={hasChallenged || challengeSeconds <= 0}
-          data-testid="hitster-btn"
-        >
-          {hasChallenged ? 'Challenge ✓' : 'Challenge'}
-        </button>
-      </div>
+      <ChallengeUnderCard
+        challengeSeconds={challengeSeconds}
+        hasChallenged={hasChallenged}
+        onChallenge={onChallenge}
+      />
     ) : null;
 
   const renderFaceDownInGap = (isPlaced: boolean) => (
@@ -269,9 +280,9 @@ export function TimelineView({
         return (
           <div key={`watch-slot-${i}`} className="timeline-watch-slot">
             {showPlacementHere && (
-              <div className="timeline-placement-with-hitster">
+              <div className="timeline-placement-column">
                 {renderFaceDownInGap(true)}
-                {showHitsterUnderPlacement && renderHitsterControls()}
+                {showHitsterUnderPlacement && renderChallengeControls()}
               </div>
             )}
             {isFlipHere && flipReveal && (
@@ -310,7 +321,7 @@ export function TimelineView({
                 isSelected={isSelected}
                 isPlaced={isPlaced}
                 showFaceDown={showFaceDown}
-                showHitsterBelow={showHitsterUnderPlacement && isPlaced && showFaceDown}
+                showChallengeBelow={showHitsterUnderPlacement && isPlaced && showFaceDown}
                 challengeSeconds={challengeSeconds}
                 onChallenge={onChallenge}
                 hasChallenged={hasChallenged}
