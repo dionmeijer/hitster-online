@@ -563,6 +563,7 @@ export interface GameRoomProps {
   onChallengeCard: () => void;
   onSkipCard: () => void;
   onNameSong: (title: string, artist: string) => void;
+  onBuyCard: () => void;
   onLeave: () => void;
 }
 
@@ -581,6 +582,8 @@ export default function GameRoom({
   onPlaceCard,
   onChallengeCard,
   onSkipCard,
+  onNameSong,
+  onBuyCard,
   onLeave,
 }: GameRoomProps) {
   const [selectedPosition, setSelectedPosition] = useState<number | null>(null);
@@ -720,10 +723,23 @@ export default function GameRoom({
             {isActivePlayer && currentCard && !isInChallengePhase && (
               <button
                 className="action-btn btn-skip-action"
+                data-testid="skip-btn"
                 disabled={myTokens < 1}
                 onClick={onSkipCard}
               >
                 SKIP (1🪙)
+              </button>
+            )}
+
+            {isActivePlayer && currentCard && !isInChallengePhase && currentTurn?.phase === 'place' && (
+              <button
+                className="action-btn btn-buy-action"
+                data-testid="buy-btn"
+                disabled={myTokens < 3}
+                onClick={onBuyCard}
+                title="Spend 3 tokens to place without hearing — your next turn will be skipped"
+              >
+                BUY (3🪙)
               </button>
             )}
 
@@ -782,6 +798,7 @@ export default function GameRoom({
               <div className="name-song-form">
                 <input
                   className="name-song-input"
+                  data-testid="name-song-title"
                   placeholder="Title"
                   value={nameSongTitle}
                   onChange={e => setNameSongTitle(e.target.value)}
@@ -790,15 +807,17 @@ export default function GameRoom({
               <div className="name-song-form" style={{ marginTop: 6 }}>
                 <input
                   className="name-song-input"
+                  data-testid="name-song-artist"
                   placeholder="Artist"
                   value={nameSongArtist}
                   onChange={e => setNameSongArtist(e.target.value)}
                 />
                 <button
                   className="name-song-submit"
+                  data-testid="name-song-submit"
                   disabled={!nameSongTitle.trim() || !nameSongArtist.trim()}
                   onClick={() => {
-                    // nameSong handled by parent via prop — not passed in current spec
+                    onNameSong(nameSongTitle.trim(), nameSongArtist.trim());
                     setNameSongTitle('');
                     setNameSongArtist('');
                   }}

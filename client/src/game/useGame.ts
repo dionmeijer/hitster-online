@@ -21,6 +21,7 @@ export interface GameState {
   challengeCard: () => void;
   skipCard: () => void;
   nameSong: (title: string, artist: string) => void;
+  buyCard: () => void;
 }
 
 export function useGame(): GameState {
@@ -112,6 +113,16 @@ export function useGame(): GameState {
       }
     });
 
+    socket.on('turn:bought', ({ tokensUpdated }) => {
+      if (tokensUpdated[sessionId] !== undefined) {
+        setMyTokens(tokensUpdated[sessionId]);
+      }
+      setRoom((prev) => {
+        if (!prev || !prev.activeRound) return prev;
+        return { ...prev, activeRound: { ...prev.activeRound, tokens: tokensUpdated } };
+      });
+    });
+
     socket.on('turn:named', ({ tokensUpdated }) => {
       if (tokensUpdated[sessionId] !== undefined) {
         setMyTokens(tokensUpdated[sessionId]);
@@ -150,6 +161,7 @@ export function useGame(): GameState {
       socket.off('turn:placed');
       socket.off('turn:challenged');
       socket.off('turn:flipped');
+      socket.off('turn:bought');
       socket.off('turn:named');
       socket.off('round:ended');
       socket.off('error');
@@ -207,6 +219,10 @@ export function useGame(): GameState {
     socket.emit('turn:name', { title, artist });
   }, []);
 
+  const buyCard = useCallback(() => {
+    socket.emit('turn:buy');
+  }, []);
+
   return {
     room,
     currentCard,
@@ -226,5 +242,6 @@ export function useGame(): GameState {
     challengeCard,
     skipCard,
     nameSong,
+    buyCard,
   };
 }

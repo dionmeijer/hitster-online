@@ -43,6 +43,7 @@ export default function App() {
       onChallengeCard={game.challengeCard}
       onSkipCard={game.skipCard}
       onNameSong={game.nameSong}
+      onBuyCard={game.buyCard}
       onLeave={() => {
         window.location.reload();
       }}

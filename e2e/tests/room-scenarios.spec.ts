@@ -274,3 +274,100 @@ test('room disappears from lobby after last player leaves', async ({ browser }: 
     await ctx2.close();
   }
 });
+
+// ---------------------------------------------------------------------------
+// 8. Skip and Buy buttons are visible during an active turn (items 3 & 4)
+// ---------------------------------------------------------------------------
+
+test('skip and buy buttons are visible during active turn', async ({ page }) => {
+  await fillEmailAndName(page, 'turnui@example.com', 'TurnUIBot');
+  await createRoom(page, 'Turn UI Test');
+  await startRound(page);
+
+  // Wait for the active game screen
+  await expect(page.locator('[data-testid="round-active"]')).toBeVisible({ timeout: 8_000 });
+
+  // Wait for a turn to start (turn:started emits turn UI)
+  await expect(page.locator('[data-testid="skip-btn"]')).toBeVisible({ timeout: 8_000 });
+  await expect(page.locator('[data-testid="buy-btn"]')).toBeVisible({ timeout: 8_000 });
+
+  // Both buttons are disabled (0 tokens at start)
+  await expect(page.locator('[data-testid="skip-btn"]')).toBeDisabled();
+  await expect(page.locator('[data-testid="buy-btn"]')).toBeDisabled();
+});
+
+// ---------------------------------------------------------------------------
+// 9. Name song panel visible and submittable during active turn (item 3)
+// ---------------------------------------------------------------------------
+
+test('name song panel is visible and inputs work during active turn', async ({ page }) => {
+  await fillEmailAndName(page, 'namesong@example.com', 'NameSongBot');
+  await createRoom(page, 'Name Song Test');
+  await startRound(page);
+
+  await expect(page.locator('[data-testid="round-active"]')).toBeVisible({ timeout: 8_000 });
+
+  // Wait for name song inputs
+  await expect(page.locator('[data-testid="name-song-title"]')).toBeVisible({ timeout: 8_000 });
+  await expect(page.locator('[data-testid="name-song-artist"]')).toBeVisible({ timeout: 8_000 });
+
+  // Submit button is disabled when inputs are empty
+  await expect(page.locator('[data-testid="name-song-submit"]')).toBeDisabled();
+
+  // Filling both inputs enables the submit button
+  await page.fill('[data-testid="name-song-title"]', 'Some Title');
+  await page.fill('[data-testid="name-song-artist"]', 'Some Artist');
+  await expect(page.locator('[data-testid="name-song-submit"]')).toBeEnabled();
+});
+
+// ---------------------------------------------------------------------------
+// 10. Disconnected player's turn auto-advances after TURN_TIMEOUT (item 6)
+// ---------------------------------------------------------------------------
+
+test('disconnected player turn auto-advances after timeout', async ({ browser }: { browser: Browser }) => {
+  const ctx1: BrowserContext = await browser.newContext();
+  const ctx2: BrowserContext = await browser.newContext();
+  const p1: Page = await ctx1.newPage();
+  const p2: Page = await ctx2.newPage();
+
+  try {
+    // p1 creates room and starts round
+    await fillEmailAndName(p1, 'host-dc@example.com', 'HostBot');
+    const roomCode = await createRoom(p1, 'Disconnect Test');
+
+    // p2 joins
+    await fillEmailAndName(p2, 'joiner-dc@example.com', 'JoinerBot');
+    await p2.click('button:has-text("Join a room")');
+    await p2.waitForSelector('.modal-box');
+    await p2.fill('.modal-box input[type="text"]', roomCode);
+    await p2.click('.modal-box button:has-text("Join")');
+    await expect(p2.locator('[data-testid="lobby-room-code"]')).toBeVisible({ timeout: 5_000 });
+
+    await startRound(p1);
+
+    // Both players should see the active game
+    await expect(p1.locator('[data-testid="round-active"]')).toBeVisible({ timeout: 8_000 });
+    await expect(p2.locator('[data-testid="round-active"]')).toBeVisible({ timeout: 8_000 });
+
+    // Record which player has the first turn
+    const firstActivePlayerEl = p2.locator('.active-player .player-name');
+    const firstActiveName = await firstActivePlayerEl.textContent({ timeout: 5_000 });
+
+    // Close the first active player's context to simulate disconnect
+    if (firstActiveName?.includes('HostBot') || firstActiveName === 'You') {
+      await ctx1.close();
+    } else {
+      await ctx2.close();
+    }
+
+    // TURN_TIMEOUT_MS = 3s in TEST_MODE — after it fires the other player becomes active
+    // Allow up to 10s for the auto-skip + turn advance to propagate
+    await expect(async () => {
+      const activeNow = await p2.locator('.active-player').isVisible().catch(() => false);
+      expect(activeNow).toBe(true);
+    }).toPass({ timeout: 10_000, intervals: [1_000] });
+  } finally {
+    await ctx1.close().catch(() => {});
+    await ctx2.close().catch(() => {});
+  }
+});

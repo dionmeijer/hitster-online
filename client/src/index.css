@@ -921,6 +921,12 @@ body {
   color: #fbbf24;
 }
 .btn-skip-action:not(:disabled):hover { background: rgba(251, 191, 36, 0.1); }
+.btn-buy-action {
+  background: transparent;
+  border-color: #a78bfa;
+  color: #a78bfa;
+}
+.btn-buy-action:not(:disabled):hover { background: rgba(167, 139, 250, 0.1); }
 
 .btn-hitster {
   background: #ef4444;
