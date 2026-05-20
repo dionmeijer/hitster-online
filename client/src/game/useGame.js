@@ -55,7 +55,9 @@ export function useGame() {
             setPlayAt(pa);
             setTimelineLength(tl);
             setLastFlip(null);
-            setRoom((prev) => {
+            // Sync currentTurn phase locally so phase-gated UI (buy-btn) renders correctly
+            // without waiting for the next room:updated broadcast.
+            setRoom(prev => {
                 if (!prev?.activeRound)
                     return prev;
                 return {
@@ -222,6 +224,9 @@ export function useGame() {
         setPlaylistPreviewCards(null);
         setPlaylistPreviewLoading(false);
     }, []);
+    const endGame = useCallback(() => {
+        socket.emit('room:end');
+    }, []);
     return {
         room,
         currentCard,
@@ -250,5 +255,6 @@ export function useGame() {
         leaveTeam,
         previewPlaylist,
         clearPlaylistPreview,
+        endGame,
     };
 }
