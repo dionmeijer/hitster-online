@@ -4,6 +4,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import { existsSync } from 'fs';
+import { randomUUID } from 'crypto';
 import { join } from 'path';
 import type {
   ServerToClientEvents,
@@ -368,8 +369,7 @@ io.on('connection', (socket) => {
     const room = store.get(session.roomCode);
     if (!room?.activeRound) return;
 
-    const activeId = room.activeRound.turnOrder[room.activeRound.turnIndex];
-    if (activeId !== sessionId) { socket.emit('error', 'Not your turn'); return; }
+    if (!engine.isActiveParticipant(room, sessionId)) { socket.emit('error', 'Not your turn'); return; }
 
     try {
       const placedRoom = engine.applyPlacement(room, sessionId, data.position);
@@ -399,7 +399,7 @@ io.on('connection', (socket) => {
 
     const { currentTurn } = room.activeRound;
     if (currentTurn.phase !== 'challenge') { socket.emit('error', 'Not in challenge phase'); return; }
-    if (currentTurn.activeId === sessionId) { socket.emit('error', 'Cannot challenge your own placement'); return; }
+    if (engine.isActiveParticipant(room, sessionId)) { socket.emit('error', 'Cannot challenge your own placement'); return; }
 
     const challenges = pendingChallenges.get(session.roomCode) ?? [];
     challenges.push({ challengerId: sessionId });
@@ -418,8 +418,7 @@ io.on('connection', (socket) => {
     const room = store.get(session.roomCode);
     if (!room?.activeRound) return;
 
-    const activeId = room.activeRound.turnOrder[room.activeRound.turnIndex];
-    if (activeId !== sessionId) { socket.emit('error', 'Not your turn'); return; }
+    if (!engine.isActiveParticipant(room, sessionId)) { socket.emit('error', 'Not your turn'); return; }
 
     try {
       const skippedRoom = engine.applySkip(room, sessionId);
@@ -467,8 +466,7 @@ io.on('connection', (socket) => {
     const room = store.get(session.roomCode);
     if (!room?.activeRound) return;
 
-    const activeId = room.activeRound.turnOrder[room.activeRound.turnIndex];
-    if (activeId !== sessionId) { socket.emit('error', 'Not your turn'); return; }
+    if (!engine.isActiveParticipant(room, sessionId)) { socket.emit('error', 'Not your turn'); return; }
 
     try {
       const updatedRoom = engine.applyBuy(room, sessionId);
@@ -478,6 +476,58 @@ io.on('connection', (socket) => {
       io.to(session.roomCode).emit('room:updated', updatedRoom);
     } catch (err) {
       socket.emit('error', err instanceof Error ? err.message : 'Buy failed');
+    }
+  });
+
+  // ------------------------------------------------------------------
+  // team:create
+  // ------------------------------------------------------------------
+  socket.on('team:create', (data) => {
+    const session = socketSession.get(socket.id);
+    if (!session) return;
+    const room = store.get(session.roomCode);
+    if (!room) return;
+    try {
+      const teamId = randomUUID().slice(0, 8);
+      const updatedRoom = engine.createTeam(room, teamId, data.name, sessionId);
+      store.set(updatedRoom);
+      io.to(session.roomCode).emit('room:updated', updatedRoom);
+    } catch (err) {
+      socket.emit('error', err instanceof Error ? err.message : 'Failed to create team');
+    }
+  });
+
+  // ------------------------------------------------------------------
+  // team:join
+  // ------------------------------------------------------------------
+  socket.on('team:join', (data) => {
+    const session = socketSession.get(socket.id);
+    if (!session) return;
+    const room = store.get(session.roomCode);
+    if (!room) return;
+    try {
+      const updatedRoom = engine.joinTeam(room, data.teamId, sessionId);
+      store.set(updatedRoom);
+      io.to(session.roomCode).emit('room:updated', updatedRoom);
+    } catch (err) {
+      socket.emit('error', err instanceof Error ? err.message : 'Failed to join team');
+    }
+  });
+
+  // ------------------------------------------------------------------
+  // team:leave
+  // ------------------------------------------------------------------
+  socket.on('team:leave', () => {
+    const session = socketSession.get(socket.id);
+    if (!session) return;
+    const room = store.get(session.roomCode);
+    if (!room) return;
+    try {
+      const updatedRoom = engine.leaveTeam(room, sessionId);
+      store.set(updatedRoom);
+      io.to(session.roomCode).emit('room:updated', updatedRoom);
+    } catch (err) {
+      socket.emit('error', err instanceof Error ? err.message : 'Failed to leave team');
     }
   });
 

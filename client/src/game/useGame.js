@@ -182,6 +182,18 @@ export function useGame() {
     const buyCard = useCallback(() => {
         socket.emit('turn:buy');
     }, []);
+    const dismissRoundEnd = useCallback(() => {
+        setRoundEnded(null);
+    }, []);
+    const createTeam = useCallback((name) => {
+        socket.emit('team:create', { name });
+    }, []);
+    const joinTeam = useCallback((teamId) => {
+        socket.emit('team:join', { teamId });
+    }, []);
+    const leaveTeam = useCallback(() => {
+        socket.emit('team:leave');
+    }, []);
     return {
         room,
         currentCard,
@@ -202,5 +214,9 @@ export function useGame() {
         skipCard,
         nameSong,
         buyCard,
+        dismissRoundEnd,
+        createTeam,
+        joinTeam,
+        leaveTeam,
     };
 }

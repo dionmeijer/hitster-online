@@ -17,6 +17,10 @@ import {
   timelineLength,
   buildRoundSummary,
   activeEntityId,
+  createTeam,
+  joinTeam,
+  leaveTeam,
+  isActiveParticipant,
 } from './engine';
 import type { Room, Card, RoundConfig } from '../../../shared/types';
 
@@ -923,3 +927,125 @@ describe('applyBuy — tokensEnabled guard', () => {
   });
 });
 
+
+// ---------------------------------------------------------------------------
+// Team management
+// ---------------------------------------------------------------------------
+
+describe('createTeam', () => {
+  it('creates a team and adds creator to it', () => {
+    const room = createRoom('p1', 'Alice', 'Test');
+    const result = createTeam(room, 'team1', 'Red Team', 'p1');
+    expect(result.teams['team1']).toBeDefined();
+    expect(result.teams['team1'].name).toBe('Red Team');
+    expect(result.teams['team1'].playerIds).toContain('p1');
+    expect(result.useTeams).toBe(true);
+  });
+
+  it('moves creator out of previous team', () => {
+    let room = createRoom('p1', 'Alice', 'Test');
+    room = createTeam(room, 'team1', 'Red Team', 'p1');
+    room = createTeam(room, 'team2', 'Blue Team', 'p1');
+    expect(room.teams['team1'].playerIds).not.toContain('p1');
+    expect(room.teams['team2'].playerIds).toContain('p1');
+  });
+
+  it('throws if room is not in lobby', () => {
+    let room = createRoom('p1', 'Alice', 'Test');
+    room = addPlayer(room, 'p2', 'Bob');
+    const deck = Array.from({ length: 15 }, (_, i) => makeCard(`t${i}`, 1980 + i));
+    const { room: started } = initRound(room, defaultConfig, deck);
+    expect(() => createTeam(started, 'team1', 'Red Team', 'p1')).toThrow();
+  });
+});
+
+describe('joinTeam', () => {
+  it('adds player to team and removes from previous team', () => {
+    let room = createRoom('p1', 'Alice', 'Test');
+    room = addPlayer(room, 'p2', 'Bob');
+    room = createTeam(room, 'team1', 'Red', 'p1');
+    room = createTeam(room, 'team2', 'Blue', 'p2');
+    room = joinTeam(room, 'team1', 'p2');
+    expect(room.teams['team1'].playerIds).toContain('p2');
+    expect(room.teams['team2'].playerIds).not.toContain('p2');
+  });
+
+  it('throws on unknown team', () => {
+    const room = createRoom('p1', 'Alice', 'Test');
+    expect(() => joinTeam(room, 'nonexistent', 'p1')).toThrow('Team not found');
+  });
+});
+
+describe('leaveTeam', () => {
+  it('removes player from team', () => {
+    let room = createRoom('p1', 'Alice', 'Test');
+    room = createTeam(room, 'team1', 'Red', 'p1');
+    room = leaveTeam(room, 'p1');
+    expect(Object.keys(room.teams)).toHaveLength(0);
+    expect(room.useTeams).toBe(false);
+  });
+});
+
+describe('isActiveParticipant', () => {
+  it('returns true when it is the player\'s turn (solo)', () => {
+    let room = createRoom('p1', 'Alice', 'Test');
+    room = addPlayer(room, 'p2', 'Bob');
+    const deck = Array.from({ length: 15 }, (_, i) => makeCard(`t${i}`, 1980 + i));
+    const { room: started } = initRound(room, defaultConfig, deck);
+    const withTurn = {
+      ...started,
+      activeRound: {
+        ...started.activeRound!,
+        currentTurn: { activeId: 'p1', phase: 'place' as const, challenges: [] },
+      },
+    };
+    expect(isActiveParticipant(withTurn, 'p1')).toBe(true);
+    expect(isActiveParticipant(withTurn, 'p2')).toBe(false);
+  });
+
+  it('returns true for any team member when team is active', () => {
+    let room = createRoom('p1', 'Alice', 'Test');
+    room = addPlayer(room, 'p2', 'Bob');
+    room = addPlayer(room, 'p3', 'Carol');
+    room = createTeam(room, 'teamA', 'Alpha', 'p1');
+    room = joinTeam(room, 'teamA', 'p2');
+    room = createTeam(room, 'teamB', 'Beta', 'p3');
+    const deck = Array.from({ length: 20 }, (_, i) => makeCard(`t${i}`, 1970 + i));
+    const config: RoundConfig = { mode: 'original', cardsToWin: 10, tokensEnabled: true };
+    const { room: started } = initRound(room, config, deck);
+    const withTurn = {
+      ...started,
+      activeRound: {
+        ...started.activeRound!,
+        currentTurn: { activeId: 'teamA', phase: 'place' as const, challenges: [] },
+      },
+    };
+    expect(isActiveParticipant(withTurn, 'p1')).toBe(true);
+    expect(isActiveParticipant(withTurn, 'p2')).toBe(true);
+    expect(isActiveParticipant(withTurn, 'p3')).toBe(false);
+  });
+});
+
+describe('initRound with teams', () => {
+  it('uses teamIds for turnOrder and creates team timelines', () => {
+    let room = createRoom('p1', 'Alice', 'Test');
+    room = addPlayer(room, 'p2', 'Bob');
+    room = createTeam(room, 'teamA', 'Alpha', 'p1');
+    room = createTeam(room, 'teamB', 'Beta', 'p2');
+    const deck = Array.from({ length: 20 }, (_, i) => makeCard(`t${i}`, 1970 + i));
+    const config: RoundConfig = { mode: 'original', cardsToWin: 10, tokensEnabled: true };
+    const { room: started } = initRound(room, config, deck);
+    expect(started.activeRound!.turnOrder).toEqual(expect.arrayContaining(['teamA', 'teamB']));
+    expect(started.activeRound!.timelines['teamA']).toBeDefined();
+    expect(started.activeRound!.timelines['teamB']).toBeDefined();
+    expect(started.activeRound!.timelines['p1']).toBeUndefined();
+  });
+
+  it('throws if fewer than 2 teams have players', () => {
+    let room = createRoom('p1', 'Alice', 'Test');
+    room = createTeam(room, 'teamA', 'Alpha', 'p1');
+    const deck = Array.from({ length: 15 }, (_, i) => makeCard(`t${i}`, 1980 + i));
+    const config: RoundConfig = { mode: 'original', cardsToWin: 10, tokensEnabled: true };
+    expect(() => initRound(room, config, deck)).toThrow('Need at least 2 teams');
+  });
+});

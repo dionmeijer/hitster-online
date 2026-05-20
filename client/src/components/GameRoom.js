@@ -16,11 +16,18 @@ function PlayerList({ room, activePlayerId, sessionId }) {
     const round = room.activeRound;
     return (_jsxs("div", { className: "side-panel", children: [_jsx("div", { className: "panel-title", children: "Players" }), players.map(p => {
                 const color = avatarColor(p.displayName);
-                const isActive = p.id === activePlayerId;
+                const pTeamId = Object.entries(room.teams).find(([, t]) => t.playerIds.includes(p.id))?.[0];
+                const isActive = round?.config.mode === 'cooperative'
+                    ? false
+                    : room.useTeams && pTeamId
+                        ? activePlayerId === pTeamId
+                        : p.id === activePlayerId;
                 const isMe = p.id === sessionId;
-                const timeline = round?.timelines[p.id];
+                const entityKey = round?.config.mode === 'cooperative' ? 'cooperative'
+                    : (room.useTeams && pTeamId ? pTeamId : p.id);
+                const timeline = round?.timelines[entityKey];
                 const cardCount = timeline?.cards.length ?? 0;
-                const tokens = round?.tokens[p.id] ?? 0;
+                const tokens = round?.tokens[entityKey] ?? 0;
                 return (_jsxs("div", { className: `player-item${isActive ? ' active-player' : ''}`, children: [_jsx("div", { className: "player-avatar", style: { background: color + '22', color }, children: p.displayName[0]?.toUpperCase() ?? '?' }), _jsxs("div", { className: "player-info", children: [_jsxs("div", { className: "player-name", children: [isMe ? 'You' : p.displayName, isActive && (_jsx("span", { style: { color: '#4ade80', fontSize: 11, marginLeft: 4 }, children: "\u25B6" }))] }), _jsxs("div", { className: "player-score", children: [cardCount, " card", cardCount !== 1 ? 's' : ''] }), _jsx("div", { className: "player-token-dots", children: Array.from({ length: 5 }, (_, i) => (_jsx("div", { className: `token-dot${i >= tokens ? ' empty' : ''}` }, i))) })] })] }, p.id));
             }), round && (_jsxs("div", { className: "round-info", children: [_jsx("div", { className: "panel-title", children: "Round" }), _jsxs("div", { className: "round-info-row", children: ["Mode: ", _jsx("span", { className: "round-info-val", children: round.config.mode }), _jsx("br", {}), "Deck: ", _jsxs("span", { className: "round-info-val", children: [round.deckRemaining, " left"] }), _jsx("br", {}), "Target: ", _jsxs("span", { className: "round-info-val-green", children: [round.config.cardsToWin, " cards"] })] })] }))] }));
 }
@@ -147,21 +154,28 @@ function FlipResult({ card, correct, onDismiss }) {
     }, [onDismiss]);
     return (_jsx("div", { className: "flip-result-overlay", onClick: onDismiss, children: _jsxs("div", { className: `flip-result-box ${correct ? 'correct' : 'wrong'}`, children: [_jsx("div", { className: "flip-result-icon", children: correct ? '✓' : '✗' }), _jsx("div", { className: "flip-result-label", children: correct ? 'Correct!' : 'Wrong!' }), _jsx("div", { className: "flip-result-card-title", children: card.title }), _jsx("div", { className: "flip-result-card-artist", children: card.artist }), _jsx("div", { className: "flip-result-card-year", children: card.releaseYear }), _jsx("div", { className: "flip-result-dismiss", children: "Press any key or click to continue" })] }) }));
 }
-function WinScreen({ winnerId, room, sessionId, onPlayAgain }) {
+function WinScreen({ winnerId, room, sessionId, onBackToLobby, onLeave }) {
     const isCoopWin = winnerId === 'cooperative';
     const isCoopLoss = !winnerId && room.activeRound?.config.mode === 'cooperative';
-    const winner = !isCoopWin && winnerId ? room.players[winnerId] : null;
+    const isTeamWin = winnerId && room.teams[winnerId] !== undefined;
+    const winner = !isCoopWin && !isTeamWin && winnerId ? room.players[winnerId] : null;
+    const winnerTeam = isTeamWin && winnerId ? room.teams[winnerId] : null;
     const isMe = winnerId === sessionId;
-    const cardsToWin = room.activeRound?.config.cardsToWin ?? room.roundHistory.at(-1)?.mode ? undefined : 10;
+    const isMyTeam = winnerId !== null && room.teams[winnerId ?? '']?.playerIds.includes(sessionId);
+    const cardsToWin = room.activeRound?.config.cardsToWin ?? 10;
     let title;
     let subtitle;
     if (isCoopWin) {
         title = 'Team Wins!';
-        subtitle = `You reached ${cardsToWin ?? 10} cards together!`;
+        subtitle = `You reached ${cardsToWin} cards together!`;
     }
     else if (isCoopLoss) {
         title = 'Team Lost';
         subtitle = 'The shared token pool ran out.';
+    }
+    else if (winnerTeam) {
+        title = isMyTeam ? 'Your Team Wins!' : `${winnerTeam.name} Wins!`;
+        subtitle = `${winnerTeam.name} reached ${cardsToWin} cards first.`;
     }
     else if (isMe) {
         title = 'You Win!';
@@ -169,13 +183,21 @@ function WinScreen({ winnerId, room, sessionId, onPlayAgain }) {
     }
     else if (winner) {
         title = `${winner.displayName} Wins!`;
-        subtitle = `${winner.displayName} reached ${cardsToWin ?? 10} cards first.`;
+        subtitle = `${winner.displayName} reached ${cardsToWin} cards first.`;
     }
     else {
         title = 'Game Over!';
         subtitle = 'The deck ran out.';
     }
-    return (_jsxs("div", { className: "win-screen", children: [_jsx("div", { className: "scanlines" }), _jsx("div", { className: "win-trophy", children: isCoopLoss ? '💀' : '🏆' }), _jsx("div", { className: "win-title", children: title }), _jsx("div", { className: "win-subtitle", children: subtitle }), _jsx("button", { className: "win-play-again", onClick: onPlayAgain, children: "\u2295 Play Again" })] }));
+    const isOwner = room.ownerId === sessionId;
+    return (_jsxs("div", { className: "win-screen", children: [_jsx("div", { className: "scanlines" }), _jsx("div", { className: "win-trophy", children: isCoopLoss ? '💀' : '🏆' }), _jsx("div", { className: "win-title", children: title }), _jsx("div", { className: "win-subtitle", children: subtitle }), room.roundHistory.length > 0 && (_jsxs("div", { className: "win-history", children: [_jsx("div", { className: "win-history-title", children: "Round History" }), room.roundHistory.map((r, i) => {
+                        const rWinner = r.winnerId && room.players[r.winnerId]
+                            ? room.players[r.winnerId].displayName
+                            : r.winnerId === 'cooperative' ? 'Team' : r.winnerId && room.teams[r.winnerId]
+                                ? room.teams[r.winnerId].name
+                                : 'No winner';
+                        return (_jsxs("div", { className: "win-history-row", children: [_jsxs("span", { className: "win-history-round", children: ["Round ", r.roundNumber] }), _jsx("span", { className: "win-history-mode", children: r.mode }), _jsx("span", { className: "win-history-winner", children: rWinner })] }, i));
+                    })] })), _jsxs("div", { className: "win-actions", children: [_jsx("button", { className: "win-play-again", onClick: onBackToLobby, children: isOwner ? '⊕ Back to Lobby' : '← Back to Lobby' }), _jsx("button", { className: "win-leave", onClick: onLeave, children: "Leave Room" })] })] }));
 }
 // ── Lobby screen ──────────────────────────────────────────────────────────────
 const MODES = [
@@ -184,7 +206,7 @@ const MODES = [
     { value: 'expert', label: 'Expert', desc: '3 starting tokens, no naming bonus' },
     { value: 'cooperative', label: 'Cooperative', desc: 'Shared timeline & tokens, reach target together' },
 ];
-function LobbyScreen({ room, sessionId, onStartRound, onLeave, socketError }) {
+function LobbyScreen({ room, sessionId, onStartRound, onCreateTeam, onJoinTeam, onLeaveTeam, onLeave, socketError }) {
     const isOwner = room.ownerId === sessionId;
     const players = Object.values(room.players);
     const [playlistLabel, setPlaylistLabel] = useState('');
@@ -192,33 +214,51 @@ function LobbyScreen({ room, sessionId, onStartRound, onLeave, socketError }) {
     const [cardsToWin, setCardsToWin] = useState(10);
     const [tokensEnabled, setTokensEnabled] = useState(true);
     const [starting, setStarting] = useState(false);
+    const [newTeamName, setNewTeamName] = useState('');
     useEffect(() => {
         if (socketError)
             setStarting(false);
     }, [socketError]);
+    const myTeam = Object.values(room.teams).find(t => t.playerIds.includes(sessionId));
+    const teams = Object.values(room.teams);
     function handleStart() {
         setStarting(true);
         onStartRound(mode, playlistLabel.trim() || undefined, cardsToWin, tokensEnabled);
     }
+    function handleCreateTeam() {
+        const name = newTeamName.trim();
+        if (!name)
+            return;
+        onCreateTeam(name);
+        setNewTeamName('');
+    }
     return (_jsxs("div", { className: "lobby-screen", children: [_jsx("div", { className: "lobby-code", "data-testid": "lobby-room-code", children: room.code }), _jsx("div", { className: "lobby-code-label", children: "Share this code to invite friends" }), _jsx("div", { className: "lobby-player-list", children: players.map(p => {
                     const color = avatarColor(p.displayName);
                     return (_jsxs("div", { className: "lobby-player-chip", "data-testid": "lobby-player", children: [_jsx("div", { className: "player-avatar", style: { background: color + '22', color, width: 24, height: 24, fontSize: 8 }, children: p.displayName[0]?.toUpperCase() }), _jsx("span", { "data-testid": "lobby-player-name", children: p.displayName }), p.id === room.ownerId && (_jsx("span", { style: { fontSize: 10, color: '#fbbf24' }, children: "\u2605" }))] }, p.id));
-                }) }), isOwner && (_jsxs(_Fragment, { children: [_jsx("div", { className: "lobby-playlist-field", children: _jsx("input", { className: "form-input", type: "text", placeholder: "Genre or Spotify playlist URL (optional)", value: playlistLabel, onChange: e => setPlaylistLabel(e.target.value), "data-testid": "playlist-label-input" }) }), _jsxs("div", { className: "lobby-config-section", children: [_jsx("div", { className: "lobby-config-label", children: "Game Mode" }), _jsx("div", { className: "lobby-mode-grid", "data-testid": "mode-selector", children: MODES.map(m => (_jsxs("label", { className: `lobby-mode-option${mode === m.value ? ' selected' : ''}`, "data-testid": `mode-option-${m.value}`, children: [_jsx("input", { type: "radio", name: "game-mode", value: m.value, checked: mode === m.value, onChange: () => setMode(m.value), style: { display: 'none' } }), _jsx("div", { className: "lobby-mode-name", children: m.label }), _jsx("div", { className: "lobby-mode-desc", children: m.desc })] }, m.value))) }), _jsxs("div", { className: "lobby-config-row", children: [_jsx("label", { className: "lobby-config-label", htmlFor: "cards-to-win", children: "Cards to Win" }), _jsx("input", { id: "cards-to-win", className: "form-input", type: "number", min: 1, max: 20, value: cardsToWin, onChange: e => setCardsToWin(Math.max(1, Math.min(20, Number(e.target.value)))), "data-testid": "cards-to-win-input", style: { width: 72 } })] }), _jsxs("div", { className: "lobby-config-row", children: [_jsx("label", { className: "lobby-config-label", htmlFor: "tokens-enabled", children: "Tokens Enabled" }), _jsx("input", { id: "tokens-enabled", type: "checkbox", checked: tokensEnabled, onChange: e => setTokensEnabled(e.target.checked), "data-testid": "tokens-enabled-toggle" })] })] })] })), socketError && (_jsx("div", { className: "server-error-msg", children: socketError })), isOwner ? (_jsx("button", { className: "lobby-start-btn", disabled: players.length < 1 || starting, onClick: handleStart, "data-testid": "start-round-btn", children: starting ? 'Starting…' : '▶ Start Round' })) : (_jsxs("div", { className: "lobby-waiting", children: ["Waiting for ", room.players[room.ownerId]?.displayName ?? 'host', " to start..."] })), _jsx("button", { className: "lobby-leave-btn", onClick: onLeave, "data-testid": "leave-btn", children: "\u2190 Leave Room" })] }));
+                }) }), isOwner && (_jsxs(_Fragment, { children: [_jsx("div", { className: "lobby-playlist-field", children: _jsx("input", { className: "form-input", type: "text", placeholder: "Genre or Spotify playlist URL (optional)", value: playlistLabel, onChange: e => setPlaylistLabel(e.target.value), "data-testid": "playlist-label-input" }) }), _jsxs("div", { className: "lobby-config-section", children: [_jsx("div", { className: "lobby-config-label", children: "Game Mode" }), _jsx("div", { className: "lobby-mode-grid", "data-testid": "mode-selector", children: MODES.map(m => (_jsxs("label", { className: `lobby-mode-option${mode === m.value ? ' selected' : ''}`, "data-testid": `mode-option-${m.value}`, children: [_jsx("input", { type: "radio", name: "game-mode", value: m.value, checked: mode === m.value, onChange: () => setMode(m.value), style: { display: 'none' } }), _jsx("div", { className: "lobby-mode-name", children: m.label }), _jsx("div", { className: "lobby-mode-desc", children: m.desc })] }, m.value))) }), _jsxs("div", { className: "lobby-config-row", children: [_jsx("label", { className: "lobby-config-label", htmlFor: "cards-to-win", children: "Cards to Win" }), _jsx("input", { id: "cards-to-win", className: "form-input", type: "number", min: 1, max: 20, value: cardsToWin, onChange: e => setCardsToWin(Math.max(1, Math.min(20, Number(e.target.value)))), "data-testid": "cards-to-win-input", style: { width: 72 } })] }), _jsxs("div", { className: "lobby-config-row", children: [_jsx("label", { className: "lobby-config-label", htmlFor: "tokens-enabled", children: "Tokens Enabled" }), _jsx("input", { id: "tokens-enabled", type: "checkbox", checked: tokensEnabled, onChange: e => setTokensEnabled(e.target.checked), "data-testid": "tokens-enabled-toggle" })] })] })] })), _jsxs("div", { className: "lobby-teams-section", children: [_jsx("div", { className: "lobby-config-label", children: "Teams (optional)" }), teams.length > 0 && (_jsx("div", { className: "lobby-teams-list", "data-testid": "teams-list", children: teams.map(team => {
+                            const isMyTeamRow = team.id === myTeam?.id;
+                            return (_jsxs("div", { className: `lobby-team-row${isMyTeamRow ? ' my-team' : ''}`, "data-testid": "team-row", children: [_jsx("div", { className: "lobby-team-name", children: team.name }), _jsx("div", { className: "lobby-team-members", children: team.playerIds.map(pid => (_jsx("span", { className: "lobby-team-member", children: room.players[pid]?.displayName ?? pid }, pid))) }), !isMyTeamRow ? (_jsx("button", { className: "lobby-team-btn", onClick: () => onJoinTeam(team.id), "data-testid": "join-team-btn", children: "Join" })) : (_jsx("button", { className: "lobby-team-btn leave", onClick: onLeaveTeam, "data-testid": "leave-team-btn", children: "Leave" }))] }, team.id));
+                        }) })), _jsxs("div", { className: "lobby-create-team-row", children: [_jsx("input", { className: "form-input", type: "text", placeholder: "New team name\u2026", maxLength: 20, value: newTeamName, onChange: e => setNewTeamName(e.target.value), onKeyDown: e => e.key === 'Enter' && handleCreateTeam(), "data-testid": "new-team-name-input", style: { flex: 1, minWidth: 0 } }), _jsx("button", { className: "lobby-team-btn", disabled: !newTeamName.trim(), onClick: handleCreateTeam, "data-testid": "create-team-btn", children: "+ Create" })] })] }), socketError && (_jsx("div", { className: "server-error-msg", children: socketError })), isOwner ? (_jsx("button", { className: "lobby-start-btn", disabled: players.length < 1 || starting, onClick: handleStart, "data-testid": "start-round-btn", children: starting ? 'Starting…' : '▶ Start Round' })) : (_jsxs("div", { className: "lobby-waiting", children: ["Waiting for ", room.players[room.ownerId]?.displayName ?? 'host', " to start..."] })), _jsx("button", { className: "lobby-leave-btn", onClick: onLeave, "data-testid": "leave-btn", children: "\u2190 Leave Room" })] }));
 }
 function TokenPanel({ myTokens, canSkip, onSkip }) {
     return (_jsxs("div", { style: { display: 'flex', alignItems: 'center', gap: 12 }, children: [_jsx("span", { style: { fontSize: 12, color: '#6b7280' }, children: "YOUR TOKENS" }), _jsx("div", { className: "token-row", children: Array.from({ length: 5 }, (_, i) => (_jsx("div", { className: `token-circle${i >= myTokens ? ' empty' : ''}`, children: i < myTokens ? '🪙' : '' }, i))) }), canSkip && (_jsx("button", { className: "action-btn btn-skip-action", disabled: myTokens < 1, onClick: onSkip, children: "SKIP (1\uD83E\uDE99)" }))] }));
 }
-export default function GameRoom({ room, currentCard, activePlayerId, previewUrl, playAt, lastFlip, roundEnded, myTokens, sessionId, socketError, onStartRound, onPlaceCard, onChallengeCard, onSkipCard, onNameSong, onBuyCard, onLeave, }) {
+export default function GameRoom({ room, currentCard, activePlayerId, previewUrl, playAt, lastFlip, roundEnded, myTokens, sessionId, socketError, onStartRound, onPlaceCard, onChallengeCard, onSkipCard, onNameSong, onBuyCard, onDismissRoundEnd, onCreateTeam, onJoinTeam, onLeaveTeam, onLeave, }) {
     const [selectedPosition, setSelectedPosition] = useState(null);
     const [showFlipResult, setShowFlipResult] = useState(false);
     const [logEntries, setLogEntries] = useState([]);
     const logCounter = useRef(0);
     const [nameSongTitle, setNameSongTitle] = useState('');
     const [nameSongArtist, setNameSongArtist] = useState('');
-    const isActivePlayer = activePlayerId === sessionId;
     const round = room.activeRound;
     const isCooperative = round?.config.mode === 'cooperative';
-    const timelineKey = isCooperative ? 'cooperative' : sessionId;
+    const myTeamId = Object.entries(room.teams).find(([, t]) => t.playerIds.includes(sessionId))?.[0];
+    const isActivePlayer = isCooperative
+        ? activePlayerId !== null // anyone can act in cooperative (handled server-side)
+        : room.useTeams && myTeamId
+            ? activePlayerId === myTeamId
+            : activePlayerId === sessionId;
+    const timelineKey = isCooperative ? 'cooperative' : (room.useTeams && myTeamId ? myTeamId : sessionId);
     const myTimeline = round?.timelines[timelineKey];
     const myCards = myTimeline?.cards ?? [];
     // Current turn phase
@@ -250,13 +290,13 @@ export default function GameRoom({ room, currentCard, activePlayerId, previewUrl
             return;
         onPlaceCard(selectedPosition);
     }
-    // In lobby
-    if (room.status === 'lobby') {
-        return (_jsxs("div", { className: "game-root", children: [_jsx("div", { className: "scanlines" }), _jsxs("header", { className: "game-header", children: [_jsx("div", { className: "logo", children: "HITSTER" }), _jsxs("div", { className: "room-code-badge", children: ["ROOM: ", room.code] }), _jsx("button", { style: { background: 'none', border: '1px solid #374151', color: '#6b7280', padding: '6px 12px', cursor: 'pointer', fontFamily: 'Rajdhani, sans-serif', fontSize: 13 }, onClick: onLeave, children: "Leave" })] }), _jsx(LobbyScreen, { room: room, sessionId: sessionId, onStartRound: onStartRound, onLeave: onLeave, socketError: socketError })] }));
-    }
-    // Win screen
+    // Win screen — shown first so dismiss → lobby transition works
     if (roundEnded) {
-        return (_jsx(WinScreen, { winnerId: roundEnded.winnerId, room: room, sessionId: sessionId, onPlayAgain: onLeave }));
+        return (_jsx(WinScreen, { winnerId: roundEnded.winnerId, room: room, sessionId: sessionId, onBackToLobby: onDismissRoundEnd, onLeave: onLeave }));
+    }
+    // In lobby (or round_ended after dismissing win screen)
+    if (room.status === 'lobby' || room.status === 'round_ended') {
+        return (_jsxs("div", { className: "game-root", children: [_jsx("div", { className: "scanlines" }), _jsxs("header", { className: "game-header", children: [_jsx("div", { className: "logo", children: "HITSTER" }), _jsxs("div", { className: "room-code-badge", children: ["ROOM: ", room.code] }), _jsx("button", { style: { background: 'none', border: '1px solid #374151', color: '#6b7280', padding: '6px 12px', cursor: 'pointer', fontFamily: 'Rajdhani, sans-serif', fontSize: 13 }, onClick: onLeave, children: "Leave" })] }), _jsx(LobbyScreen, { room: room, sessionId: sessionId, onStartRound: onStartRound, onLeave: onLeave, onCreateTeam: onCreateTeam, onJoinTeam: onJoinTeam, onLeaveTeam: onLeaveTeam, socketError: socketError })] }));
     }
     // Active round
     const isFlipped = isInFlipPhase || showFlipResult;

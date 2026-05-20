@@ -1,6 +1,7 @@
 import type {
   Room,
   Player,
+  Team,
   Card,
   Timeline,
   RoundConfig,
@@ -98,6 +99,69 @@ export function markReconnected(room: Room, playerId: string): Room {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Team management (lobby only)
+// ---------------------------------------------------------------------------
+
+/** Create a new team and add the creator to it */
+export function createTeam(room: Room, teamId: string, teamName: string, creatorId: string): Room {
+  if (room.status !== 'lobby') throw new Error('Cannot create teams after round has started');
+  const newTeam: Team = { id: teamId, name: teamName.trim(), playerIds: [creatorId] };
+  // Remove creator from any existing teams
+  const cleanedTeams = removePlayerFromTeams(room.teams, creatorId);
+  return {
+    ...room,
+    teams: { ...cleanedTeams, [teamId]: newTeam },
+    useTeams: true,
+  };
+}
+
+/** Join a team; auto-leaves current team */
+export function joinTeam(room: Room, teamId: string, playerId: string): Room {
+  if (room.status !== 'lobby') throw new Error('Cannot change teams after round has started');
+  const team = room.teams[teamId];
+  if (!team) throw new Error('Team not found');
+  const cleanedTeams = removePlayerFromTeams(room.teams, playerId);
+  return {
+    ...room,
+    teams: {
+      ...cleanedTeams,
+      [teamId]: { ...cleanedTeams[teamId] ?? team, playerIds: [...(cleanedTeams[teamId]?.playerIds ?? team.playerIds), playerId] },
+    },
+  };
+}
+
+/** Leave current team */
+export function leaveTeam(room: Room, playerId: string): Room {
+  if (room.status !== 'lobby') throw new Error('Cannot leave teams after round has started');
+  const updatedTeams = removePlayerFromTeams(room.teams, playerId);
+  // Remove empty teams and disable useTeams if no teams have players
+  const nonEmptyTeams = Object.fromEntries(
+    Object.entries(updatedTeams).filter(([, t]) => t.playerIds.length > 0)
+  );
+  return { ...room, teams: nonEmptyTeams, useTeams: Object.keys(nonEmptyTeams).length > 0 };
+}
+
+function removePlayerFromTeams(teams: Record<string, Team>, playerId: string): Record<string, Team> {
+  return Object.fromEntries(
+    Object.entries(teams).map(([tid, team]) => [
+      tid,
+      { ...team, playerIds: team.playerIds.filter(pid => pid !== playerId) },
+    ])
+  );
+}
+
+/** Returns true if this player can act on the current turn (own turn, or team member's turn) */
+export function isActiveParticipant(room: Room, playerId: string): boolean {
+  if (!room.activeRound?.currentTurn) return false;
+  const activeId = room.activeRound.currentTurn.activeId;
+  if (activeId === playerId) return true;
+  if (room.useTeams && room.teams[activeId]) {
+    return room.teams[activeId].playerIds.includes(playerId);
+  }
+  return false;
+}
+
 const STARTING_TOKENS: Record<string, number> = {
   original: 2,
   pro: 5,
@@ -107,10 +171,16 @@ const STARTING_TOKENS: Record<string, number> = {
 
 /**
  * Returns the entity key used for timeline/token lookups.
- * In cooperative mode all players share one timeline/pool keyed 'cooperative'.
+ * In cooperative mode: 'cooperative'. In team mode: the player's teamId. Else: playerId.
  */
-export function activeEntityId(room: Room, _playerId: string): string {
-  return room.activeRound?.config.mode === 'cooperative' ? 'cooperative' : _playerId;
+export function activeEntityId(room: Room, playerId: string): string {
+  if (!room.activeRound) return playerId;
+  if (room.activeRound.config.mode === 'cooperative') return 'cooperative';
+  if (room.useTeams) {
+    const teamEntry = Object.entries(room.teams).find(([, t]) => t.playerIds.includes(playerId));
+    return teamEntry?.[0] ?? playerId;
+  }
+  return playerId;
 }
 
 /**
@@ -145,6 +215,39 @@ export function initRound(
       cards: sharedCards.sort((a, b) => a.releaseYear - b.releaseYear),
     };
     tokens['cooperative'] = startTokens;
+  } else if (room.useTeams) {
+    // Team mode: one timeline + token pool per team; turn order = teamIds
+    const activeTeamIds = Object.keys(room.teams).filter(
+      tid => room.teams[tid].playerIds.length > 0
+    );
+    if (activeTeamIds.length < 2) throw new Error('Need at least 2 teams with players to start');
+    for (const teamId of activeTeamIds) {
+      const startCard = remaining.shift();
+      if (!startCard) throw new Error('Not enough cards in the deck to deal starting cards');
+      timelines[teamId] = { ownerId: teamId, cards: [startCard] };
+      tokens[teamId] = startTokens;
+      startingCards[teamId] = startCard;
+    }
+    // Reuse sortedPlayerIds variable name for teams
+    const sortedTeamIds = shuffleArray(activeTeamIds).sort(
+      (a, b) => startingCards[a].releaseYear - startingCards[b].releaseYear
+    );
+    return {
+      room: {
+        ...room,
+        status: 'round_active',
+        activeRound: {
+          config,
+          roundNumber: room.roundHistory.length + 1,
+          turnOrder: sortedTeamIds,
+          turnIndex: 0,
+          timelines,
+          tokens,
+          deckRemaining: remaining.length,
+        },
+      },
+      deck: remaining,
+    };
   } else {
     for (const playerId of playerIds) {
       const startCard = remaining.shift();
@@ -218,7 +321,7 @@ export function applyPlacement(room: Room, playerId: string, position: number): 
   if (!room.activeRound) throw new Error('No active round');
   const currentTurn = room.activeRound.currentTurn;
   if (!currentTurn) throw new Error('No current turn');
-  if (currentTurn.activeId !== playerId) throw new Error('Not your turn');
+  if (!isActiveParticipant(room, playerId)) throw new Error('Not your turn');
 
   return {
     ...room,
@@ -247,6 +350,7 @@ export function resolveFlip(
   if (!currentTurn) throw new Error('No current turn');
 
   const playerId = currentTurn.activeId;
+  // In team/coop mode activeId is the teamId/'cooperative'; in solo mode it's a playerId
   const entityId = config.mode === 'cooperative' ? 'cooperative' : playerId;
   const position = currentTurn.placedPosition ?? 0;
   const timeline = timelines[entityId];
@@ -282,11 +386,15 @@ export function resolveFlip(
   } else {
     // Handle challenges — no challenges in cooperative
     for (const challenge of (currentTurn.challenges ?? [])) {
+      // In team mode, challengerId is the player's teamId; in solo mode it's the playerId
+      const challengerEntityId = room.useTeams
+        ? (Object.entries(room.teams).find(([, t]) => t.playerIds.includes(challenge.challengerId))?.[0] ?? challenge.challengerId)
+        : challenge.challengerId;
       if (!correct) {
         // Opponent was wrong → challenger steals the card
-        const challengerTimeline = updatedTimelines[challenge.challengerId];
+        const challengerTimeline = updatedTimelines[challengerEntityId];
         if (challengerTimeline) {
-          updatedTimelines[challenge.challengerId] = {
+          updatedTimelines[challengerEntityId] = {
             ...challengerTimeline,
             cards: [...challengerTimeline.cards, card].sort(
               (a, b) => a.releaseYear - b.releaseYear
@@ -295,8 +403,8 @@ export function resolveFlip(
         }
       } else {
         // Opponent was right → challenger loses a token
-        const cTokens = updatedTokens[challenge.challengerId] ?? 0;
-        updatedTokens[challenge.challengerId] = Math.max(0, cTokens - 1);
+        const cTokens = updatedTokens[challengerEntityId] ?? 0;
+        updatedTokens[challengerEntityId] = Math.max(0, cTokens - 1);
       }
     }
   }
@@ -417,7 +525,7 @@ export function applyBuy(room: Room, playerId: string): Room {
   const { tokens, currentTurn, config } = room.activeRound;
   if (!config.tokensEnabled) throw new Error('Tokens are disabled in this game');
   if (!currentTurn) throw new Error('No current turn');
-  if (currentTurn.activeId !== playerId) throw new Error('Not your turn');
+  if (!isActiveParticipant(room, playerId)) throw new Error('Not your turn');
   if (currentTurn.phase !== 'place') throw new Error('Can only buy during place phase');
 
   const entityId = config.mode === 'cooperative' ? 'cooperative' : playerId;

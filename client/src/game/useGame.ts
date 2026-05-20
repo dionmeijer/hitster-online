@@ -22,6 +22,10 @@ export interface GameState {
   skipCard: () => void;
   nameSong: (title: string, artist: string) => void;
   buyCard: () => void;
+  dismissRoundEnd: () => void;
+  createTeam: (name: string) => void;
+  joinTeam: (teamId: string) => void;
+  leaveTeam: () => void;
 }
 
 export function useGame(): GameState {
@@ -225,6 +229,22 @@ export function useGame(): GameState {
     socket.emit('turn:buy');
   }, []);
 
+  const dismissRoundEnd = useCallback(() => {
+    setRoundEnded(null);
+  }, []);
+
+  const createTeam = useCallback((name: string) => {
+    socket.emit('team:create', { name });
+  }, []);
+
+  const joinTeam = useCallback((teamId: string) => {
+    socket.emit('team:join', { teamId });
+  }, []);
+
+  const leaveTeam = useCallback(() => {
+    socket.emit('team:leave');
+  }, []);
+
   return {
     room,
     currentCard,
@@ -245,5 +265,9 @@ export function useGame(): GameState {
     skipCard,
     nameSong,
     buyCard,
+    dismissRoundEnd,
+    createTeam,
+    joinTeam,
+    leaveTeam,
   };
 }
