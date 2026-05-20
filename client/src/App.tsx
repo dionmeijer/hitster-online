@@ -52,6 +52,7 @@ export default function App() {
       onClearPlaylistPreview={game.clearPlaylistPreview}
       playlistPreviewCards={game.playlistPreviewCards}
       playlistPreviewLoading={game.playlistPreviewLoading}
+      onEndGame={game.endGame}
       onLeave={() => {
         window.location.reload();
       }}

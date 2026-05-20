@@ -573,6 +573,20 @@ io.on('connection', (socket) => {
   });
 
   // ------------------------------------------------------------------
+  // room:end
+  // ------------------------------------------------------------------
+  socket.on('room:end', () => {
+    const session = socketSession.get(socket.id);
+    if (!session) return;
+    const room = store.get(session.roomCode);
+    if (!room) return;
+    if (room.ownerId !== sessionId) { socket.emit('error', 'Only the room owner can end the game'); return; }
+    const endedRoom = engine.endGame(room);
+    store.set(endedRoom);
+    io.to(session.roomCode).emit('room:updated', endedRoom);
+  });
+
+  // ------------------------------------------------------------------
   // disconnect
   // ------------------------------------------------------------------
   socket.on('disconnect', () => {

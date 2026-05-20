@@ -433,9 +433,10 @@ interface WinScreenProps {
   sessionId: string;
   onBackToLobby: () => void;
   onLeave: () => void;
+  onEndGame: () => void;
 }
 
-function WinScreen({ winnerId, room, sessionId, onBackToLobby, onLeave }: WinScreenProps) {
+function WinScreen({ winnerId, room, sessionId, onBackToLobby, onLeave, onEndGame }: WinScreenProps) {
   const isCoopWin = winnerId === 'cooperative';
   const isCoopLoss = !winnerId && room.activeRound?.config.mode === 'cooperative';
   const isTeamWin = winnerId && room.teams[winnerId] !== undefined;
@@ -504,6 +505,11 @@ function WinScreen({ winnerId, room, sessionId, onBackToLobby, onLeave }: WinScr
         <button className="win-leave" onClick={onLeave}>
           Leave Room
         </button>
+        {isOwner && (
+          <button className="win-end-game" onClick={onEndGame}>
+            ✕ End Game
+          </button>
+        )}
       </div>
     </div>
   );
@@ -836,6 +842,7 @@ export interface GameRoomProps {
   onCreateTeam: (name: string) => void;
   onJoinTeam: (teamId: string) => void;
   onLeaveTeam: () => void;
+  onEndGame: () => void;
   onLeave: () => void;
   onPreviewPlaylist: (playlistLabel: string) => void;
   onClearPlaylistPreview: () => void;
@@ -864,6 +871,7 @@ export default function GameRoom({
   onCreateTeam,
   onJoinTeam,
   onLeaveTeam,
+  onEndGame,
   onLeave,
   onPreviewPlaylist,
   onClearPlaylistPreview,
@@ -881,11 +889,12 @@ export default function GameRoom({
   const round = room.activeRound;
   const isCooperative = round?.config.mode === 'cooperative';
   const myTeamId = Object.entries(room.teams).find(([, t]) => t.playerIds.includes(sessionId))?.[0];
-  const isActivePlayer = isCooperative
+  const isSpectator = room.players[sessionId]?.isSpectator === true;
+  const isActivePlayer = !isSpectator && (isCooperative
     ? activePlayerId !== null  // anyone can act in cooperative (handled server-side)
     : room.useTeams && myTeamId
       ? activePlayerId === myTeamId
-      : activePlayerId === sessionId;
+      : activePlayerId === sessionId);
   const timelineKey = isCooperative ? 'cooperative' : (room.useTeams && myTeamId ? myTeamId : sessionId);
   const myTimeline = round?.timelines[timelineKey];
   const myCards = myTimeline?.cards ?? [];
@@ -925,6 +934,40 @@ export default function GameRoom({
     onPlaceCard(selectedPosition);
   }
 
+  // Game over screen — room permanently ended by owner
+  if (room.status === 'game_over') {
+    return (
+      <div className="win-screen">
+        <div className="scanlines" />
+        <div className="win-trophy">🎮</div>
+        <div className="win-title">Game Over</div>
+        <div className="win-subtitle">Thanks for playing!</div>
+        {room.roundHistory.length > 0 && (
+          <div className="win-history">
+            <div className="win-history-title">Round History</div>
+            {room.roundHistory.map((r, i) => {
+              const rWinner = r.winnerId && room.players[r.winnerId]
+                ? room.players[r.winnerId].displayName
+                : r.winnerId === 'cooperative' ? 'Team'
+                : r.winnerId && room.teams[r.winnerId] ? room.teams[r.winnerId].name
+                : 'No winner';
+              return (
+                <div key={i} className="win-history-row">
+                  <span className="win-history-round">Round {r.roundNumber}</span>
+                  <span className="win-history-mode">{r.mode}</span>
+                  <span className="win-history-winner">{rWinner}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <div className="win-actions">
+          <button className="win-leave" onClick={onLeave}>← Leave</button>
+        </div>
+      </div>
+    );
+  }
+
   // Win screen — shown first so dismiss → lobby transition works
   if (roundEnded) {
     return (
@@ -934,6 +977,7 @@ export default function GameRoom({
         sessionId={sessionId}
         onBackToLobby={onDismissRoundEnd}
         onLeave={onLeave}
+        onEndGame={onEndGame}
       />
     );
   }
@@ -985,7 +1029,7 @@ export default function GameRoom({
         <div className="room-code-badge">ROOM: {room.code}</div>
         <TokenPanel
           myTokens={myTokens}
-          canSkip={isActivePlayer && !isInChallengePhase && currentCard !== null}
+          canSkip={!isSpectator && isActivePlayer && !isInChallengePhase && currentCard !== null}
           onSkip={onSkipCard}
         />
       </header>
@@ -996,6 +1040,11 @@ export default function GameRoom({
 
         {/* CENTER: Gameplay */}
         <div className="center-col">
+          {isSpectator && (
+            <div className="spectator-banner">
+              👁 Spectating — you'll join the next round automatically
+            </div>
+          )}
           <AudioPlayer
             previewUrl={previewUrl}
             playAt={playAt}
@@ -1055,7 +1104,7 @@ export default function GameRoom({
               </button>
             )}
 
-            {!isActivePlayer && isInChallengePhase && !isCooperative && (
+            {!isActivePlayer && !isSpectator && isInChallengePhase && !isCooperative && (
               <button
                 className="action-btn btn-hitster"
                 onClick={onChallengeCard}
@@ -1085,7 +1134,7 @@ export default function GameRoom({
           <div className="panel-title">Game Log</div>
 
           <ChallengeBar
-            deadline={isCooperative ? null : challengeDeadline}
+            deadline={isCooperative || isSpectator ? null : challengeDeadline}
             onChallenge={onChallengeCard}
             isActivePlayer={isActivePlayer}
           />
