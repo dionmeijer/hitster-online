@@ -20,7 +20,7 @@ export interface GameState {
   placeCard: (position: number) => void;
   challengeCard: () => void;
   skipCard: () => void;
-  nameSong: (title: string, artist: string) => void;
+  nameSong: (title: string, artist: string, year?: number) => void;
   buyCard: () => void;
   dismissRoundEnd: () => void;
   createTeam: (name: string) => void;
@@ -221,8 +221,8 @@ export function useGame(): GameState {
     socket.emit('turn:skip');
   }, []);
 
-  const nameSong = useCallback((title: string, artist: string) => {
-    socket.emit('turn:name', { title, artist });
+  const nameSong = useCallback((title: string, artist: string, year?: number) => {
+    socket.emit('turn:name', { title, artist, year });
   }, []);
 
   const buyCard = useCallback(() => {

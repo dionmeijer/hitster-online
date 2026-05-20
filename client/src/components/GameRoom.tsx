@@ -537,6 +537,7 @@ function LobbyScreen({ room, sessionId, onStartRound, onCreateTeam, onJoinTeam, 
   const [tokensEnabled, setTokensEnabled] = useState(true);
   const [starting, setStarting] = useState(false);
   const [newTeamName, setNewTeamName] = useState('');
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (socketError) setStarting(false);
@@ -557,10 +558,21 @@ function LobbyScreen({ room, sessionId, onStartRound, onCreateTeam, onJoinTeam, 
     setNewTeamName('');
   }
 
+  function handleCopyLink() {
+    const url = `${window.location.origin}/?room=${room.code}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }
+
   return (
     <div className="lobby-screen">
       <div className="lobby-code" data-testid="lobby-room-code">{room.code}</div>
       <div className="lobby-code-label">Share this code to invite friends</div>
+      <button className="lobby-copy-link-btn" onClick={handleCopyLink}>
+        {copied ? '✓ Copied!' : '🔗 Copy invite link'}
+      </button>
 
       <div className="lobby-player-list">
         {players.map(p => {
@@ -798,7 +810,7 @@ export interface GameRoomProps {
   onPlaceCard: (position: number) => void;
   onChallengeCard: () => void;
   onSkipCard: () => void;
-  onNameSong: (title: string, artist: string) => void;
+  onNameSong: (title: string, artist: string, year?: number) => void;
   onBuyCard: () => void;
   onDismissRoundEnd: () => void;
   onCreateTeam: (name: string) => void;
@@ -836,6 +848,7 @@ export default function GameRoom({
   const logCounter = useRef(0);
   const [nameSongTitle, setNameSongTitle] = useState('');
   const [nameSongArtist, setNameSongArtist] = useState('');
+  const [nameSongYear, setNameSongYear] = useState('');
 
   const round = room.activeRound;
   const isCooperative = round?.config.mode === 'cooperative';
@@ -1061,7 +1074,11 @@ export default function GameRoom({
           {/* Name song panel */}
           {isActivePlayer && currentCard && !isInChallengePhase && (
             <div style={{ marginTop: 24 }}>
-              <div className="panel-title">Name the Song (+1🪙)</div>
+              <div className="panel-title">
+                {round?.config.mode === 'pro' || round?.config.mode === 'expert'
+                  ? 'Name the Song (required to score)'
+                  : 'Name the Song (+1🪙)'}
+              </div>
               <div className="name-song-form">
                 <input
                   className="name-song-input"
@@ -1079,14 +1096,34 @@ export default function GameRoom({
                   value={nameSongArtist}
                   onChange={e => setNameSongArtist(e.target.value)}
                 />
+              </div>
+              {round?.config.mode === 'expert' && (
+                <div className="name-song-form" style={{ marginTop: 6 }}>
+                  <input
+                    className="name-song-input"
+                    data-testid="name-song-year"
+                    type="number"
+                    placeholder="Year"
+                    value={nameSongYear}
+                    onChange={e => setNameSongYear(e.target.value)}
+                  />
+                </div>
+              )}
+              <div className="name-song-form" style={{ marginTop: 6 }}>
                 <button
                   className="name-song-submit"
                   data-testid="name-song-submit"
-                  disabled={!nameSongTitle.trim() || !nameSongArtist.trim()}
+                  disabled={
+                    !nameSongTitle.trim() ||
+                    !nameSongArtist.trim() ||
+                    (round?.config.mode === 'expert' && !nameSongYear)
+                  }
                   onClick={() => {
-                    onNameSong(nameSongTitle.trim(), nameSongArtist.trim());
+                    const year = round?.config.mode === 'expert' ? Number(nameSongYear) : undefined;
+                    onNameSong(nameSongTitle.trim(), nameSongArtist.trim(), year);
                     setNameSongTitle('');
                     setNameSongArtist('');
+                    setNameSongYear('');
                   }}
                 >
                   Submit

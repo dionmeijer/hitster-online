@@ -1157,7 +1157,24 @@ body {
   font-family: 'Press Start 2P', monospace;
   font-size: 8px;
   color: #6b7280;
-  margin-bottom: 32px;
+  margin-bottom: 8px;
+}
+.lobby-copy-link-btn {
+  background: none;
+  border: 1px solid #374151;
+  color: #9ca3af;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: 'Rajdhani', sans-serif;
+  margin-top: 8px;
+  margin-bottom: 24px;
+  transition: border-color 0.15s, color 0.15s;
+}
+.lobby-copy-link-btn:hover {
+  border-color: #6b7280;
+  color: #e5e7eb;
 }
 .lobby-player-list {
   display: flex;
