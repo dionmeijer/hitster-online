@@ -1,4 +1,5 @@
 import { io } from 'socket.io-client';
+import { getServerUrl } from '../config';
 function getOrCreateSessionId() {
     let id = sessionStorage.getItem('hitster_session_id');
     if (!id) {
@@ -9,7 +10,7 @@ function getOrCreateSessionId() {
 }
 const sessionId = getOrCreateSessionId();
 const displayName = sessionStorage.getItem('hitster_display_name') ?? '';
-export const socket = io(import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3000', {
+export const socket = io(getServerUrl(), {
     auth: { sessionId, displayName },
     autoConnect: false,
 });

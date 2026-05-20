@@ -1,5 +1,6 @@
 import { io, Socket } from 'socket.io-client';
 import type { ServerToClientEvents, ClientToServerEvents } from '../../../shared/types';
+import { getServerUrl } from '../config';
 
 function getOrCreateSessionId(): string {
   let id = sessionStorage.getItem('hitster_session_id');
@@ -14,7 +15,7 @@ const sessionId = getOrCreateSessionId();
 const displayName = sessionStorage.getItem('hitster_display_name') ?? '';
 
 export const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(
-  import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3000',
+  getServerUrl(),
   {
     auth: { sessionId, displayName },
     autoConnect: false,

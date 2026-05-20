@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import type { Room, Card, CardHidden, GameMode } from '../../../shared/types';
+import { isSpotifyTrackPageUrl } from '../spotify';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -137,6 +138,7 @@ function AudioPlayer({ previewUrl, playAt, currentCard, revealedCard, isFlipped 
   const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [timeLeft, setTimeLeft] = useState(30);
   const [progress, setProgress] = useState(0);
+  const spotifyOnly = previewUrl !== null && isSpotifyTrackPageUrl(previewUrl);
 
   // Waveform animation
   useEffect(() => {
@@ -163,9 +165,9 @@ function AudioPlayer({ previewUrl, playAt, currentCard, revealedCard, isFlipped 
     };
   }, []);
 
-  // Audio scheduling
+  // Audio scheduling (MP3 previews only — Spotify track pages open externally)
   useEffect(() => {
-    if (!previewUrl || !playAt) return;
+    if (!previewUrl || !playAt || spotifyOnly) return;
 
     const audio = audioRef.current;
     if (!audio) return;
@@ -210,7 +212,7 @@ function AudioPlayer({ previewUrl, playAt, currentCard, revealedCard, isFlipped 
       setTimeLeft(30);
       setProgress(0);
     };
-  }, [previewUrl, playAt]);
+  }, [previewUrl, playAt, spotifyOnly]);
 
   const albumArt = isFlipped
     ? (revealedCard?.albumArt ?? currentCard?.albumArt ?? null)
@@ -244,6 +246,10 @@ function AudioPlayer({ previewUrl, playAt, currentCard, revealedCard, isFlipped 
                 <div className="song-year">{revealedCard.releaseYear}</div>
               </div>
             </>
+          ) : spotifyOnly ? (
+            <div style={{ fontSize: 13, color: '#6b7280', marginTop: 8 }}>
+              No in-browser preview — listen on Spotify
+            </div>
           ) : (
             <div style={{ fontSize: 13, color: '#6b7280', marginTop: 8 }}>
               Song is playing for all...
@@ -251,20 +257,47 @@ function AudioPlayer({ previewUrl, playAt, currentCard, revealedCard, isFlipped 
           )}
         </div>
 
-        <div className="song-timer-wrap">
-          <div className="song-timer-label">TIME LEFT</div>
-          <div className="song-timer">
-            0:{String(Math.ceil(timeLeft)).padStart(2, '0')}
+        {spotifyOnly && previewUrl ? (
+          <a
+            href={previewUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="song-timer"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '10px 16px',
+              background: '#1db954',
+              color: '#fff',
+              borderRadius: 999,
+              fontSize: 14,
+              fontWeight: 600,
+              textDecoration: 'none',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Open in Spotify
+          </a>
+        ) : (
+          <div className="song-timer-wrap">
+            <div className="song-timer-label">TIME LEFT</div>
+            <div className="song-timer">
+              0:{String(Math.ceil(timeLeft)).padStart(2, '0')}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
-      <div className="waveform" ref={waveformRef} />
-      <div className="progress-track">
-        <div className="progress-fill" style={{ width: `${progress}%` }} />
-      </div>
-
-      <audio ref={audioRef} preload="auto" />
+      {!spotifyOnly && (
+        <>
+          <div className="waveform" ref={waveformRef} />
+          <div className="progress-track">
+            <div className="progress-fill" style={{ width: `${progress}%` }} />
+          </div>
+          <audio ref={audioRef} preload="auto" />
+        </>
+      )}
     </>
   );
 }

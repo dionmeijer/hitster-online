@@ -27,7 +27,8 @@ function parseArgs(): {
   genre?: string;
 } {
   const args = process.argv.slice(2);
-  let serverUrl = process.env.SERVER_URL ?? 'http://localhost:3000';
+  const port = process.env.PORT || '3000';
+  let serverUrl = process.env.SERVER_URL ?? `http://localhost:${port}`;
   let roomCode: string | undefined;
   let count: number | undefined;
   let mode: 'original' | 'pro' | 'expert' | 'cooperative' = 'original';

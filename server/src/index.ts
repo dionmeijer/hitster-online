@@ -1,11 +1,24 @@
-import 'dotenv/config';
+import { config as loadEnv } from 'dotenv';
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import { existsSync } from 'fs';
 import { randomUUID } from 'crypto';
-import { join } from 'path';
+import { join, resolve } from 'path';
+
+// Load server/.env even when started from repo root (e.g. npx tsx server/src/index.ts)
+for (const envPath of [
+  resolve(__dirname, '..', '.env'),
+  resolve(__dirname, '..', '..', '..', '.env'),
+  resolve(process.cwd(), 'server', '.env'),
+  resolve(process.cwd(), '.env'),
+]) {
+  if (existsSync(envPath)) {
+    loadEnv({ path: envPath });
+    break;
+  }
+}
 import type {
   ServerToClientEvents,
   ClientToServerEvents,

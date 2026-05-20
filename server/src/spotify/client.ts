@@ -11,6 +11,7 @@ interface SpotifyTrack {
   name: string;
   artists: Array<{ name: string }>;
   preview_url: string | null;
+  external_urls?: { spotify?: string };
   album: {
     images: Array<{ url: string; width: number; height: number }>;
     release_date: string;
@@ -92,22 +93,56 @@ export class SpotifyClient {
     return res.json() as Promise<T>;
   }
 
-  private trackToCard(track: SpotifyTrack): Card | null {
-    if (!track.preview_url) return null;
+  private trackArtists(track: SpotifyTrack): string {
+    return track.artists.map((a) => a.name).join(', ');
+  }
 
-    const releaseYear = parseInt(track.album.release_date.slice(0, 4), 10);
-    if (isNaN(releaseYear)) return null;
+  private trackReleaseYear(track: SpotifyTrack): number | null {
+    const year = parseInt(track.album.release_date.slice(0, 4), 10);
+    return isNaN(year) ? null : year;
+  }
+
+  private trackPlayUrl(track: SpotifyTrack): string {
+    return track.external_urls?.spotify ?? `https://open.spotify.com/track/${track.id}`;
+  }
+
+  private logRetrievedTrack(track: SpotifyTrack, included: boolean, skipReason?: string): void {
+    const year = this.trackReleaseYear(track);
+    const parts = [
+      `[Spotify]`,
+      `id=${track.id}`,
+      `year=${year ?? '?'}`,
+      `title="${track.name}"`,
+      `artist="${this.trackArtists(track)}"`,
+      `playUrl=${this.trackPlayUrl(track)}`,
+      `previewUrl=${track.preview_url ?? 'null'}`,
+      `albumArt=${track.album.images[0]?.url ?? 'none'}`,
+      `included=${included}`,
+    ];
+    if (skipReason) parts.push(`reason=${skipReason}`);
+    console.log(parts.join(' '));
+  }
+
+  private trackToCard(track: SpotifyTrack): Card | null {
+    const releaseYear = this.trackReleaseYear(track);
+    if (releaseYear === null) {
+      this.logRetrievedTrack(track, false, 'invalid_release_year');
+      return null;
+    }
 
     const albumArt = track.album.images[0]?.url ?? '';
 
-    return {
+    const card: Card = {
       trackId: track.id,
       title: track.name,
-      artist: track.artists.map((a) => a.name).join(', '),
+      artist: this.trackArtists(track),
       releaseYear,
-      previewUrl: track.preview_url,
+      // For now: Spotify play page (external_urls.spotify), not preview_url MP3.
+      previewUrl: this.trackPlayUrl(track),
       albumArt,
     };
+    this.logRetrievedTrack(track, true);
+    return card;
   }
 
   private extractPlaylistId(playlistUrl: string): string {
@@ -117,22 +152,18 @@ export class SpotifyClient {
     throw new Error(`Cannot extract playlist ID from: ${playlistUrl}`);
   }
 
-  /** Fetch tracks from a Spotify playlist URL or bare playlist ID. Tracks without a preview_url are excluded. */
+  /** Fetch tracks from a Spotify playlist URL or bare playlist ID. */
   async getPlaylistTracks(playlistUrl: string, limit = 200): Promise<Card[]> {
     const playlistId = this.extractPlaylistId(playlistUrl);
     const cards: Card[] = [];
-    let nullPreviews = 0;
-    let totalTracks = 0;
     let nextPath: string | null = `/playlists/${playlistId}/tracks?limit=50`;
 
     while (nextPath && cards.length < limit) {
       const data: PlaylistTracksPage = await this.apiGet<PlaylistTracksPage>(nextPath);
 
       for (const item of data.items) {
-        if (!item.track) continue;
-        totalTracks++;
-        if (!item.track.preview_url) {
-          nullPreviews++;
+        if (!item.track) {
+          console.log('[Spotify] skipped null playlist item');
           continue;
         }
         const card = this.trackToCard(item.track);
@@ -142,18 +173,13 @@ export class SpotifyClient {
       nextPath = data.next ?? null;
     }
 
-    if (nullPreviews > 0) {
-      console.warn(`[Spotify] ${nullPreviews} of ${totalTracks} tracks have no preview URL and will be excluded`);
-    }
-
+    console.log(`[Spotify] playlist ${playlistId}: ${cards.length} tracks included`);
     return cards;
   }
 
-  /** Search for tracks by genre keyword. Tracks without a preview_url are excluded. */
+  /** Search for tracks by genre keyword. */
   async getGenreTracks(genre: string, limit = 100): Promise<Card[]> {
     const cards: Card[] = [];
-    let nullPreviews = 0;
-    let totalTracks = 0;
     const q = encodeURIComponent(`genre:${genre}`);
     let nextPath: string | null = `/search?q=${q}&type=track&limit=50&offset=0`;
 
@@ -162,11 +188,6 @@ export class SpotifyClient {
       const items: SpotifyTrack[] = data.tracks?.items ?? [];
 
       for (const track of items) {
-        totalTracks++;
-        if (!track.preview_url) {
-          nullPreviews++;
-          continue;
-        }
         const card = this.trackToCard(track);
         if (card) cards.push(card);
       }
@@ -174,10 +195,7 @@ export class SpotifyClient {
       nextPath = items.length === 0 ? null : (data.tracks?.next ?? null);
     }
 
-    if (nullPreviews > 0) {
-      console.warn(`[Spotify] ${nullPreviews} of ${totalTracks} tracks have no preview URL and will be excluded`);
-    }
-
+    console.log(`[Spotify] genre "${genre}": ${cards.length} tracks included`);
     return cards;
   }
 
@@ -222,6 +240,7 @@ export class SpotifyClient {
       const card = this.trackToCard(track);
       if (card) cards.push(card);
     }
+    console.log(`[Spotify] genre fallback "${genre}": ${cards.length} tracks included`);
     return cards;
   }
 

@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useGame } from './game/useGame';
+import { getServerUrl } from './config';
 import EntryPage from './components/EntryPage';
 import GameRoom from './components/GameRoom';
 
@@ -10,7 +11,7 @@ export default function App() {
     return sessionStorage.getItem('hitster_session_id') ?? '';
   }, []);
 
-  const serverUrl = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3000';
+  const serverUrl = getServerUrl();
 
   if (!game.room) {
     return (
