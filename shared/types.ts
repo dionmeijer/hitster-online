@@ -48,6 +48,7 @@ export interface RoundConfig {
   playlistLabel?: string;     // Spotify playlist label / genre tag
   mode: GameMode;
   cardsToWin: number;         // default 10
+  tokensEnabled: boolean;     // false disables all token mechanics
 }
 
 export interface RoundSummary {
@@ -174,7 +175,7 @@ export interface ClientToServerEvents {
   'room:join': (data: { roomCode: string }) => void;
 
   /** Owner starts the round */
-  'round:start': (data: { playlistLabel?: string; mode: GameMode }) => void;
+  'round:start': (data: { playlistLabel?: string; mode: GameMode; cardsToWin?: number; tokensEnabled?: boolean }) => void;
 
   /** Active player places their card at position (0 = before all, n = after all) */
   'turn:place': (data: { position: number }) => void;
@@ -190,6 +191,15 @@ export interface ClientToServerEvents {
 
   /** Active player spends 3 tokens to place the current card without hearing the song; their next turn is skipped */
   'turn:buy': () => void;
+
+  /** Create a new team in the lobby */
+  'team:create': (data: { name: string }) => void;
+
+  /** Join an existing team (auto-leaves current team) */
+  'team:join': (data: { teamId: string }) => void;
+
+  /** Leave your current team */
+  'team:leave': () => void;
 }
 
 // ----------------------------

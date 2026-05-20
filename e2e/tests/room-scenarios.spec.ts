@@ -371,3 +371,30 @@ test('disconnected player turn auto-advances after timeout', async ({ browser }:
     await ctx2.close().catch(() => {});
   }
 });
+
+// ---------------------------------------------------------------------------
+// 11. Mode selector UI — all options visible and selectable (item 1)
+// ---------------------------------------------------------------------------
+
+test('mode selector shows all modes and can be changed', async ({ page }) => {
+  await fillEmailAndName(page, 'mode-host@example.com', 'ModeHost');
+  await createRoom(page, 'Mode Test');
+  await expect(page.locator('[data-testid="lobby-room-code"]')).toBeVisible({ timeout: 8_000 });
+
+  // Mode selector should be visible to the room owner
+  await expect(page.locator('[data-testid="mode-selector"]')).toBeVisible();
+
+  // All four modes should be present
+  await expect(page.locator('[data-testid="mode-option-original"]')).toBeVisible();
+  await expect(page.locator('[data-testid="mode-option-pro"]')).toBeVisible();
+  await expect(page.locator('[data-testid="mode-option-expert"]')).toBeVisible();
+  await expect(page.locator('[data-testid="mode-option-cooperative"]')).toBeVisible();
+
+  // Selecting a different mode works
+  await page.click('[data-testid="mode-option-pro"]');
+  await expect(page.locator('[data-testid="mode-option-pro"]')).toHaveClass(/selected/);
+
+  // Cards-to-win and tokens-enabled are visible
+  await expect(page.locator('[data-testid="cards-to-win-input"]')).toBeVisible();
+  await expect(page.locator('[data-testid="tokens-enabled-toggle"]')).toBeVisible();
+});

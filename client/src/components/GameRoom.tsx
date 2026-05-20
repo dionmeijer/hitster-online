@@ -26,50 +26,92 @@ function PlayerList({ room, activePlayerId, sessionId }: PlayerListProps) {
   const players = Object.values(room.players);
   const round = room.activeRound;
 
+  const renderPlayer = (p: typeof players[number]) => {
+    const color = avatarColor(p.displayName);
+    const pTeamId = Object.entries(room.teams).find(([, t]) => t.playerIds.includes(p.id))?.[0];
+    const isActive = round?.config.mode === 'cooperative'
+      ? false
+      : room.useTeams && pTeamId
+        ? activePlayerId === pTeamId
+        : p.id === activePlayerId;
+    const isMe = p.id === sessionId;
+    const entityKey = round?.config.mode === 'cooperative' ? 'cooperative'
+      : (room.useTeams && pTeamId ? pTeamId : p.id);
+    const timeline = round?.timelines[entityKey];
+    const cardCount = timeline?.cards.length ?? 0;
+    const tokens = round?.tokens[entityKey] ?? 0;
+
+    return (
+      <div key={p.id} className={`player-item${isActive ? ' active-player' : ''}${!p.isConnected ? ' disconnected' : ''}`}>
+        <div
+          className="player-avatar"
+          style={{ background: color + '22', color }}
+        >
+          {p.displayName[0]?.toUpperCase() ?? '?'}
+        </div>
+        <div className="player-info">
+          <div className="player-name">
+            {isMe ? 'You' : p.displayName}
+            {isActive && (
+              <span style={{ color: '#4ade80', fontSize: 11, marginLeft: 4 }}>▶</span>
+            )}
+            {!p.isConnected && (
+              <span className="player-disconnected-badge">⚡ offline</span>
+            )}
+          </div>
+          <div className="player-score">{cardCount} card{cardCount !== 1 ? 's' : ''}</div>
+          <div className="player-token-dots">
+            {Array.from({ length: 5 }, (_, i) => (
+              <div key={i} className={`token-dot${i >= tokens ? ' empty' : ''}`} />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const teams = Object.values(room.teams);
+  const hasTeams = room.useTeams && teams.length > 0;
+
   return (
     <div className="side-panel">
       <div className="panel-title">Players</div>
 
-      {players.map(p => {
-        const color = avatarColor(p.displayName);
-        const isActive = p.id === activePlayerId;
-        const isMe = p.id === sessionId;
-        const timeline = round?.timelines[p.id];
-        const cardCount = timeline?.cards.length ?? 0;
-        const tokens = round?.tokens[p.id] ?? 0;
-
-        return (
-          <div key={p.id} className={`player-item${isActive ? ' active-player' : ''}`}>
-            <div
-              className="player-avatar"
-              style={{ background: color + '22', color }}
-            >
-              {p.displayName[0]?.toUpperCase() ?? '?'}
-            </div>
-            <div className="player-info">
-              <div className="player-name">
-                {isMe ? 'You' : p.displayName}
-                {isActive && (
-                  <span style={{ color: '#4ade80', fontSize: 11, marginLeft: 4 }}>▶</span>
-                )}
+      {hasTeams ? (
+        <>
+          {teams.map(team => {
+            const teamPlayers = players.filter(p => team.playerIds.includes(p.id));
+            return (
+              <div key={team.id}>
+                <div className="player-team-header">{team.name}</div>
+                {teamPlayers.map(p => renderPlayer(p))}
               </div>
-              <div className="player-score">{cardCount} card{cardCount !== 1 ? 's' : ''}</div>
-              <div className="player-token-dots">
-                {Array.from({ length: 5 }, (_, i) => (
-                  <div key={i} className={`token-dot${i >= tokens ? ' empty' : ''}`} />
-                ))}
+            );
+          })}
+          {(() => {
+            const unteamedPlayers = players.filter(p =>
+              !teams.some(t => t.playerIds.includes(p.id))
+            );
+            return unteamedPlayers.length > 0 ? (
+              <div>
+                <div className="player-team-header">No team</div>
+                {unteamedPlayers.map(p => renderPlayer(p))}
               </div>
-            </div>
-          </div>
-        );
-      })}
+            ) : null;
+          })()}
+        </>
+      ) : (
+        players.map(p => renderPlayer(p))
+      )}
 
       {round && (
         <div className="round-info">
           <div className="panel-title">Round</div>
           <div className="round-info-row">
             Mode: <span className="round-info-val">{round.config.mode}</span><br />
-            Deck: <span className="round-info-val">{round.deckRemaining} left</span><br />
+            Deck: <span className="round-info-val" style={{
+              color: round.deckRemaining <= 3 ? '#ef4444' : round.deckRemaining <= 10 ? '#fbbf24' : undefined
+            }}>{round.deckRemaining} left</span><br />
             Target: <span className="round-info-val-green">{round.config.cardsToWin} cards</span>
           </div>
         </div>
@@ -388,57 +430,131 @@ interface WinScreenProps {
   winnerId: string | null;
   room: Room;
   sessionId: string;
-  onPlayAgain: () => void;
+  onBackToLobby: () => void;
+  onLeave: () => void;
 }
 
-function WinScreen({ winnerId, room, sessionId, onPlayAgain }: WinScreenProps) {
-  const winner = winnerId ? room.players[winnerId] : null;
+function WinScreen({ winnerId, room, sessionId, onBackToLobby, onLeave }: WinScreenProps) {
+  const isCoopWin = winnerId === 'cooperative';
+  const isCoopLoss = !winnerId && room.activeRound?.config.mode === 'cooperative';
+  const isTeamWin = winnerId && room.teams[winnerId] !== undefined;
+  const winner = !isCoopWin && !isTeamWin && winnerId ? room.players[winnerId] : null;
+  const winnerTeam = isTeamWin && winnerId ? room.teams[winnerId] : null;
   const isMe = winnerId === sessionId;
+  const isMyTeam = winnerId !== null && room.teams[winnerId ?? '']?.playerIds.includes(sessionId);
+  const cardsToWin = room.activeRound?.config.cardsToWin ?? 10;
+
+  let title: string;
+  let subtitle: string;
+  if (isCoopWin) {
+    title = 'Team Wins!';
+    subtitle = `You reached ${cardsToWin} cards together!`;
+  } else if (isCoopLoss) {
+    title = 'Team Lost';
+    subtitle = 'The shared token pool ran out.';
+  } else if (winnerTeam) {
+    title = isMyTeam ? 'Your Team Wins!' : `${winnerTeam.name} Wins!`;
+    subtitle = `${winnerTeam.name} reached ${cardsToWin} cards first.`;
+  } else if (isMe) {
+    title = 'You Win!';
+    subtitle = 'You built the perfect timeline!';
+  } else if (winner) {
+    title = `${winner.displayName} Wins!`;
+    subtitle = `${winner.displayName} reached ${cardsToWin} cards first.`;
+  } else {
+    title = 'Game Over!';
+    subtitle = 'The deck ran out.';
+  }
+
+  const isOwner = room.ownerId === sessionId;
 
   return (
     <div className="win-screen">
       <div className="scanlines" />
-      <div className="win-trophy">🏆</div>
-      <div className="win-title">
-        {isMe ? 'You Win!' : winner ? `${winner.displayName} Wins!` : 'Game Over!'}
+      <div className="win-trophy">{isCoopLoss ? '💀' : '🏆'}</div>
+      <div className="win-title">{title}</div>
+      <div className="win-subtitle">{subtitle}</div>
+
+      {/* Round history */}
+      {room.roundHistory.length > 0 && (
+        <div className="win-history">
+          <div className="win-history-title">Round History</div>
+          {room.roundHistory.map((r, i) => {
+            const rWinner = r.winnerId && room.players[r.winnerId]
+              ? room.players[r.winnerId].displayName
+              : r.winnerId === 'cooperative' ? 'Team' : r.winnerId && room.teams[r.winnerId]
+                ? room.teams[r.winnerId].name
+                : 'No winner';
+            return (
+              <div key={i} className="win-history-row">
+                <span className="win-history-round">Round {r.roundNumber}</span>
+                <span className="win-history-mode">{r.mode}</span>
+                <span className="win-history-winner">{rWinner}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="win-actions">
+        <button className="win-play-again" onClick={onBackToLobby}>
+          {isOwner ? '⊕ Back to Lobby' : '← Back to Lobby'}
+        </button>
+        <button className="win-leave" onClick={onLeave}>
+          Leave Room
+        </button>
       </div>
-      <div className="win-subtitle">
-        {isMe
-          ? 'You built the perfect timeline!'
-          : winner
-          ? `${winner.displayName} reached 10 cards first.`
-          : 'The deck ran out.'}
-      </div>
-      <button className="win-play-again" onClick={onPlayAgain}>
-        ⊕ Play Again
-      </button>
     </div>
   );
 }
 
 // ── Lobby screen ──────────────────────────────────────────────────────────────
 
+const MODES: { value: GameMode; label: string; desc: string }[] = [
+  { value: 'original', label: 'Original', desc: '2 starting tokens, naming bonus on' },
+  { value: 'pro',      label: 'Pro',      desc: '5 starting tokens, no naming bonus' },
+  { value: 'expert',   label: 'Expert',   desc: '3 starting tokens, no naming bonus' },
+  { value: 'cooperative', label: 'Cooperative', desc: 'Shared timeline & tokens, reach target together' },
+];
+
 interface LobbyScreenProps {
   room: Room;
   sessionId: string;
-  onStartRound: (mode: GameMode, playlistLabel?: string) => void;
+  onStartRound: (mode: GameMode, playlistLabel?: string, cardsToWin?: number, tokensEnabled?: boolean) => void;
+  onCreateTeam: (name: string) => void;
+  onJoinTeam: (teamId: string) => void;
+  onLeaveTeam: () => void;
   onLeave: () => void;
   socketError?: string | null;
 }
 
-function LobbyScreen({ room, sessionId, onStartRound, onLeave, socketError }: LobbyScreenProps) {
+function LobbyScreen({ room, sessionId, onStartRound, onCreateTeam, onJoinTeam, onLeaveTeam, onLeave, socketError }: LobbyScreenProps) {
   const isOwner = room.ownerId === sessionId;
   const players = Object.values(room.players);
   const [playlistLabel, setPlaylistLabel] = useState('');
+  const [mode, setMode] = useState<GameMode>('original');
+  const [cardsToWin, setCardsToWin] = useState(10);
+  const [tokensEnabled, setTokensEnabled] = useState(true);
   const [starting, setStarting] = useState(false);
+  const [newTeamName, setNewTeamName] = useState('');
 
   useEffect(() => {
     if (socketError) setStarting(false);
   }, [socketError]);
 
+  const myTeam = Object.values(room.teams).find(t => t.playerIds.includes(sessionId));
+  const teams = Object.values(room.teams);
+
   function handleStart() {
     setStarting(true);
-    onStartRound('original', playlistLabel.trim() || undefined);
+    onStartRound(mode, playlistLabel.trim() || undefined, cardsToWin, tokensEnabled);
+  }
+
+  function handleCreateTeam() {
+    const name = newTeamName.trim();
+    if (!name) return;
+    onCreateTeam(name);
+    setNewTeamName('');
   }
 
   return (
@@ -467,17 +583,137 @@ function LobbyScreen({ room, sessionId, onStartRound, onLeave, socketError }: Lo
       </div>
 
       {isOwner && (
-        <div className="lobby-playlist-field">
+        <>
+          <div className="lobby-playlist-field">
+            <input
+              className="form-input"
+              type="text"
+              placeholder="Genre or Spotify playlist URL (optional)"
+              value={playlistLabel}
+              onChange={e => setPlaylistLabel(e.target.value)}
+              data-testid="playlist-label-input"
+            />
+          </div>
+
+          <div className="lobby-config-section">
+            <div className="lobby-config-label">Game Mode</div>
+            <div className="lobby-mode-grid" data-testid="mode-selector">
+              {MODES.map(m => (
+                <label
+                  key={m.value}
+                  className={`lobby-mode-option${mode === m.value ? ' selected' : ''}`}
+                  data-testid={`mode-option-${m.value}`}
+                >
+                  <input
+                    type="radio"
+                    name="game-mode"
+                    value={m.value}
+                    checked={mode === m.value}
+                    onChange={() => setMode(m.value)}
+                    style={{ display: 'none' }}
+                  />
+                  <div className="lobby-mode-name">{m.label}</div>
+                  <div className="lobby-mode-desc">{m.desc}</div>
+                </label>
+              ))}
+            </div>
+
+            <div className="lobby-config-row">
+              <label className="lobby-config-label" htmlFor="cards-to-win">
+                Cards to Win
+              </label>
+              <input
+                id="cards-to-win"
+                className="form-input"
+                type="number"
+                min={1}
+                max={20}
+                value={cardsToWin}
+                onChange={e => setCardsToWin(Math.max(1, Math.min(20, Number(e.target.value))))}
+                data-testid="cards-to-win-input"
+                style={{ width: 72 }}
+              />
+            </div>
+
+            <div className="lobby-config-row">
+              <label className="lobby-config-label" htmlFor="tokens-enabled">
+                Tokens Enabled
+              </label>
+              <input
+                id="tokens-enabled"
+                type="checkbox"
+                checked={tokensEnabled}
+                onChange={e => setTokensEnabled(e.target.checked)}
+                data-testid="tokens-enabled-toggle"
+              />
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── Teams section ── */}
+      <div className="lobby-teams-section">
+        <div className="lobby-config-label">Teams (optional)</div>
+
+        {teams.length > 0 && (
+          <div className="lobby-teams-list" data-testid="teams-list">
+            {teams.map(team => {
+              const isMyTeamRow = team.id === myTeam?.id;
+              return (
+                <div key={team.id} className={`lobby-team-row${isMyTeamRow ? ' my-team' : ''}`} data-testid="team-row">
+                  <div className="lobby-team-name">{team.name}</div>
+                  <div className="lobby-team-members">
+                    {team.playerIds.map(pid => (
+                      <span key={pid} className="lobby-team-member">
+                        {room.players[pid]?.displayName ?? pid}
+                      </span>
+                    ))}
+                  </div>
+                  {!isMyTeamRow ? (
+                    <button
+                      className="lobby-team-btn"
+                      onClick={() => onJoinTeam(team.id)}
+                      data-testid="join-team-btn"
+                    >
+                      Join
+                    </button>
+                  ) : (
+                    <button
+                      className="lobby-team-btn leave"
+                      onClick={onLeaveTeam}
+                      data-testid="leave-team-btn"
+                    >
+                      Leave
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="lobby-create-team-row">
           <input
             className="form-input"
             type="text"
-            placeholder="Genre or Spotify playlist URL (optional)"
-            value={playlistLabel}
-            onChange={e => setPlaylistLabel(e.target.value)}
-            data-testid="playlist-label-input"
+            placeholder="New team name…"
+            maxLength={20}
+            value={newTeamName}
+            onChange={e => setNewTeamName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleCreateTeam()}
+            data-testid="new-team-name-input"
+            style={{ flex: 1, minWidth: 0 }}
           />
+          <button
+            className="lobby-team-btn"
+            disabled={!newTeamName.trim()}
+            onClick={handleCreateTeam}
+            data-testid="create-team-btn"
+          >
+            + Create
+          </button>
         </div>
-      )}
+      </div>
 
       {socketError && (
         <div className="server-error-msg">{socketError}</div>
@@ -558,12 +794,16 @@ export interface GameRoomProps {
   myTokens: number;
   sessionId: string;
   socketError?: string | null;
-  onStartRound: (mode: GameMode, playlistLabel?: string) => void;
+  onStartRound: (mode: GameMode, playlistLabel?: string, cardsToWin?: number, tokensEnabled?: boolean) => void;
   onPlaceCard: (position: number) => void;
   onChallengeCard: () => void;
   onSkipCard: () => void;
   onNameSong: (title: string, artist: string) => void;
   onBuyCard: () => void;
+  onDismissRoundEnd: () => void;
+  onCreateTeam: (name: string) => void;
+  onJoinTeam: (teamId: string) => void;
+  onLeaveTeam: () => void;
   onLeave: () => void;
 }
 
@@ -584,6 +824,10 @@ export default function GameRoom({
   onSkipCard,
   onNameSong,
   onBuyCard,
+  onDismissRoundEnd,
+  onCreateTeam,
+  onJoinTeam,
+  onLeaveTeam,
   onLeave,
 }: GameRoomProps) {
   const [selectedPosition, setSelectedPosition] = useState<number | null>(null);
@@ -593,9 +837,16 @@ export default function GameRoom({
   const [nameSongTitle, setNameSongTitle] = useState('');
   const [nameSongArtist, setNameSongArtist] = useState('');
 
-  const isActivePlayer = activePlayerId === sessionId;
   const round = room.activeRound;
-  const myTimeline = round?.timelines[sessionId];
+  const isCooperative = round?.config.mode === 'cooperative';
+  const myTeamId = Object.entries(room.teams).find(([, t]) => t.playerIds.includes(sessionId))?.[0];
+  const isActivePlayer = isCooperative
+    ? activePlayerId !== null  // anyone can act in cooperative (handled server-side)
+    : room.useTeams && myTeamId
+      ? activePlayerId === myTeamId
+      : activePlayerId === sessionId;
+  const timelineKey = isCooperative ? 'cooperative' : (room.useTeams && myTeamId ? myTeamId : sessionId);
+  const myTimeline = round?.timelines[timelineKey];
   const myCards = myTimeline?.cards ?? [];
 
   // Current turn phase
@@ -633,8 +884,21 @@ export default function GameRoom({
     onPlaceCard(selectedPosition);
   }
 
-  // In lobby
-  if (room.status === 'lobby') {
+  // Win screen — shown first so dismiss → lobby transition works
+  if (roundEnded) {
+    return (
+      <WinScreen
+        winnerId={roundEnded.winnerId}
+        room={room}
+        sessionId={sessionId}
+        onBackToLobby={onDismissRoundEnd}
+        onLeave={onLeave}
+      />
+    );
+  }
+
+  // In lobby (or round_ended after dismissing win screen)
+  if (room.status === 'lobby' || room.status === 'round_ended') {
     return (
       <div className="game-root">
         <div className="scanlines" />
@@ -648,20 +912,17 @@ export default function GameRoom({
             Leave
           </button>
         </header>
-        <LobbyScreen room={room} sessionId={sessionId} onStartRound={onStartRound} onLeave={onLeave} socketError={socketError} />
+        <LobbyScreen
+          room={room}
+          sessionId={sessionId}
+          onStartRound={onStartRound}
+          onLeave={onLeave}
+          onCreateTeam={onCreateTeam}
+          onJoinTeam={onJoinTeam}
+          onLeaveTeam={onLeaveTeam}
+          socketError={socketError}
+        />
       </div>
-    );
-  }
-
-  // Win screen
-  if (roundEnded) {
-    return (
-      <WinScreen
-        winnerId={roundEnded.winnerId}
-        room={room}
-        sessionId={sessionId}
-        onPlayAgain={onLeave}
-      />
     );
   }
 
@@ -697,6 +958,12 @@ export default function GameRoom({
             revealedCard={revealedCard}
             isFlipped={isFlipped}
           />
+
+          {isCooperative && round && (round.tokens['cooperative'] ?? 0) <= 2 && (
+            <div className="coop-token-warning">
+              ⚠ Only {round.tokens['cooperative'] ?? 0} shared token{(round.tokens['cooperative'] ?? 0) !== 1 ? 's' : ''} left!
+            </div>
+          )}
 
           <Timeline
             cards={myCards}
@@ -743,7 +1010,7 @@ export default function GameRoom({
               </button>
             )}
 
-            {!isActivePlayer && isInChallengePhase && (
+            {!isActivePlayer && isInChallengePhase && !isCooperative && (
               <button
                 className="action-btn btn-hitster"
                 onClick={onChallengeCard}
@@ -773,7 +1040,7 @@ export default function GameRoom({
           <div className="panel-title">Game Log</div>
 
           <ChallengeBar
-            deadline={challengeDeadline}
+            deadline={isCooperative ? null : challengeDeadline}
             onChallenge={onChallengeCard}
             isActivePlayer={isActivePlayer}
           />

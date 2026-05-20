@@ -16,6 +16,11 @@ import {
   applySkip,
   timelineLength,
   buildRoundSummary,
+  activeEntityId,
+  createTeam,
+  joinTeam,
+  leaveTeam,
+  isActiveParticipant,
 } from './engine';
 import type { Room, Card, RoundConfig } from '../../../shared/types';
 
@@ -37,6 +42,7 @@ function makeCard(trackId: string, year: number): Card {
 const defaultConfig: RoundConfig = {
   mode: 'original',
   cardsToWin: 10,
+  tokensEnabled: true,
 };
 
 function makeRoomWithTurn(
@@ -659,6 +665,16 @@ describe('addPlayer', () => {
     const { room: active } = initRound(room, defaultConfig, deck);
     expect(() => addPlayer(active, 'p2', 'Bob')).toThrow();
   });
+
+  it('addPlayer throws when room has 12 players', () => {
+    // createRoom creates owner (p1) = 1 player; add p2–p12 = 11 more → 12 total
+    let room = createRoom('p1', 'Alice', 'Test');
+    for (let i = 2; i <= 12; i++) {
+      room = addPlayer(room, `p${i}`, `Player${i}`);
+    }
+    expect(Object.keys(room.players)).toHaveLength(12);
+    expect(() => addPlayer(room, 'p13', 'Player13')).toThrow('Room is full (max 12 players)');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -701,5 +717,354 @@ describe('initRound deck size and card distribution', () => {
     const config: RoundConfig = { ...defaultConfig, playlistLabel: "90's rock" };
     const { room: started } = initRound(room, config, deck);
     expect(started.activeRound?.config.playlistLabel).toBe("90's rock");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Mode-specific starting tokens
+// ---------------------------------------------------------------------------
+
+describe('initRound — starting tokens by mode', () => {
+  function startTokensForMode(mode: RoundConfig['mode']): number {
+    let room = createRoom('p1', 'Alice', 'Test');
+    room = addPlayer(room, 'p2', 'Bob');
+    const deck = Array.from({ length: 15 }, (_, i) => makeCard(`t${i}`, 1980 + i));
+    const config: RoundConfig = { mode, cardsToWin: 10, tokensEnabled: true };
+    const { room: started } = initRound(room, config, deck);
+    if (mode === 'cooperative') return started.activeRound!.tokens['cooperative'];
+    return started.activeRound!.tokens['p1'];
+  }
+
+  it('original mode starts with 2 tokens', () => {
+    expect(startTokensForMode('original')).toBe(2);
+  });
+
+  it('pro mode starts with 5 tokens', () => {
+    expect(startTokensForMode('pro')).toBe(5);
+  });
+
+  it('expert mode starts with 3 tokens', () => {
+    expect(startTokensForMode('expert')).toBe(3);
+  });
+
+  it('cooperative mode starts with 5 shared tokens', () => {
+    expect(startTokensForMode('cooperative')).toBe(5);
+  });
+
+  it('cooperative mode creates shared timeline', () => {
+    let room = createRoom('p1', 'Alice', 'Test');
+    room = addPlayer(room, 'p2', 'Bob');
+    const deck = Array.from({ length: 15 }, (_, i) => makeCard(`t${i}`, 1980 + i));
+    const config: RoundConfig = { mode: 'cooperative', cardsToWin: 10, tokensEnabled: true };
+    const { room: started } = initRound(room, config, deck);
+    expect(started.activeRound!.timelines['cooperative']).toBeDefined();
+    expect(started.activeRound!.timelines['p1']).toBeUndefined();
+    // Shared timeline should have one starting card per player (2 players)
+    expect(started.activeRound!.timelines['cooperative'].cards).toHaveLength(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// activeEntityId
+// ---------------------------------------------------------------------------
+
+describe('activeEntityId', () => {
+  it('returns playerId in non-cooperative modes', () => {
+    let room = createRoom('p1', 'Alice', 'Test');
+    room = addPlayer(room, 'p2', 'Bob');
+    const deck = Array.from({ length: 15 }, (_, i) => makeCard(`t${i}`, 1980 + i));
+    const { room: started } = initRound(room, defaultConfig, deck);
+    expect(activeEntityId(started, 'p1')).toBe('p1');
+  });
+
+  it('returns "cooperative" in cooperative mode', () => {
+    let room = createRoom('p1', 'Alice', 'Test');
+    room = addPlayer(room, 'p2', 'Bob');
+    const deck = Array.from({ length: 15 }, (_, i) => makeCard(`t${i}`, 1980 + i));
+    const config: RoundConfig = { mode: 'cooperative', cardsToWin: 10, tokensEnabled: true };
+    const { room: started } = initRound(room, config, deck);
+    expect(activeEntityId(started, 'p1')).toBe('cooperative');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// applyNamingBonus — mode restrictions
+// ---------------------------------------------------------------------------
+
+describe('applyNamingBonus — mode restrictions', () => {
+  function roomWithMode(mode: RoundConfig['mode']): Room {
+    let room = createRoom('p1', 'Alice', 'Test');
+    room = addPlayer(room, 'p2', 'Bob');
+    const deck = Array.from({ length: 15 }, (_, i) => makeCard(`t${i}`, 1980 + i));
+    const config: RoundConfig = { mode, cardsToWin: 10, tokensEnabled: true };
+    const { room: started } = initRound(room, config, deck);
+    return started;
+  }
+
+  it('original: awards +1 token', () => {
+    const room = roomWithMode('original');
+    const before = room.activeRound!.tokens['p1'];
+    const after = applyNamingBonus(room, 'p1');
+    expect(after.activeRound!.tokens['p1']).toBe(before + 1);
+  });
+
+  it('pro: naming bonus is a no-op', () => {
+    const room = roomWithMode('pro');
+    const tokensBefore = { ...room.activeRound!.tokens };
+    const after = applyNamingBonus(room, 'p1');
+    expect(after.activeRound!.tokens).toEqual(tokensBefore);
+  });
+
+  it('expert: naming bonus is a no-op', () => {
+    const room = roomWithMode('expert');
+    const tokensBefore = { ...room.activeRound!.tokens };
+    const after = applyNamingBonus(room, 'p1');
+    expect(after.activeRound!.tokens).toEqual(tokensBefore);
+  });
+
+  it('tokensEnabled=false: naming bonus is a no-op', () => {
+    let room = createRoom('p1', 'Alice', 'Test');
+    room = addPlayer(room, 'p2', 'Bob');
+    const deck = Array.from({ length: 15 }, (_, i) => makeCard(`t${i}`, 1980 + i));
+    const config: RoundConfig = { mode: 'original', cardsToWin: 10, tokensEnabled: false };
+    const { room: started } = initRound(room, config, deck);
+    const tokensBefore = { ...started.activeRound!.tokens };
+    const after = applyNamingBonus(started, 'p1');
+    expect(after.activeRound!.tokens).toEqual(tokensBefore);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Cooperative resolveFlip
+// ---------------------------------------------------------------------------
+
+describe('resolveFlip — cooperative mode', () => {
+  function makeCoopRoom(sharedCards: Card[], cardToPlace: Card, position: number): Room {
+    let room = createRoom('p1', 'Alice', 'Test');
+    room = addPlayer(room, 'p2', 'Bob');
+    const deck = Array.from({ length: 20 }, (_, i) => makeCard(`f${i}`, 2000 + i));
+    const config: RoundConfig = { mode: 'cooperative', cardsToWin: 5, tokensEnabled: true };
+    const { room: initedRoom } = initRound(room, config, deck);
+    return {
+      ...initedRoom,
+      activeRound: {
+        ...initedRoom.activeRound!,
+        timelines: { cooperative: { ownerId: 'cooperative', cards: sharedCards } },
+        tokens: { cooperative: 3 },
+        currentTurn: {
+          activeId: 'p1',
+          phase: 'challenge',
+          placedPosition: position,
+          challengeDeadline: Date.now() + 10_000,
+          challenges: [],
+        },
+        deckRemaining: 10,
+      },
+    };
+  }
+
+  it('correct placement adds card to shared timeline', () => {
+    const existing = [makeCard('a', 1980), makeCard('b', 2000)];
+    const card = makeCard('c', 1990);
+    const room = makeCoopRoom(existing, card, 1); // between 1980 and 2000
+    const { correct, room: result } = resolveFlip(room, card);
+    expect(correct).toBe(true);
+    expect(result.activeRound!.timelines['cooperative'].cards).toHaveLength(3);
+  });
+
+  it('wrong placement deducts 1 shared token', () => {
+    const existing = [makeCard('a', 1980), makeCard('b', 2000)];
+    const card = makeCard('c', 1990);
+    const room = makeCoopRoom(existing, card, 0); // wrong — before 1980 but year is 1990
+    const { correct, room: result } = resolveFlip(room, card);
+    expect(correct).toBe(false);
+    expect(result.activeRound!.tokens['cooperative']).toBe(2); // was 3
+  });
+
+  it('cooperative win when shared timeline reaches cardsToWin', () => {
+    const existing = [makeCard('a', 1970), makeCard('b', 1980), makeCard('c', 1990), makeCard('d', 2000)];
+    const card = makeCard('e', 2010);
+    const room = makeCoopRoom(existing, card, 4); // append at end
+    const { winnerId } = resolveFlip(room, card);
+    expect(winnerId).toBe('cooperative');
+  });
+
+  it('cooperative loss when tokens drop to 0', () => {
+    const existing = [makeCard('a', 1980), makeCard('b', 2000)];
+    const card = makeCard('c', 1990);
+    // Set tokens to 1 so wrong placement drives to 0
+    let room = makeCoopRoom(existing, card, 0); // wrong placement
+    room = { ...room, activeRound: { ...room.activeRound!, tokens: { cooperative: 1 } } };
+    const { room: result, winnerId } = resolveFlip(room, card);
+    expect(result.activeRound!.tokens['cooperative']).toBe(0);
+    expect(result.status).toBe('round_ended');
+    expect(winnerId).toBeUndefined(); // null winner = loss
+  });
+});
+
+// ---------------------------------------------------------------------------
+// applySkip / applyBuy — tokensEnabled guard
+// ---------------------------------------------------------------------------
+
+describe('applySkip — tokensEnabled guard', () => {
+  it('throws when tokensEnabled is false', () => {
+    let room = createRoom('p1', 'Alice', 'Test');
+    room = addPlayer(room, 'p2', 'Bob');
+    const deck = Array.from({ length: 15 }, (_, i) => makeCard(`t${i}`, 1980 + i));
+    const config: RoundConfig = { mode: 'original', cardsToWin: 10, tokensEnabled: false };
+    const { room: started } = initRound(room, config, deck);
+    expect(() => applySkip(started, 'p1')).toThrow('Tokens are disabled');
+  });
+});
+
+describe('applyBuy — tokensEnabled guard', () => {
+  it('throws when tokensEnabled is false', () => {
+    let room = createRoom('p1', 'Alice', 'Test');
+    room = addPlayer(room, 'p2', 'Bob');
+    const deck = Array.from({ length: 15 }, (_, i) => makeCard(`t${i}`, 1980 + i));
+    const config: RoundConfig = { mode: 'original', cardsToWin: 10, tokensEnabled: false };
+    const { room: started } = initRound(room, config, deck);
+    // Give player 3 tokens and set up a place-phase turn
+    const withTurn: Room = {
+      ...started,
+      activeRound: {
+        ...started.activeRound!,
+        tokens: { p1: 3, p2: 3 },
+        currentTurn: { activeId: 'p1', phase: 'place', challenges: [] },
+      },
+    };
+    expect(() => applyBuy(withTurn, 'p1')).toThrow('Tokens are disabled');
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// Team management
+// ---------------------------------------------------------------------------
+
+describe('createTeam', () => {
+  it('creates a team and adds creator to it', () => {
+    const room = createRoom('p1', 'Alice', 'Test');
+    const result = createTeam(room, 'team1', 'Red Team', 'p1');
+    expect(result.teams['team1']).toBeDefined();
+    expect(result.teams['team1'].name).toBe('Red Team');
+    expect(result.teams['team1'].playerIds).toContain('p1');
+    expect(result.useTeams).toBe(true);
+  });
+
+  it('moves creator out of previous team', () => {
+    let room = createRoom('p1', 'Alice', 'Test');
+    room = createTeam(room, 'team1', 'Red Team', 'p1');
+    room = createTeam(room, 'team2', 'Blue Team', 'p1');
+    expect(room.teams['team1'].playerIds).not.toContain('p1');
+    expect(room.teams['team2'].playerIds).toContain('p1');
+  });
+
+  it('throws if room is not in lobby', () => {
+    let room = createRoom('p1', 'Alice', 'Test');
+    room = addPlayer(room, 'p2', 'Bob');
+    const deck = Array.from({ length: 15 }, (_, i) => makeCard(`t${i}`, 1980 + i));
+    const { room: started } = initRound(room, defaultConfig, deck);
+    expect(() => createTeam(started, 'team1', 'Red Team', 'p1')).toThrow();
+  });
+
+  it('createTeam throws when room has 6 teams', () => {
+    let room = createRoom('p1', 'Alice', 'Test');
+    for (let i = 1; i <= 6; i++) {
+      room = createTeam(room, `team${i}`, `Team ${i}`, 'p1');
+    }
+    expect(Object.keys(room.teams)).toHaveLength(6);
+    expect(() => createTeam(room, 'team7', 'Team 7', 'p1')).toThrow('Maximum of 6 teams allowed');
+  });
+});
+
+describe('joinTeam', () => {
+  it('adds player to team and removes from previous team', () => {
+    let room = createRoom('p1', 'Alice', 'Test');
+    room = addPlayer(room, 'p2', 'Bob');
+    room = createTeam(room, 'team1', 'Red', 'p1');
+    room = createTeam(room, 'team2', 'Blue', 'p2');
+    room = joinTeam(room, 'team1', 'p2');
+    expect(room.teams['team1'].playerIds).toContain('p2');
+    expect(room.teams['team2'].playerIds).not.toContain('p2');
+  });
+
+  it('throws on unknown team', () => {
+    const room = createRoom('p1', 'Alice', 'Test');
+    expect(() => joinTeam(room, 'nonexistent', 'p1')).toThrow('Team not found');
+  });
+});
+
+describe('leaveTeam', () => {
+  it('removes player from team', () => {
+    let room = createRoom('p1', 'Alice', 'Test');
+    room = createTeam(room, 'team1', 'Red', 'p1');
+    room = leaveTeam(room, 'p1');
+    expect(Object.keys(room.teams)).toHaveLength(0);
+    expect(room.useTeams).toBe(false);
+  });
+});
+
+describe('isActiveParticipant', () => {
+  it('returns true when it is the player\'s turn (solo)', () => {
+    let room = createRoom('p1', 'Alice', 'Test');
+    room = addPlayer(room, 'p2', 'Bob');
+    const deck = Array.from({ length: 15 }, (_, i) => makeCard(`t${i}`, 1980 + i));
+    const { room: started } = initRound(room, defaultConfig, deck);
+    const withTurn = {
+      ...started,
+      activeRound: {
+        ...started.activeRound!,
+        currentTurn: { activeId: 'p1', phase: 'place' as const, challenges: [] },
+      },
+    };
+    expect(isActiveParticipant(withTurn, 'p1')).toBe(true);
+    expect(isActiveParticipant(withTurn, 'p2')).toBe(false);
+  });
+
+  it('returns true for any team member when team is active', () => {
+    let room = createRoom('p1', 'Alice', 'Test');
+    room = addPlayer(room, 'p2', 'Bob');
+    room = addPlayer(room, 'p3', 'Carol');
+    room = createTeam(room, 'teamA', 'Alpha', 'p1');
+    room = joinTeam(room, 'teamA', 'p2');
+    room = createTeam(room, 'teamB', 'Beta', 'p3');
+    const deck = Array.from({ length: 20 }, (_, i) => makeCard(`t${i}`, 1970 + i));
+    const config: RoundConfig = { mode: 'original', cardsToWin: 10, tokensEnabled: true };
+    const { room: started } = initRound(room, config, deck);
+    const withTurn = {
+      ...started,
+      activeRound: {
+        ...started.activeRound!,
+        currentTurn: { activeId: 'teamA', phase: 'place' as const, challenges: [] },
+      },
+    };
+    expect(isActiveParticipant(withTurn, 'p1')).toBe(true);
+    expect(isActiveParticipant(withTurn, 'p2')).toBe(true);
+    expect(isActiveParticipant(withTurn, 'p3')).toBe(false);
+  });
+});
+
+describe('initRound with teams', () => {
+  it('uses teamIds for turnOrder and creates team timelines', () => {
+    let room = createRoom('p1', 'Alice', 'Test');
+    room = addPlayer(room, 'p2', 'Bob');
+    room = createTeam(room, 'teamA', 'Alpha', 'p1');
+    room = createTeam(room, 'teamB', 'Beta', 'p2');
+    const deck = Array.from({ length: 20 }, (_, i) => makeCard(`t${i}`, 1970 + i));
+    const config: RoundConfig = { mode: 'original', cardsToWin: 10, tokensEnabled: true };
+    const { room: started } = initRound(room, config, deck);
+    expect(started.activeRound!.turnOrder).toEqual(expect.arrayContaining(['teamA', 'teamB']));
+    expect(started.activeRound!.timelines['teamA']).toBeDefined();
+    expect(started.activeRound!.timelines['teamB']).toBeDefined();
+    expect(started.activeRound!.timelines['p1']).toBeUndefined();
+  });
+
+  it('throws if fewer than 2 teams have players', () => {
+    let room = createRoom('p1', 'Alice', 'Test');
+    room = createTeam(room, 'teamA', 'Alpha', 'p1');
+    const deck = Array.from({ length: 15 }, (_, i) => makeCard(`t${i}`, 1980 + i));
+    const config: RoundConfig = { mode: 'original', cardsToWin: 10, tokensEnabled: true };
+    expect(() => initRound(room, config, deck)).toThrow('Need at least 2 teams');
   });
 });

@@ -16,12 +16,16 @@ export interface GameState {
   connect: (displayName: string, email: string) => void;
   createRoom: (topic: string) => void;
   joinRoom: (code: string) => void;
-  startRound: (mode: GameMode, playlistLabel?: string) => void;
+  startRound: (mode: GameMode, playlistLabel?: string, cardsToWin?: number, tokensEnabled?: boolean) => void;
   placeCard: (position: number) => void;
   challengeCard: () => void;
   skipCard: () => void;
   nameSong: (title: string, artist: string) => void;
   buyCard: () => void;
+  dismissRoundEnd: () => void;
+  createTeam: (name: string) => void;
+  joinTeam: (teamId: string) => void;
+  leaveTeam: () => void;
 }
 
 export function useGame(): GameState {
@@ -55,8 +59,9 @@ export function useGame(): GameState {
 
     socket.on('room:updated', (r) => {
       setRoom(r);
-      if (r.activeRound?.tokens[sessionId] !== undefined) {
-        setMyTokens(r.activeRound.tokens[sessionId]);
+      const tokenKey = r.activeRound?.config.mode === 'cooperative' ? 'cooperative' : sessionId;
+      if (r.activeRound?.tokens[tokenKey] !== undefined) {
+        setMyTokens(r.activeRound.tokens[tokenKey]);
       }
     });
 
@@ -69,8 +74,9 @@ export function useGame(): GameState {
       setPlayAt(null);
       setLastFlip(null);
       setRoundEnded(null);
-      if (r.activeRound?.tokens[sessionId] !== undefined) {
-        setMyTokens(r.activeRound.tokens[sessionId]);
+      const tokenKey = r.activeRound?.config.mode === 'cooperative' ? 'cooperative' : sessionId;
+      if (r.activeRound?.tokens[tokenKey] !== undefined) {
+        setMyTokens(r.activeRound.tokens[tokenKey]);
       }
     });
 
@@ -199,8 +205,8 @@ export function useGame(): GameState {
     }
   }, []);
 
-  const startRound = useCallback((mode: GameMode, playlistLabel?: string) => {
-    socket.emit('round:start', { mode, playlistLabel });
+  const startRound = useCallback((mode: GameMode, playlistLabel?: string, cardsToWin?: number, tokensEnabled?: boolean) => {
+    socket.emit('round:start', { mode, playlistLabel, cardsToWin, tokensEnabled });
   }, []);
 
   const placeCard = useCallback((position: number) => {
@@ -223,6 +229,22 @@ export function useGame(): GameState {
     socket.emit('turn:buy');
   }, []);
 
+  const dismissRoundEnd = useCallback(() => {
+    setRoundEnded(null);
+  }, []);
+
+  const createTeam = useCallback((name: string) => {
+    socket.emit('team:create', { name });
+  }, []);
+
+  const joinTeam = useCallback((teamId: string) => {
+    socket.emit('team:join', { teamId });
+  }, []);
+
+  const leaveTeam = useCallback(() => {
+    socket.emit('team:leave');
+  }, []);
+
   return {
     room,
     currentCard,
@@ -243,5 +265,9 @@ export function useGame(): GameState {
     skipCard,
     nameSong,
     buyCard,
+    dismissRoundEnd,
+    createTeam,
+    joinTeam,
+    leaveTeam,
   };
 }

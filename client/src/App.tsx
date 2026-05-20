@@ -44,6 +44,10 @@ export default function App() {
       onSkipCard={game.skipCard}
       onNameSong={game.nameSong}
       onBuyCard={game.buyCard}
+      onDismissRoundEnd={game.dismissRoundEnd}
+      onCreateTeam={game.createTeam}
+      onJoinTeam={game.joinTeam}
+      onLeaveTeam={game.leaveTeam}
       onLeave={() => {
         window.location.reload();
       }}

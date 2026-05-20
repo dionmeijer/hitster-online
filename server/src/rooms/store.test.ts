@@ -7,7 +7,7 @@ function makeCard(trackId: string, year: number): Card {
 }
 
 const deck = Array.from({ length: 15 }, (_, i) => makeCard(`d${i}`, 1980 + i));
-const config: RoundConfig = { mode: 'original', cardsToWin: 10 };
+const config: RoundConfig = { mode: 'original', cardsToWin: 10, tokensEnabled: true };
 
 describe('RoomStore', () => {
   let store: RoomStore;

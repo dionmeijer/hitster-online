@@ -15,12 +15,6 @@ build/
 # TypeScript
 *.tsbuildinfo
 
-# Compiled JS emitted next to source (e.g. from failed tsc runs)
-shared/**/*.js
-shared/**/*.d.ts
-client/src/**/*.js
-client/src/**/*.d.ts
-
 # Logs
 *.log
 npm-debug.log*
@@ -33,9 +27,6 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
-.claude/
 
-# Compiled JS files in source dirs (from tsc --outDir leaks)
-client/src/**/*.js
-shared/*.js
-bots/src/**/*.js
+# Claude Code session data
+.claude/
