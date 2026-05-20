@@ -1,13 +1,57 @@
-// Entry point for the Hitster Online React app.
-// TODO: replace with full routing/state once server is wired up.
+import { useMemo } from 'react';
+import { useGame } from './game/useGame';
+import EntryPage from './components/EntryPage';
+import GameRoom from './components/GameRoom';
 
 export default function App() {
+  const game = useGame();
+
+  const sessionId = useMemo(() => {
+    return sessionStorage.getItem('hitster_session_id') ?? '';
+  }, []);
+
+  const serverUrl = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3000';
+
+  if (!game.room) {
+    return (
+      <EntryPage
+        serverUrl={serverUrl}
+        onConnect={game.connect}
+        onCreateRoom={game.createRoom}
+        onJoinRoom={game.joinRoom}
+        serverError={game.socketError}
+        roomJoined={game.room}
+      />
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-2">🎵 Hitster Online</h1>
-        <p className="text-gray-400">Coming soon — build in progress.</p>
-      </div>
-    </div>
+    <GameRoom
+      room={game.room}
+      currentCard={game.currentCard}
+      activePlayerId={game.activePlayerId}
+      previewUrl={game.previewUrl}
+      playAt={game.playAt}
+      timelineLength={game.timelineLength}
+      lastFlip={game.lastFlip}
+      roundEnded={game.roundEnded}
+      myTokens={game.myTokens}
+      sessionId={sessionId}
+      socketError={game.socketError}
+      onStartRound={game.startRound}
+      onPlaceCard={game.placeCard}
+      onChallengeCard={game.challengeCard}
+      onSkipCard={game.skipCard}
+      onNameSong={game.nameSong}
+      onBuyCard={game.buyCard}
+      onDismissRoundEnd={game.dismissRoundEnd}
+      onCreateTeam={game.createTeam}
+      onJoinTeam={game.joinTeam}
+      onLeaveTeam={game.leaveTeam}
+      onEndGame={game.endGame}
+      onLeave={() => {
+        window.location.reload();
+      }}
+    />
   );
 }

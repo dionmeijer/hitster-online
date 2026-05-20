@@ -1,3 +1,1387 @@
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@400;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ── Global reset ── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: #0a0a0f;
+  color: #e0e0ff;
+  font-family: 'Rajdhani', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── Scanlines CRT overlay ── */
+.scanlines {
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.08) 2px,
+    rgba(0, 0, 0, 0.08) 4px
+  );
+  pointer-events: none;
+  z-index: 100;
+}
+
+/* ── Cursor blink ── */
+.cursor-blink {
+  display: inline-block;
+  width: 10px;
+  height: 18px;
+  background: #a78bfa;
+  animation: blink 1s step-end infinite;
+  vertical-align: middle;
+  margin-left: 2px;
+}
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* ── Pulse dot ── */
+.dot-pulse {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #4ade80;
+  animation: dotpulse 1.5s infinite;
+}
+@keyframes dotpulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.5); }
+  50% { opacity: 0.8; box-shadow: 0 0 0 6px rgba(74, 222, 128, 0); }
+}
+
+/* ── ENTRY PAGE ── */
+
+.entry-root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.entry-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  border-bottom: 2px solid #7c3aed;
+  background: #0f0f1a;
+}
+
+.logo {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 14px;
+  color: #a78bfa;
+  text-shadow: 0 0 20px #7c3aed;
+  display: flex;
+  align-items: center;
+}
+
+.live-dot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  color: #4ade80;
+}
+
+.entry-split {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 420px 1fr;
+  min-height: 0;
+}
+
+@media (max-width: 768px) {
+  .entry-split {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+  }
+}
+
+/* ── Form column ── */
+.form-col {
+  background: #0f0f1a;
+  border-right: 2px solid #1e1e3a;
+  padding: 40px 36px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow-y: auto;
+}
+
+.hero-title {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 22px;
+  color: #a78bfa;
+  text-shadow: 0 0 30px #7c3aed;
+  line-height: 1.5;
+  margin-bottom: 6px;
+}
+.hero-title-green { color: #4ade80; }
+
+.hero-sub {
+  font-size: 14px;
+  color: #6b7280;
+  margin-bottom: 36px;
+  line-height: 1.5;
+}
+
+.field {
+  margin-bottom: 20px;
+}
+
+.field-label {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  color: #6366f1;
+  letter-spacing: 2px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.req-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #ef4444;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.opt-label {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 11px;
+  color: #374151;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.form-input {
+  width: 100%;
+  background: #1e1e3a;
+  border: 2px solid #374151;
+  color: #e0e0ff;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  padding: 11px 14px;
+  outline: none;
+  transition: all 0.2s;
+}
+.form-input::placeholder { color: #374151; font-weight: 400; }
+.form-input:focus { border-color: #7c3aed; box-shadow: 0 0 14px rgba(124, 58, 237, 0.3); }
+.form-input.valid { border-color: #4ade80; }
+.form-input.err { border-color: #ef4444; }
+
+.err-msg {
+  font-size: 12px;
+  color: #ef4444;
+  margin-top: 6px;
+}
+
+.server-error-msg {
+  font-size: 13px;
+  color: #ef4444;
+  background: #ef444422;
+  border: 1px solid #ef4444;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-top: 8px;
+}
+
+.preview-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #0a0a0f;
+  border: 1px solid #1e1e3a;
+  padding: 8px 12px;
+  margin-top: 8px;
+}
+
+.pr-label {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 6px;
+  color: #6b7280;
+}
+
+.pr-ava {
+  width: 22px;
+  height: 22px;
+  background: #1a0a2e;
+  border: 1px solid #7c3aed;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  color: #a78bfa;
+  flex-shrink: 0;
+}
+
+.pr-name {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.form-divider {
+  border: none;
+  border-top: 1px solid #1e1e3a;
+  margin: 24px 0;
+}
+
+.btn {
+  width: 100%;
+  padding: 13px 18px;
+  border: 2px solid;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.btn-create {
+  background: #7c3aed;
+  border-color: #6d28d9;
+  color: #fff;
+}
+.btn-create:not(:disabled):hover {
+  background: #8b5cf6;
+  box-shadow: 0 0 20px rgba(124, 58, 237, 0.5);
+}
+
+.btn-join {
+  background: transparent;
+  border-color: #4ade80;
+  color: #4ade80;
+}
+.btn-join:not(:disabled):hover {
+  background: rgba(74, 222, 128, 0.06);
+  box-shadow: 0 0 14px rgba(74, 222, 128, 0.2);
+}
+
+.join-open {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.join-row {
+  display: flex;
+  gap: 8px;
+}
+
+.code-input {
+  font-family: 'Press Start 2P', monospace !important;
+  font-size: 14px !important;
+  text-transform: uppercase;
+  letter-spacing: 4px;
+  text-align: center;
+}
+
+.btn-go {
+  flex-shrink: 0;
+  padding: 11px 18px;
+  background: #4ade80;
+  border: 2px solid #16a34a;
+  color: #0a0a0f;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  transition: all 0.15s;
+}
+.btn-go:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-go:not(:disabled):hover { background: #86efac; }
+
+.btn-cancel {
+  font-size: 12px;
+  color: #6b7280;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: 'Rajdhani', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  align-self: flex-start;
+}
+.btn-cancel:hover { color: #e0e0ff; }
+
+/* ── Room browser ── */
+.rooms-col {
+  padding: 32px 28px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.rooms-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.rooms-title {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 9px;
+  color: #6366f1;
+  letter-spacing: 2px;
+}
+
+.rooms-count {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.room-card {
+  background: #0f0f1a;
+  border: 2px solid #1e1e3a;
+  padding: 16px;
+  margin-bottom: 10px;
+  transition: all 0.2s;
+  position: relative;
+}
+.room-card:hover { border-color: #7c3aed; box-shadow: 0 0 16px rgba(124, 58, 237, 0.2); }
+.room-card.lobby:hover { border-color: #4ade80; box-shadow: 0 0 16px rgba(74, 222, 128, 0.15); }
+.room-card.over { opacity: 0.4; }
+.room-card.over:hover { border-color: #1e1e3a; box-shadow: none; }
+
+.rc-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.rc-code {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 11px;
+  color: #a78bfa;
+}
+
+.rc-topic {
+  font-size: 17px;
+  font-weight: 700;
+  color: #e0e0ff;
+  margin-top: 3px;
+}
+
+.rc-genre {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+.status-badge {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  padding: 4px 8px;
+  border: 1px solid;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.badge-lobby { color: #4ade80; border-color: #4ade80; background: rgba(74, 222, 128, 0.05); }
+.badge-active { color: #fbbf24; border-color: #fbbf24; background: rgba(251, 191, 36, 0.05); }
+.badge-over { color: #6b7280; border-color: #374151; }
+
+.rc-players {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.player-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: #1e1e3a;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.chip-ava {
+  width: 18px;
+  height: 18px;
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 6px;
+  flex-shrink: 0;
+}
+
+.rc-progress {
+  background: #0a0a0f;
+  border: 1px solid #1e1e3a;
+  padding: 10px 12px;
+}
+
+.rp-label {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 6px;
+  color: #6b7280;
+  margin-bottom: 6px;
+}
+
+.rp-leader {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fbbf24;
+  margin-bottom: 6px;
+}
+
+.rp-waiting {
+  font-size: 13px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+.rp-bar-wrap {
+  height: 6px;
+  background: #1e1e3a;
+  border-radius: 1px;
+  overflow: hidden;
+}
+
+.rp-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #7c3aed, #4ade80);
+  border-radius: 1px;
+  transition: width 0.3s;
+}
+
+.rc-join-hint {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  color: #7c3aed;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.room-card:hover .rc-join-hint { opacity: 1; }
+
+.no-rooms {
+  text-align: center;
+  padding: 60px 20px;
+  color: #374151;
+}
+.no-rooms-icon { font-size: 40px; margin-bottom: 12px; }
+.no-rooms-text {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  line-height: 2;
+}
+
+/* ── Modal ── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+.modal-box {
+  background: #0f0f1a;
+  border: 2px solid #7c3aed;
+  padding: 32px;
+  width: 400px;
+  max-width: 90vw;
+  box-shadow: 0 0 40px rgba(124, 58, 237, 0.4);
+}
+.modal-title {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 11px;
+  color: #a78bfa;
+  margin-bottom: 24px;
+}
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+/* ── GAME ROOM ── */
+
+.game-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.game-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  border-bottom: 2px solid #7c3aed;
+  background: #0f0f1a;
+  flex-shrink: 0;
+}
+
+.room-code-badge {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 10px;
+  color: #4ade80;
+  background: #052e16;
+  border: 1px solid #4ade80;
+  padding: 6px 12px;
+}
+
+.token-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.token-circle {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fbbf24;
+  border: 2px solid #d97706;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: #0a0a0f;
+  font-weight: 700;
+}
+.token-circle.empty {
+  background: #1f1f2e;
+  border-color: #374151;
+}
+
+.game-main {
+  display: grid;
+  grid-template-columns: 240px 1fr 240px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 900px) {
+  .game-main {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr auto;
+  }
+}
+
+/* ── Side panels ── */
+.side-panel {
+  background: #0f0f1a;
+  border-right: 1px solid #1e1e3a;
+  padding: 16px;
+  overflow-y: auto;
+}
+.right-side-panel {
+  background: #0f0f1a;
+  border-left: 1px solid #1e1e3a;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.panel-title {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  color: #6366f1;
+  margin-bottom: 16px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+/* ── Player list ── */
+.player-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #1e1e3a;
+  margin-bottom: 8px;
+  transition: all 0.2s;
+}
+.player-item.active-player {
+  border-color: #7c3aed;
+  background: #1a0a2e;
+  box-shadow: 0 0 12px rgba(124, 58, 237, 0.3);
+}
+.player-item.disconnected {
+  opacity: 0.45;
+}
+
+.player-disconnected-badge {
+  font-size: 9px;
+  color: #ef4444;
+  background: #1f1f1f;
+  border: 1px solid #374151;
+  border-radius: 4px;
+  padding: 1px 4px;
+  margin-left: 4px;
+}
+
+.player-team-header {
+  font-size: 10px;
+  font-weight: 700;
+  color: #a78bfa;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 8px 0 2px;
+  border-bottom: 1px solid #1f2937;
+  margin-bottom: 4px;
+}
+
+.coop-token-warning {
+  background: #78350f22;
+  border: 1px solid #d97706;
+  color: #fbbf24;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  text-align: center;
+  margin: 8px 32px 0;
+  flex-shrink: 0;
+}
+
+.player-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+.player-info { flex: 1; min-width: 0; }
+.player-name { font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.player-score { font-size: 12px; color: #6b7280; }
+
+.player-token-dots {
+  display: flex;
+  gap: 3px;
+  margin-top: 4px;
+}
+.token-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fbbf24;
+}
+.token-dot.empty { background: #1f2937; }
+
+/* ── Center column ── */
+.center-col {
+  background: #0a0a0f;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── Now playing ── */
+.now-playing {
+  background: linear-gradient(135deg, #1a0a2e, #0f0f1a);
+  border-bottom: 2px solid #7c3aed;
+  padding: 20px 32px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-shrink: 0;
+}
+
+.album-art-wrap {
+  width: 80px;
+  height: 80px;
+  border: 3px solid #7c3aed;
+  box-shadow: 0 0 20px rgba(124, 58, 237, 0.5);
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+  background: #1e1e3a;
+}
+.album-art-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.album-art-blur {
+  position: absolute;
+  inset: 0;
+  backdrop-filter: blur(20px);
+  background: rgba(124, 58, 237, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+}
+
+.song-info { flex: 1; }
+.song-label {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  color: #6366f1;
+  margin-bottom: 6px;
+}
+.song-title { font-size: 22px; font-weight: 700; color: #e0e0ff; }
+.song-artist { font-size: 16px; color: #a78bfa; }
+.song-year { font-size: 28px; font-weight: 700; color: #4ade80; font-family: 'Press Start 2P', monospace; }
+
+.song-timer-wrap { text-align: center; }
+.song-timer-label {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+.song-timer {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 28px;
+  color: #e0e0ff;
+}
+
+/* ── Waveform / progress ── */
+.waveform {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 40px;
+  padding: 0 32px;
+  background: #0f0f1a;
+  border-bottom: 1px solid #1e1e3a;
+  flex-shrink: 0;
+}
+.waveform-bar {
+  flex: 1;
+  background: #7c3aed;
+  border-radius: 2px;
+  transition: height 0.15s;
+}
+
+.progress-track {
+  height: 4px;
+  background: #1e1e3a;
+  flex-shrink: 0;
+}
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #7c3aed, #a78bfa);
+  transition: width 0.1s linear;
+}
+
+/* ── Timeline ── */
+.timeline-section {
+  flex: 1;
+  padding: 24px 32px;
+  overflow-y: auto;
+}
+.timeline-label {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  color: #6b7280;
+  margin-bottom: 16px;
+}
+.timeline-track {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  overflow-x: auto;
+  padding-bottom: 12px;
+}
+
+/* ── Timeline cards ── */
+.timeline-card {
+  width: 100px;
+  min-width: 100px;
+  height: 140px;
+  border: 2px solid #374151;
+  background: #0f0f1a;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  text-align: center;
+  position: relative;
+  transition: all 0.2s;
+}
+.timeline-card.placed-card { border-color: #4ade80; }
+.timeline-card.face-up { border-color: #374151; }
+.card-year {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 11px;
+  color: #4ade80;
+  margin-bottom: 4px;
+}
+.card-title { font-size: 10px; font-weight: 700; line-height: 1.2; }
+.card-artist { font-size: 9px; color: #6b7280; }
+.card-face-down { font-size: 32px; }
+
+/* ── Drop zone ── */
+.drop-zone {
+  width: 24px;
+  min-width: 24px;
+  height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.drop-zone:hover { background: rgba(124, 58, 237, 0.2); }
+.drop-zone.selected-zone { background: rgba(74, 222, 128, 0.2); }
+
+.drop-zone-line {
+  width: 3px;
+  height: 80px;
+  background: #1e1e3a;
+  border-radius: 2px;
+  transition: all 0.2s;
+}
+.drop-zone:hover .drop-zone-line { background: #7c3aed; box-shadow: 0 0 10px #7c3aed; height: 120px; }
+.drop-zone.selected-zone .drop-zone-line { background: #4ade80; height: 120px; }
+
+/* ── Pending card slot ── */
+.pending-card-slot {
+  width: 100px;
+  min-width: 100px;
+  height: 140px;
+  border: 3px dashed #7c3aed;
+  background: rgba(124, 58, 237, 0.1);
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  text-align: center;
+  animation: pulse-border 2s infinite;
+}
+@keyframes pulse-border {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(124, 58, 237, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(124, 58, 237, 0); }
+}
+.pending-card-icon { font-size: 28px; margin-bottom: 6px; }
+.pending-card-label {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  color: #7c3aed;
+}
+
+/* ── Placed pending card ── */
+.placed-pending {
+  border-color: #fbbf24;
+  background: rgba(251, 191, 36, 0.1);
+}
+
+/* ── Actions bar ── */
+.actions-bar {
+  padding: 16px 32px;
+  background: #0f0f1a;
+  border-top: 2px solid #1e1e3a;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.action-btn {
+  padding: 10px 20px;
+  border: 2px solid;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  transition: all 0.15s;
+}
+.action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btn-confirm {
+  background: #4ade80;
+  border-color: #16a34a;
+  color: #0a0a0f;
+}
+.btn-confirm:not(:disabled):hover {
+  background: #86efac;
+  box-shadow: 0 0 20px rgba(74, 222, 128, 0.5);
+}
+
+.btn-skip-action {
+  background: transparent;
+  border-color: #fbbf24;
+  color: #fbbf24;
+}
+.btn-skip-action:not(:disabled):hover { background: rgba(251, 191, 36, 0.1); }
+.btn-buy-action {
+  background: transparent;
+  border-color: #a78bfa;
+  color: #a78bfa;
+}
+.btn-buy-action:not(:disabled):hover { background: rgba(167, 139, 250, 0.1); }
+
+.btn-hitster {
+  background: #ef4444;
+  border-color: #dc2626;
+  color: #fff;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 10px;
+  padding: 10px 16px;
+  animation: hitster-pulse 1.5s infinite;
+}
+@keyframes hitster-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6); }
+  50% { box-shadow: 0 0 0 12px rgba(239, 68, 68, 0); }
+}
+.btn-hitster:disabled { animation: none; opacity: 0.4; cursor: not-allowed; }
+
+.turn-info-label {
+  margin-left: auto;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  color: #6b7280;
+}
+.turn-info-label span { color: #a78bfa; }
+
+/* ── Game log (right panel) ── */
+.game-log { font-size: 12px; color: #6b7280; }
+.log-entry { padding: 6px 0; border-bottom: 1px solid #1e1e3a; }
+.log-highlight { color: #a78bfa; }
+.log-correct { color: #4ade80; }
+.log-wrong { color: #f87171; }
+
+/* ── Challenge timer ── */
+.challenge-timer-box {
+  text-align: center;
+  padding: 12px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid #ef4444;
+  margin-bottom: 12px;
+}
+.challenge-timer-label {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  color: #ef4444;
+  margin-bottom: 6px;
+}
+.challenge-timer-count {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 24px;
+  color: #ef4444;
+}
+
+/* ── Flip result overlay ── */
+.flip-result-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+}
+.flip-result-box {
+  background: #0f0f1a;
+  border: 3px solid;
+  padding: 40px 56px;
+  text-align: center;
+  max-width: 480px;
+  width: 90vw;
+}
+.flip-result-box.correct { border-color: #4ade80; box-shadow: 0 0 40px rgba(74, 222, 128, 0.4); }
+.flip-result-box.wrong { border-color: #ef4444; box-shadow: 0 0 40px rgba(239, 68, 68, 0.4); }
+.flip-result-icon { font-size: 56px; margin-bottom: 12px; }
+.flip-result-label {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 18px;
+  margin-bottom: 16px;
+}
+.flip-result-box.correct .flip-result-label { color: #4ade80; }
+.flip-result-box.wrong .flip-result-label { color: #ef4444; }
+.flip-result-card-title { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+.flip-result-card-artist { font-size: 16px; color: #a78bfa; margin-bottom: 8px; }
+.flip-result-card-year {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 20px;
+  color: #4ade80;
+}
+.flip-result-dismiss {
+  margin-top: 20px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  color: #6b7280;
+  animation: blink 1s step-end infinite;
+}
+
+/* ── Win screen ── */
+.win-screen {
+  position: fixed;
+  inset: 0;
+  background: #0a0a0f;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 400;
+  text-align: center;
+  padding: 40px;
+}
+.win-trophy { font-size: 80px; margin-bottom: 20px; }
+.win-title {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 22px;
+  color: #fbbf24;
+  text-shadow: 0 0 30px rgba(251, 191, 36, 0.6);
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+.win-subtitle { font-size: 18px; color: #a78bfa; margin-bottom: 24px; }
+.win-history {
+  background: #111827;
+  border: 1px solid #1e1e3a;
+  padding: 12px 20px;
+  margin-bottom: 24px;
+  min-width: 300px;
+  max-width: 440px;
+}
+.win-history-title {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  color: #6b7280;
+  letter-spacing: 2px;
+  margin-bottom: 10px;
+}
+.win-history-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 13px;
+  padding: 4px 0;
+  border-bottom: 1px solid #1e1e3a;
+}
+.win-history-row:last-child { border-bottom: none; }
+.win-history-round { color: #6b7280; width: 56px; flex-shrink: 0; }
+.win-history-mode { color: #a78bfa; width: 80px; flex-shrink: 0; }
+.win-history-winner { color: #4ade80; }
+.win-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+.win-play-again {
+  background: #7c3aed;
+  border: 2px solid #6d28d9;
+  color: #fff;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  padding: 14px 32px;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  transition: all 0.15s;
+}
+.win-play-again:hover { background: #8b5cf6; box-shadow: 0 0 20px rgba(124, 58, 237, 0.5); }
+.win-leave {
+  background: none;
+  border: 1px solid #374151;
+  color: #6b7280;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 14px 24px;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.win-leave:hover { border-color: #6b7280; color: #9ca3af; }
+.win-end-game {
+  background: none;
+  border: 1px solid #374151;
+  color: #6b7280;
+  padding: 8px 20px;
+  border-radius: 6px;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 13px;
+  cursor: pointer;
+  margin-top: 4px;
+}
+.win-end-game:hover {
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+/* ── Spectator banner ── */
+.spectator-banner {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+/* ── Lobby / start screen ── */
+.lobby-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  text-align: center;
+}
+.lobby-code {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 36px;
+  color: #4ade80;
+  text-shadow: 0 0 20px rgba(74, 222, 128, 0.5);
+  margin-bottom: 8px;
+}
+.lobby-code-label {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+.lobby-copy-link-btn {
+  background: none;
+  border: 1px solid #374151;
+  color: #9ca3af;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: 'Rajdhani', sans-serif;
+  margin-top: 8px;
+  margin-bottom: 24px;
+  transition: border-color 0.15s, color 0.15s;
+}
+.lobby-copy-link-btn:hover {
+  border-color: #6b7280;
+  color: #e5e7eb;
+}
+.lobby-player-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+  margin-bottom: 32px;
+  max-width: 500px;
+}
+.lobby-player-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #1e1e3a;
+  border: 1px solid #374151;
+  padding: 8px 16px;
+  font-size: 15px;
+  font-weight: 700;
+}
+.lobby-start-btn {
+  background: #4ade80;
+  border: 2px solid #16a34a;
+  color: #0a0a0f;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  padding: 14px 40px;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  transition: all 0.15s;
+  margin-bottom: 16px;
+}
+.lobby-start-btn:not(:disabled):hover {
+  background: #86efac;
+  box-shadow: 0 0 20px rgba(74, 222, 128, 0.5);
+}
+.lobby-start-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.lobby-waiting {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  color: #6b7280;
+  line-height: 2;
+}
+.lobby-playlist-field { margin-bottom: 16px; width: 340px; }
+.lobby-config-section {
+  width: 100%;
+  max-width: 480px;
+  margin-bottom: 24px;
+  text-align: left;
+}
+.lobby-config-label {
+  font-size: 11px;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+  display: block;
+}
+.lobby-mode-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.lobby-mode-option {
+  border: 1px solid #374151;
+  background: #111827;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.lobby-mode-option.selected {
+  border-color: #a78bfa;
+  background: #1e1b4b;
+}
+.lobby-mode-option:hover { border-color: #6b7280; }
+.lobby-mode-name { font-size: 14px; font-weight: 700; color: #e5e7eb; margin-bottom: 2px; }
+.lobby-mode-desc { font-size: 11px; color: #6b7280; }
+.lobby-config-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.lobby-leave-btn {
+  margin-top: 8px;
+  background: none;
+  border: 1px solid #374151;
+  color: #6b7280;
+  padding: 8px 20px;
+  cursor: pointer;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 13px;
+}
+.lobby-leave-btn:hover { border-color: #6b7280; color: #9ca3af; }
+
+/* ── Round info ── */
+.round-info {
+  margin-top: 24px;
+}
+.round-info-row {
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.8;
+}
+.round-info-val { color: #a78bfa; }
+.round-info-val-green { color: #4ade80; }
+
+/* ── Teams (lobby) ── */
+.lobby-teams-section {
+  width: 100%;
+  max-width: 480px;
+  margin-bottom: 24px;
+  text-align: left;
+}
+.lobby-teams-list { margin-bottom: 10px; }
+.lobby-team-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid #1e1e3a;
+  background: #111827;
+  margin-bottom: 6px;
+}
+.lobby-team-row.my-team { border-color: #4ade80; background: #0d2315; }
+.lobby-team-name { font-weight: 700; color: #e5e7eb; font-size: 14px; min-width: 80px; }
+.lobby-team-members { flex: 1; display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px; color: #9ca3af; }
+.lobby-team-member { background: #1e1e3a; padding: 2px 8px; }
+.lobby-team-btn {
+  background: #1e1e3a;
+  border: 1px solid #374151;
+  color: #a78bfa;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 12px;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.lobby-team-btn:not(:disabled):hover { border-color: #a78bfa; }
+.lobby-team-btn.leave { color: #f87171; }
+.lobby-team-btn.leave:hover { border-color: #f87171; }
+.lobby-team-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.lobby-create-team-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+/* ── Name song input ── */
+.name-song-form {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.name-song-input {
+  flex: 1;
+  background: #1e1e3a;
+  border: 2px solid #374151;
+  color: #e0e0ff;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 10px;
+  outline: none;
+}
+.name-song-input:focus { border-color: #7c3aed; }
+.name-song-submit {
+  padding: 8px 14px;
+  background: #fbbf24;
+  border: 2px solid #d97706;
+  color: #0a0a0f;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  text-transform: uppercase;
+}

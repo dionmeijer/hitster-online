@@ -15,11 +15,12 @@ build/
 # TypeScript
 *.tsbuildinfo
 
-# Compiled JS emitted next to source (e.g. from failed tsc runs)
-shared/**/*.js
-shared/**/*.d.ts
+# Test coverage
+coverage/
+
+# Compiled JS artifacts alongside TS sources
 client/src/**/*.js
-client/src/**/*.d.ts
+server/src/**/*.js
 
 # Logs
 *.log
@@ -33,3 +34,6 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+
+# Claude Code session data
+.claude/

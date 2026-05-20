@@ -1,7 +1,7 @@
 # Hitster Online — Requirements
 
-> Status: Draft v0.4 — actively being refined
-> Last updated: 2026-05-19
+> Status: v0.5 — updated to match current implementation
+> Last updated: 2026-05-20
 
 ---
 
@@ -19,33 +19,36 @@ _What the system does from a player's perspective. No technical detail._
   - **Create a room** (becoming the room owner), or
   - **Join a room** by entering a 4-character room code, or
   - **Click directly into an existing room** shown in the room browser (see §1.1.1).
+- If the page is loaded with a `?room=XXXX` query parameter (e.g. from a shared invite link), the join form should be pre-filled with that code automatically. _(not yet implemented)_
 
 #### 1.1.1 Room Browser
 - The entry page displays a live list of all **active rooms** on the server (lobby or in-progress).
 - Each room card shows:
   - **Room code** and **topic / description** set by the owner
   - **Genre / playlist** (e.g. "90s Night", "Pop Classics") — the song source label
-  - **Participants**: player count and display names of players currently in the room
+  - **Participants**: player count and leader name
   - **Round status**: lobby waiting, or current round number
   - **Progress**: for in-progress rounds, the leading player/team's card count and the target (e.g. "Mike — 6 / 10 cards")
 - Clicking a room card pre-fills the join code. The player still needs to have entered a valid email before joining.
 - Rooms in **LOBBY** state can be joined freely.
 - Rooms in **ROUND_ACTIVE** state can be observed but the player joins the next round only.
 - Rooms in **GAME_OVER** state are shown greyed-out and cannot be joined.
-- The room list auto-refreshes every 10 seconds via a server poll or Socket.io event.
+- The room list auto-refreshes every **2 seconds**.
 
 ### 1.2 Rooms
-- Each room has a unique **room code** and a shareable **join link**.
+- Each room has a unique **room code** and a shareable **invite link** (copies `?room=XXXX` URL to clipboard from the lobby).
 - The owner sets a **topic / description** for the room (e.g. "90s Night", "Office Party").
 - Multiple game rounds can be played within the same room without players having to rejoin.
 - Players can join a room at any point while it is in the **lobby** state (before a round starts).
 - Only the room owner can configure rounds and start the game.
+- Maximum **12 players** or **6 teams** per room.
 
 ### 1.3 Teams
-- The room owner can optionally create **teams** and assign players to them.
-- Teams share a single timeline during a round.
+- Any player in the lobby can create a team and invite others to join.
+- Teams share a single timeline and token pool during a round.
 - If no teams are created, each player has their own individual timeline.
-- Teams are finalised before the game starts. The owner can reassign players between rounds.
+- Players can join/leave teams between rounds. Teams carry over unless changed.
+- A round in team mode requires at least 2 teams, each with at least 1 player.
 
 ### 1.4 Round Configuration
 Before each round, the room owner sets:
@@ -55,336 +58,247 @@ Before each round, the room owner sets:
 | Song source | Spotify playlist URL or genre/theme | — |
 | Game mode | Original / Pro / Expert / Cooperative | Original |
 | Tokens enabled | Yes / No | Yes |
-| Cards needed to win | Number | 10 |
+| Cards needed to win | 1–20 | 10 |
 
 ### 1.5 Gameplay — Hitster Rules (Digital)
 
 #### Setup
 - Each player/team receives **1 starting card** face-up (showing title, artist, and release year). This is the anchor of their timeline.
-- The player/team with the **oldest starting song** takes the first turn. Play proceeds in join order (clockwise equivalent).
-- If tokens are enabled, each player/team starts with **2 tokens**.
+- The player/team with the **oldest starting song** takes the first turn.
+- Starting token counts depend on game mode (see Game Modes table below).
 
 #### Turn Structure
 Each turn has three phases:
 
-**REVEAL** — A new card is drawn from the deck and the song starts playing for all players. The placing player does not see the song's title, artist, or year until after they have placed the card. All other players see the song details immediately.
+**REVEAL** — A new card is drawn from the deck and the song starts playing for all players simultaneously (synchronised via a server-issued `playAt` timestamp). The placing player does not see the song's title, artist, or year until after they have placed the card. All other players see the song details immediately.
 
-**PLACE** — The placing player selects a position on their timeline: before their earliest card, after their latest card, or between any two existing cards. The card is placed face-down (year hidden).
+**PLACE** — The placing player selects a position on their timeline. The card is placed face-down. A **10-second challenge window** then opens for all non-placing players.
 
-**FLIP** — The card is revealed. If the placement is chronologically correct, the card stays on the timeline. If incorrect, the card is discarded. If the release year matches an existing card's year exactly, placement immediately before or after that card also counts as correct.
+**FLIP** — The card is revealed. Placement is correct if the release year fits chronologically between its neighbours (same year as a neighbour also counts as correct). If correct, the card stays on the timeline. If incorrect, the card is discarded.
 
 #### Token Mechanics
 
 | Action | Rule |
 |---|---|
 | **Skip card** (your turn) | Spend 1 token to discard the current card and draw a new one. |
-| **Challenge** ("HITSTER!") | During an opponent's placement, spend 1 token and declare a challenge. If the opponent placed incorrectly, you steal the card for your own timeline. If they were correct, you lose your token. First to shout gets priority; multiple players may challenge different positions on the same timeline simultaneously. |
-| **Buy a card** | Trade 3 tokens to place a card directly on your timeline without guessing. Must decide before the song plays. You skip your next turn. |
-| **Earn a token** | Name the song title AND artist correctly on any turn = +1 token (max 5 per player). |
+| **Challenge** ("HITSTER!") | During the challenge window, any non-placing player can challenge. If the opponent placed incorrectly, challenger steals the card. If the opponent was correct, the challenger loses a token. |
+| **Buy a card** | Spend 3 tokens to place a card on your timeline without hearing the song. Your next turn is auto-skipped. |
+| **Earn a token** | Name the song title AND artist correctly during your turn = +1 token (max 5). Original/Cooperative only. |
 
 #### Game Modes
 
 | Mode | Rule | Starting Tokens |
 |---|---|---|
-| **Original** | Place cards in chronological order. | 2 |
-| **Pro** | Must also name artist and song title to win or steal a card. | 5 (no new tokens earned) |
-| **Expert** | Must name artist, song title, and exact release year. | 3 (no new tokens earned) |
-| **Cooperative** | All players as one team. Incorrect placement costs 1 token. Win by reaching 10 cards; lose if tokens hit 0. | 5 (shared) |
+| **Original** | Standard rules. Naming song earns +1 token. | 2 |
+| **Pro** | Placing player must correctly name title + artist during the challenge window for the card to count. No naming token bonus. | 5 |
+| **Expert** | Placing player must correctly name title, artist, and exact release year for the card to count. No naming token bonus. | 3 |
+| **Cooperative** | All players share one timeline and one token pool. Incorrect placement costs 1 shared token. Win by reaching the card target; lose if tokens hit 0. No challenges. | 5 (shared) |
 
 #### Winning
-- **Individual / team**: First to correctly place **10 cards** on their timeline wins the round.
-- **Cooperative**: Collect 10 cards before running out of tokens.
+- **Individual / team**: First to correctly place the target number of cards on their timeline wins the round.
+- **Cooperative**: Reach the card target before the shared token pool runs out.
+- **Deck empty**: Player/team with the most cards wins. Tiebreaker: highest average release year.
 
 ### 1.6 Multiple Rounds
-- After a round ends, the room stays open. The owner can start a new round with new settings.
-- Round history (who won each round) is visible in the room.
-- Teams and player assignments carry over unless the owner changes them.
+- After a round ends, the room returns to **lobby** state. The owner can start a new round with new or identical settings.
+- Round history (winner, mode, round number) is shown on the end-of-round screen.
+- Teams and player assignments carry over unless changed before the next round.
 
 ### 1.7 Known Limitations (v1)
 - Spotify playlist URLs must be **public** playlists.
-- Not all tracks have a 30-second audio preview. Tracks without a preview are flagged during deck-build so the owner can remove or replace them before the round starts.
-- If the deck runs out of cards before anyone wins, the player/team with the most cards on their timeline wins the round.
+- Tracks with no 30-second audio preview (`preview_url = null`) are excluded from the deck automatically. The count is logged server-side; a future version may surface this in the lobby UI.
+- If the deck runs out of cards before anyone wins, the tiebreaker rule (most cards, then highest avg year) applies.
 
 ---
 
 ## Part 2 — Technical Requirements
 
-_What the system must do technically to support the functional requirements._
-
 ---
 
 ### 2.1 Real-Time Multiplayer
-- All players in a room must see game state changes (turns, placements, flips, scores, token actions) in real time.
-- Latency for game state updates should be imperceptible during normal play (<200ms on a typical connection).
+- All players in a room see game state changes in real time via Socket.io.
+- Latency for game state updates should be imperceptible during normal play (<200ms).
 
 ### 2.2 Audio Synchronisation
-- When a turn starts, all players must begin playing the same audio clip at approximately the same moment.
-- Sync is achieved by the server sending a `preview_url` + `playAt` timestamp to all clients simultaneously. Each client starts playback at the specified time.
+- The server sends `previewUrl` + `playAt` (Unix ms, ~600ms in the future) to all clients simultaneously.
+- Each client schedules `<audio>.play()` via `setTimeout` to fire at exactly `playAt`.
 - Acceptable sync variance: ≤500ms between clients.
 
 ### 2.3 Spotify Integration
-- The server must authenticate with the Spotify Web API using the **Client Credentials Flow** (app-level, no user login required).
-- Given a public Spotify playlist URL, the server must retrieve all tracks in the playlist including: title, artist(s), release year, album art URL, and `preview_url`.
-- Tracks with a null `preview_url` must be identified and flagged to the room owner before the round starts.
+- Server authenticates with Spotify via **Client Credentials Flow** (no user login).
+- Given a playlist URL or genre label, server retrieves tracks including title, artist(s), release year, album art URL, and `preview_url`.
+- Tracks with `preview_url = null` are excluded from the deck; a warning is logged server-side with the count.
 
 ### 2.4 Audio Playback
-- The `preview_url` from Spotify is a publicly accessible 30-second MP3 hosted on Spotify's CDN.
-- The client plays this URL directly in a browser `<audio>` element. No server-side audio streaming is required.
-- Playback stops after 30 seconds or when the placing player confirms their placement, whichever comes first.
+- The `preview_url` is a publicly accessible 30-second MP3 on Spotify's CDN.
+- Client plays it directly in a `<audio>` element. No server-side audio streaming.
 
 ### 2.5 Game State
-- Game state (room, players, teams, deck, timelines, tokens, scores) is managed server-side and broadcast to clients via WebSocket.
-- Clients are stateless — they render what the server tells them. No game logic runs client-side.
+- All game state is server-side and broadcast via WebSocket. Clients are stateless renderers.
 
 ### 2.6 No Authentication
-- No user accounts, passwords, or OAuth flows are required.
-- Players are identified by their **email address** (entered at onboarding) combined with a **session ID** (UUID generated client-side, stored in `sessionStorage`).
-- The email is stored in `sessionStorage` and re-submitted on reconnect to restore the player's identity within an active room.
-- **Display name** shown in-game is the player's chosen name, or the email local part if no name was provided.
-- Room ownership is tied to the session ID of the creator.
+- Players are identified by email + session ID (UUID in `sessionStorage`).
+- Display name is the player's chosen name, or the email local part if omitted.
+- Room ownership is tied to the creator's session ID.
 
 ---
 
 ## Part 3 — Design & Architecture
-
-_How the system is structured internally._
-
----
 
 ### 3.1 Components
 
 ```
 ┌─────────────────────────────────────────┐
 │               Browser (client)          │
-│  - React/Vue UI                         │
-│  - WebSocket connection to server       │
+│  - React 18 + TypeScript + Vite         │
+│  - Socket.io client                     │
 │  - <audio> element for preview playback │
 └────────────────┬────────────────────────┘
                  │ WebSocket
 ┌────────────────▼────────────────────────┐
 │               Server (Node.js)          │
-│  - WebSocket server (Socket.io)         │
-│  - Game state engine                    │
+│  - Express + Socket.io v4               │
+│  - Game state engine (pure functions)   │
 │  - Room / session management            │
 │  - Spotify API client                   │
 └────────────────┬────────────────────────┘
                  │ HTTPS (Client Credentials)
 ┌────────────────▼────────────────────────┐
 │            Spotify Web API              │
-│  - Playlist → track list                │
-│  - Track metadata + preview_url         │
 └─────────────────────────────────────────┘
 ```
 
 ### 3.2 Data Flow — Turn Lifecycle
 
-1. Server draws next card from deck, resolves `preview_url`
-2. Server emits `turn:start` to all clients: `{ trackId, previewUrl, playAt, activePlayer }`
-3. **Placing player** receives a "blind" view — audio plays, timeline is interactive, song identity hidden
-4. **All other players** receive full song details — can prepare a HITSTER! challenge
-5. Placing player selects a position and confirms → server emits `turn:placed`
-6. Server validates placement against release year
-7. Server emits `turn:flip` with result (correct / incorrect) and updated timeline state
-8. Token challenges resolved if any; server emits updated token counts
-9. Server checks win condition → emits `round:win` or proceeds to next turn
+1. Server draws next card, resolves `previewUrl`
+2. Server emits `turn:started` → `{ activePlayerId, card (hidden), previewUrl, playAt, timelineLength }`
+3. Placing player: audio plays, timeline interactive, song identity hidden
+4. Other players: full song details visible; challenge button available after placement
+5. Placing player confirms position → server emits `turn:placed`
+6. Challenge window (10s) → `turn:challenged` events collected
+7. Timer expires → server resolves flip → `turn:flipped` with card, correct flag, updatedTimeline, tokensUpdated
+8. In Pro/Expert: card only lands on timeline if placing player named correctly (`currentTurn.named === true`)
+9. Win check → `round:ended` or advance to next turn
 
 ### 3.3 Room State Machine
 
 ```
 LOBBY → ROUND_ACTIVE → ROUND_ENDED → LOBBY (next round)
-                                    → GAME_OVER (someone won)
 ```
 
-### 3.4 Open Design Questions
+> `game_over` exists in the `RoomStatus` type but is not currently used — all rooms return to lobby after a round ends. See Appendix A.
 
-| # | Question | Recommendation |
+### 3.4 Resolved Design Decisions
+
+| # | Decision | Outcome |
 |---|---|---|
-| 3 | **Turn structure** | Each player places on their own timeline on their turn (simpler than the physical "player to the left" rule) |
-| 4 | **Team placement** | Any team member can click to place; team discusses via voice/video call |
-| 5 | **HITSTER! challenge UX** | A challenge button appears for all non-placing players during PLACE phase; closes when placing player confirms or after 30s |
-| 6 | **Deck exhaustion** | Declare player/team with most cards the winner |
-| 7 | **Player disconnection** | Skip disconnected player's turn; remove them from active play after 2 missed turns |
-| 8 | **Room size** | Max 12 players (or 6 teams of 2) per room for v1 |
+| 1 | Turn structure | Each player places on their own timeline on their turn. |
+| 2 | Team placement | Any team member can place; first click confirms. |
+| 3 | Challenge window | 10 seconds after placement confirmation. |
+| 4 | Deck exhaustion | Most cards wins; tiebreaker = highest avg release year. |
+| 5 | Player disconnection | 15s auto-skip; removed from turn order after 2 consecutive missed turns. Disconnected players show an offline badge. |
+| 6 | Room size | Max 12 players or 6 teams. |
+| 7 | Poll interval | Room browser refreshes every 2s. |
 
 ---
 
 ## Part 4 — Technology Stack
 
-_Chosen technologies and the rationale behind each decision._
-
----
-
 ### 4.1 Stack Overview
 
-| Layer | Technology | Rationale |
-|---|---|---|
-| Frontend framework | React + TypeScript | Best agent code quality; component model suits timeline UI |
-| Frontend build tool | Vite | Fast dev server, minimal config |
-| Styling | Tailwind CSS | Rapid styling without custom CSS |
-| Drag & drop | dnd-kit | Modern, accessible, touch-friendly for timeline placement |
-| Real-time transport | Socket.io (client + server) | Built-in room management, auto-reconnect, event API |
-| Backend runtime | Node.js + TypeScript | Shares types with frontend; best agent coverage |
-| HTTP layer | Express | Serves API + compiled React build from one process |
-| State storage | In-memory (no database) | No persistence needed for v1 |
-| External API | Spotify Web API | Playlist data + track metadata + preview URLs |
+| Layer | Technology |
+|---|---|
+| Frontend | React 18 + TypeScript, Vite, Tailwind CSS |
+| Drag & drop | @dnd-kit/core |
+| Real-time | Socket.io v4 |
+| Backend | Node.js + TypeScript, Express |
+| External API | Spotify Web API (Client Credentials Flow) |
+| State | In-memory only — no database |
+| Hosting | Railway |
 
 ### 4.2 Repo Structure
 
-Single monorepo — the Node server serves the compiled React build as static files. One repository, one deployment.
-
 ```
 /
-├── server/          # Node.js + Express + Socket.io
-│   ├── src/
-│   │   ├── index.ts        # Entry point
-│   │   ├── game/           # Game state engine
-│   │   ├── rooms/          # Room & session management
-│   │   └── spotify/        # Spotify API client
-│   └── package.json
-├── client/          # React + Vite
-│   ├── src/
-│   │   ├── components/     # UI components
-│   │   ├── game/           # Game state hooks
-│   │   └── socket/         # Socket.io client
-│   └── package.json
-└── shared/          # Shared TypeScript types (events, state)
-    └── types.ts
+├── server/src/
+│   ├── index.ts          # Express + Socket.io entry point
+│   ├── game/             # Pure game logic (engine.ts + tests)
+│   ├── rooms/            # RoomStore
+│   └── spotify/          # SpotifyClient + mock tracks
+├── client/src/
+│   ├── components/       # GameRoom, EntryPage
+│   ├── game/             # useGame hook
+│   └── socket/           # Socket.io client
+├── shared/types.ts        # All shared TypeScript types
+├── bots/                  # Bot harness (profiles.yaml, bot.ts, index.ts)
+├── e2e/                   # Playwright E2E tests
+└── .github/workflows/ci.yml
 ```
 
-### 4.3 Shared Types
+### 4.3 CI Pipeline
 
-TypeScript types defined once in `/shared/types.ts` and imported by both server and client. This ensures WebSocket events are type-safe on both ends — the agent cannot accidentally emit an event the client doesn't know how to handle.
-
-Key shared types: `Room`, `Player`, `Team`, `Card`, `Timeline`, `GameEvent`.
-
-### 4.4 Technology Decision Log
-
-| Decision | Alternatives considered | Reason not chosen |
-|---|---|---|
-| Node.js | Bun, Deno, Python, Go | Node has most agent training coverage; TypeScript sharing with frontend |
-| Socket.io | raw `ws`, native WebSocket | Socket.io rooms + reconnection save significant boilerplate |
-| React | Vue, Svelte, vanilla JS | Agents produce most reliable React; dnd-kit ecosystem |
-| Railway (hosting) | Render, Fly.io | No cold starts on free tier; WebSockets work out of the box; 2-min deploys |
+| Job | Steps |
+|---|---|
+| **server** | `npm ci` (root) → TypeScript build → Jest (125 tests) |
+| **client** | `npm ci` (root) → Vite build |
+| **e2e** | Depends on server+client → Playwright with TEST_MODE server |
 
 ---
 
 ## Part 5 — Deployment
 
-_How and where the system runs._
-
----
-
-### 5.1 Hosting Model
-- The server is **hosted and operated by the game owner** (Dion).
-- **Platform: Railway** — supports Node.js and WebSockets without configuration, no cold starts on free tier, deploys from GitHub in ~2 minutes.
+### 5.1 Platform
+Railway — Node.js + WebSockets, no cold starts on free tier, deploys from GitHub in ~2 minutes.
 
 ### 5.2 Environment Variables
-The server requires the following configuration at deploy time:
 
 | Variable | Description |
 |---|---|
-| `SPOTIFY_CLIENT_ID` | Spotify app client ID (from Spotify Developer Dashboard) |
+| `SPOTIFY_CLIENT_ID` | Spotify app client ID |
 | `SPOTIFY_CLIENT_SECRET` | Spotify app client secret |
 | `PORT` | Server port (default: 3000) |
+| `CLIENT_URL` | Allowed CORS origin (default: `http://localhost:5173`) |
 
-### 5.3 Spotify App Setup
-- Register a free app at [developer.spotify.com](https://developer.spotify.com) to obtain a client ID and secret.
-- No redirect URIs or scopes required (Client Credentials Flow only).
-- No Spotify review / quota extension needed for reading public playlists.
-
-### 5.4 Scale
-- v1 is designed for small groups (friends, team events). No scaling infrastructure needed.
-- A single server process handles all rooms.
-- No database required — all state is in-memory. Rooms are lost on server restart (acceptable for v1).
+### 5.3 TEST_MODE
+`TEST_MODE=true` shortens timeouts (challenge window 500ms, disconnect skip 3s) and enables mock Spotify tracks so tests run without real credentials.
 
 ---
 
 ## Part 6 — Testing
 
 ### 6.1 Unit Tests
-- All game logic in `server/src/game/` is written as pure functions and covered by Jest unit tests.
-- Tests live alongside source files as `*.test.ts`.
-- Key areas: placement validation, token accounting, HITSTER! resolution, win detection, tie-breaking, disconnect handling, deck exhaustion.
-- Run with `npm test` from `server/`.
+Jest, 125 tests in `engine.test.ts`, `store.test.ts`, `client.test.ts`.
+Run: `npm test` from root or `server/`.
 
-### 6.2 Manual Multiplayer Testing
-- Open 2–4 browser tabs at `localhost:5173`. Each tab acts as an independent player.
-- Sufficient for visual / UX verification during development.
+Coverage: placement validation, token accounting (all modes), challenge resolution, win/loss detection, cooperative token depletion, Pro/Expert naming enforcement, max room size, disconnect handling, deck exhaustion tiebreak.
+
+### 6.2 E2E Tests
+Playwright, `e2e/tests/room-scenarios.spec.ts`. Runs against a live TEST_MODE server.
+Run: `npx playwright test` from root.
 
 ### 6.3 Bot Players
-- A bot harness lives at `/bots/` in the project root (not inside `server/` or `client/`).
-- Bots are real Socket.io clients — they connect to the running server and participate in a game exactly as human players do.
-- Bots are **a first-class demo tool**: `npm start` inside `/bots/` fills a room with configured bot players so the game can be shown end-to-end without needing human participants.
-- Bots and the "open 4 tabs" approach are complementary: bots drive the logic, tabs verify the UI.
+`/bots/` — profile-driven Socket.io clients. Used for demo and manual testing.
+Run: `npm start` from `bots/` or `npm run test:bots` from root.
+CLI flags: `--room XXXX`, `--count N`, `--mode <mode>`, `--genre <label>`.
 
-#### 6.3.1 Bot Profiles
-- Each bot's behaviour is defined by a **profile** in `/bots/profiles.yaml`.
-- Multiple profiles can be defined in the same file; the runner picks N profiles to fill a room.
-- Profile fields:
+---
 
-| Field | Type | Description |
+## Appendix A — Not Yet Implemented
+
+| # | Feature | Section |
 |---|---|---|
-| `name` | string | Display name shown in-game |
-| `avatar_color` | hex string | Colour used for the bot's avatar chip |
-| `knowledge` | 0.0 – 1.0 | Base probability of placing a card in the correct chronological position |
-| `genre_affinities` | string[] | Genres the bot knows well; matched against the room's playlist label. Each matching affinity adds `+0.15` to effective knowledge, capped at 1.0 |
-| `naming_willingness` | 0.0 – 1.0 | Probability the bot attempts to name the title + artist on any given turn to earn a token |
-| `challenge_rate` | 0.0 – 1.0 | Probability the bot shouts HITSTER! when another player places a card it believes is wrong |
-| `reaction_time_ms` | `{ min, max }` | Random delay range before the bot acts, simulating human thinking time |
-| `token_strategy` | `"hoard"` \| `"spend"` \| `"balanced"` | How the bot decides to use tokens: hoard = save for buy; spend = skip freely; balanced = default |
-| `join_willingness` | 0.0 – 1.0 | Probability the bot joins a room that already has active players (vs. waiting for a fresh lobby). At 1.0 it always joins; at 0.0 it only joins empty lobbies |
-
-#### 6.3.2 Bot Runner
-- `npm start` in `/bots/` reads `profiles.yaml`, connects the listed bots to `SERVER_URL` (default `http://localhost:3000`), and creates or joins a room.
-- Pass `--room XXXX` to join an existing room; omit to create a new one.
-- Pass `--count N` to spawn only N bots from the profiles list (round-robins if N > profiles).
-- Bots log every action to stdout with a timestamp and their display name.
-
-#### 6.3.3 Bot Behaviour Model
-On each turn a bot:
-1. Waits `reaction_time_ms` (random within range).
-2. Rolls against `knowledge` (adjusted for genre affinity) to decide the correct vs. a random position.
-3. Emits `turn:placed` with the chosen position.
-4. Independently rolls against `naming_willingness` and, if successful, emits a name attempt.
-
-During other players' turns:
-- If the placing player appears to have placed incorrectly (bot uses its own knowledge roll to judge), rolls against `challenge_rate` to decide whether to challenge.
+| 1 | `?room=XXXX` URL param auto-fills join code on page load | §1.1 |
+| 2 | Null-preview track count shown in lobby UI (server logs it only) | §1.7 |
+| 3 | Spectator mode for ROUND_ACTIVE rooms | §1.1.1 |
+| 4 | `game_over` room status (declared in types, never set) | §3.3 |
 
 ---
 
-## Appendix A — Repository & Licence
-
-| Item | Value |
-|---|---|
-| GitHub owner | [github.com/dionmeijer](https://github.com/dionmeijer/) |
-| Repository name | `hitster-online` |
-| Repository URL | https://github.com/dionmeijer/hitster-online |
-| Licence | Apache 2.0 |
-
-An `LICENSE` file (Apache 2.0 text) and a `NOTICE` file should be included in the root of the repository. The agent should generate both when scaffolding the project.
-
----
-
-## Appendix B — Resolved Design Decisions
-
-All open questions from Part 3 are resolved as follows:
-
-| # | Question | Decision |
-|---|---|---|
-| 3 | **Turn structure** | Each player places on their own timeline on their turn. Simpler than the physical "player to the left" rule and cleaner UX online. |
-| 4 | **Team placement** | Any team member can click to place. Team discusses via voice/video call; first to click confirms the placement. |
-| 5 | **HITSTER! challenge window** | After the placing player confirms, a **10-second challenge window** opens. All non-placing players see a "HITSTER!" button. Window closes when the first challenge is placed or after 10 seconds, then the card flips automatically. |
-| 6 | **Deck exhaustion** | Declare the player/team with the most cards the winner. Tiebreaker: highest average release year on their timeline. |
-| 7 | **Player disconnection** | Skip their turn after a 15-second timeout. Remove from active rotation after 2 consecutive missed turns. They can rejoin the room but not the active round. |
-| 8 | **Room size limit** | Maximum 12 players or 6 teams per room (v1). |
-
----
-
-## Appendix C — Out of Scope (v1)
+## Appendix B — Out of Scope (v1)
 
 - User accounts or persistent profiles
 - Leaderboards across sessions
 - Native mobile app
 - Private Spotify playlist support
-- Apple Music or YouTube playlist support
+- Apple Music or YouTube Music support
 - Persistent room history across server restarts
