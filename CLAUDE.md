@@ -2,13 +2,23 @@
 
 This file is read by Claude Code at the start of every session. Read it fully before touching any code.
 
+## Key documents — read these before writing code
+
+| Document | When to read |
+|---|---|
+| `CLAUDE.md` (this file) | Every session — rules and constraints |
+| `docs/ARCHITECTURE.md` | Before adding or changing any server/client module |
+| `docs/REQUIREMENTS.md` | Before implementing any game feature |
+| `shared/types.ts` | Before defining new event shapes or state fields |
+| `CONTRIBUTING.md` | Step-by-step guide for adding features, tests, and events |
+
 ---
 
 ## What this project is
 
 A browser-based multiplayer implementation of the **Hitster** card game. Players build a chronological timeline of songs by listening to 30-second audio previews and guessing whether each song belongs before or after the ones already on their timeline. First to correctly place 10 cards wins.
 
-The full functional requirements, architecture, and game rules are in `REQUIREMENTS.md` in the root of this repo. Read that file if you need detail on game mechanics.
+The full functional requirements, architecture, and game rules are in `docs/REQUIREMENTS.md`. Read that file if you need detail on game mechanics.
 
 ---
 
@@ -17,8 +27,11 @@ The full functional requirements, architecture, and game rules are in `REQUIREME
 ```
 /
 ├── CLAUDE.md              ← you are here
-├── REQUIREMENTS.md        ← full spec, read before building features
+├── CONTRIBUTING.md        ← dev workflow, how to add features and events
 ├── LICENSE                ← Apache 2.0
+├── docs/
+│   ├── ARCHITECTURE.md    ← module contracts, data flow, invariants
+│   └── REQUIREMENTS.md    ← full spec, read before building features
 ├── shared/
 │   └── types.ts           ← ALL shared TypeScript types. Define types here first.
 ├── server/
@@ -146,16 +159,16 @@ Each client uses `setTimeout` to start `<audio>.play()` at exactly `playAt`. Do 
 | Deck empty | Player/team with most cards wins. Tiebreaker: highest avg release year. |
 | Disconnect | Skip turn after 15s timeout. Remove from rotation after 2 missed turns. |
 
-Game modes (Original / Pro / Expert / Cooperative) are defined in `REQUIREMENTS.md` Part 1.
+Game modes (Original / Pro / Expert / Cooperative) are defined in `docs/REQUIREMENTS.md` Part 1.
 
 ---
 
 ## Working approach for this project
 
 ### Before implementing any feature
-1. Read the relevant section of `REQUIREMENTS.md` to understand the expected behaviour.
+1. Read the relevant section of `docs/REQUIREMENTS.md` to understand the expected behaviour.
 2. Check `shared/types.ts` to see if the types you need already exist.
-3. Plan the server-side state change first, then the Socket.io event, then the client handler.
+3. Follow the order in `CONTRIBUTING.md`: types → engine logic → test → socket event → client handler.
 
 ### When something is ambiguous
 Stop and ask rather than guessing. Game logic bugs are hard to find later. A 30-second check is worth it.
