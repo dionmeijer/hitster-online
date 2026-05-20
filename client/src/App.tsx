@@ -48,6 +48,7 @@ export default function App() {
       onCreateTeam={game.createTeam}
       onJoinTeam={game.joinTeam}
       onLeaveTeam={game.leaveTeam}
+      onEndGame={game.endGame}
       onLeave={() => {
         window.location.reload();
       }}
