@@ -24,12 +24,13 @@ async function fillEmailAndName(page: Page, email: string, name?: string) {
 }
 
 async function createRoom(page: Page, topic: string): Promise<string> {
+  const uniqueTopic = `${topic} ${Date.now()}`;
   await page.click('button:has-text("Create a room")');
   await page.waitForSelector('.modal-box');
-  await page.fill('.modal-box input[type="text"]', topic);
+  await page.fill('.modal-box input[type="text"]', uniqueTopic);
   await page.click('.modal-box button:has-text("Create")');
   await expect(page.locator('[data-testid="lobby-screen"]')).toBeVisible({ timeout: 8_000 });
-  return topic;
+  return uniqueTopic;
 }
 
 async function startRound(page: Page, playlistLabel?: string) {
@@ -46,7 +47,7 @@ async function waitForRooms(page: Page, timeout = 6_000): Promise<void> {
 
 async function joinRoomByClick(page: Page, roomTopic: string): Promise<void> {
   await waitForRooms(page);
-  const card = page.locator('[data-testid="room-card-joinable"].lobby', { hasText: roomTopic });
+  const card = page.locator('[data-testid="room-card-joinable"].lobby', { hasText: roomTopic }).first();
   await expect(card).toBeVisible({ timeout: 15_000 });
   await card.click();
   await expect(page.locator('[data-testid="lobby-screen"]')).toBeVisible({ timeout: 8_000 });
@@ -96,7 +97,7 @@ test('active game appears in lobby with correct status and participant', async (
     await p2.goto('/');
     await waitForRooms(p2);
 
-    const card = p2.locator('.room-card', { hasText: roomCode });
+    const card = p2.locator('.room-card', { hasText: roomCode }).first();
     await expect(card).toBeVisible();
     await expect(card.locator('.status-badge')).toHaveText('LIVE');
     await expect(card).toContainText('HostPlayer');
@@ -125,7 +126,7 @@ test("room with genre '90s rock' appears in lobby with genre label", async ({ br
     await p2.goto('/');
     await waitForRooms(p2);
 
-    const card = p2.locator('.room-card', { hasText: roomCode });
+    const card = p2.locator('.room-card', { hasText: roomCode }).first();
     await expect(card).toBeVisible();
     await expect(card.locator('.rc-genre')).toHaveText("90's rock");
   } finally {
@@ -158,7 +159,7 @@ test('room with Spotify playlist URL starts successfully in TEST_MODE', async ({
     await p2.goto('/');
     await waitForRooms(p2);
 
-    const card = p2.locator('.room-card', { hasText: roomCode });
+    const card = p2.locator('.room-card', { hasText: roomCode }).first();
     await expect(card).toBeVisible();
     await expect(card.locator('.status-badge')).toHaveText('LIVE');
   } finally {
@@ -202,7 +203,7 @@ test('multiple rooms are all visible in the lobby at the same time', async ({ br
     await waitForRooms(observer);
 
     for (let i = 0; i < roomCodes.length; i++) {
-      await expect(observer.locator('.room-card', { hasText: roomCodes[i] })).toBeVisible();
+      await expect(observer.locator('.room-card', { hasText: roomCodes[i] }).first()).toBeVisible();
     }
 
     await observer.close();
@@ -265,7 +266,7 @@ test('room disappears from lobby after last player leaves', async ({ browser }: 
     // Confirm room appears in lobby
     await p2.goto('/');
     await waitForRooms(p2);
-    await expect(p2.locator('.room-card', { hasText: roomCode })).toBeVisible();
+    await expect(p2.locator('.room-card', { hasText: roomCode }).first()).toBeVisible();
 
     // p1 leaves the room
     await p1.click('[data-testid="leave-btn"]');
@@ -273,7 +274,7 @@ test('room disappears from lobby after last player leaves', async ({ browser }: 
     // Server has EMPTY_ROOM_TTL_MS=5s in TEST_MODE — poll lobby until room is gone
     await expect(async () => {
       await p2.reload();
-      await expect(p2.locator('.room-card', { hasText: roomCode })).not.toBeVisible();
+      await expect(p2.locator('.room-card', { hasText: roomCode }).first()).not.toBeVisible();
     }).toPass({ timeout: 15_000, intervals: [2_000] });
   } finally {
     await ctx1.close();
@@ -328,12 +329,12 @@ test('joiner sees host timeline and placement during challenge', async ({ browse
     await expect(p2.locator('[data-testid="timeline-gap-0"]').or(p2.locator('[data-testid="watch-timeline"]'))).toBeVisible({
       timeout: 8_000,
     });
-    if (await p2.locator('[data-testid="sidebar-turn-status"]').getByText('Your turn').isVisible()) {
+    if (await p2.locator('[data-testid="sidebar-turn-status"]').getByText(/your turn/i).isVisible()) {
       await p2.click('[data-testid="timeline-gap-0"]');
       await p2.click('button:has-text("CONFIRM PLACE")');
     }
 
-    await expect(p1.locator('[data-testid="sidebar-turn-status"]')).toContainText('Your turn', { timeout: 20_000 });
+    await expect(p1.locator('[data-testid="sidebar-turn-status"]')).toContainText(/your turn/i, { timeout: 20_000 });
     await expect(p2.locator('[data-testid="watch-timeline"]')).toBeVisible({ timeout: 90_000 });
     await expect(p2.locator('[data-testid="watch-timeline"]')).toContainText("HOSTWATCH'S TIMELINE");
     await expect(p2.locator('[data-testid="my-timeline-disabled"]')).toBeVisible();

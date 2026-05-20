@@ -208,6 +208,7 @@ async function resolveTurnStreamUrl(card: {
 }): Promise<string | null> {
   if (card.streamUrl) return card.streamUrl;
   if (!isSpotifyTrackPageUrl(card.previewUrl)) return card.previewUrl;
+  if (process.env.TEST_MODE === 'true') return null;
   try {
     return await fetchEmbedPreviewUrl(card.trackId);
   } catch (err) {
@@ -460,7 +461,7 @@ io.on('connection', (socket) => {
       io.to(session.roomCode).emit('round:started', { room: initedRoom });
       io.to(session.roomCode).emit('room:updated', initedRoom);
 
-      startTurn(session.roomCode);
+      await startTurn(session.roomCode);
     } catch (err) {
       socket.emit('error', err instanceof Error ? err.message : 'Failed to start round');
     }
