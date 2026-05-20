@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import type { Room, Card, CardHidden, GameMode } from '../../../shared/types';
+import TrackPreviewModal from './TrackPreviewModal';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -526,9 +527,13 @@ interface LobbyScreenProps {
   onLeaveTeam: () => void;
   onLeave: () => void;
   socketError?: string | null;
+  onPreviewPlaylist: (playlistLabel: string) => void;
+  onClearPlaylistPreview: () => void;
+  playlistPreviewCards: Card[] | null;
+  playlistPreviewLoading: boolean;
 }
 
-function LobbyScreen({ room, sessionId, onStartRound, onCreateTeam, onJoinTeam, onLeaveTeam, onLeave, socketError }: LobbyScreenProps) {
+function LobbyScreen({ room, sessionId, onStartRound, onCreateTeam, onJoinTeam, onLeaveTeam, onLeave, socketError, onPreviewPlaylist, onClearPlaylistPreview, playlistPreviewCards, playlistPreviewLoading }: LobbyScreenProps) {
   const isOwner = room.ownerId === sessionId;
   const players = Object.values(room.players);
   const [playlistLabel, setPlaylistLabel] = useState('');
@@ -605,7 +610,22 @@ function LobbyScreen({ room, sessionId, onStartRound, onCreateTeam, onJoinTeam, 
               onChange={e => setPlaylistLabel(e.target.value)}
               data-testid="playlist-label-input"
             />
+            <button
+              className="lobby-preview-btn"
+              disabled={!playlistLabel.trim() || playlistPreviewLoading}
+              onClick={() => onPreviewPlaylist(playlistLabel.trim())}
+              data-testid="preview-tracks-btn"
+            >
+              {playlistPreviewLoading ? '…' : '🔍 Preview'}
+            </button>
           </div>
+
+          {playlistPreviewCards && (
+            <TrackPreviewModal
+              cards={playlistPreviewCards}
+              onClose={onClearPlaylistPreview}
+            />
+          )}
 
           <div className="lobby-config-section">
             <div className="lobby-config-label">Game Mode</div>
@@ -817,6 +837,10 @@ export interface GameRoomProps {
   onJoinTeam: (teamId: string) => void;
   onLeaveTeam: () => void;
   onLeave: () => void;
+  onPreviewPlaylist: (playlistLabel: string) => void;
+  onClearPlaylistPreview: () => void;
+  playlistPreviewCards: Card[] | null;
+  playlistPreviewLoading: boolean;
 }
 
 export default function GameRoom({
@@ -841,6 +865,10 @@ export default function GameRoom({
   onJoinTeam,
   onLeaveTeam,
   onLeave,
+  onPreviewPlaylist,
+  onClearPlaylistPreview,
+  playlistPreviewCards,
+  playlistPreviewLoading,
 }: GameRoomProps) {
   const [selectedPosition, setSelectedPosition] = useState<number | null>(null);
   const [showFlipResult, setShowFlipResult] = useState(false);
@@ -934,6 +962,10 @@ export default function GameRoom({
           onJoinTeam={onJoinTeam}
           onLeaveTeam={onLeaveTeam}
           socketError={socketError}
+          onPreviewPlaylist={onPreviewPlaylist}
+          onClearPlaylistPreview={onClearPlaylistPreview}
+          playlistPreviewCards={playlistPreviewCards}
+          playlistPreviewLoading={playlistPreviewLoading}
         />
       </div>
     );

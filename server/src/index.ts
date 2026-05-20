@@ -361,6 +361,25 @@ io.on('connection', (socket) => {
   });
 
   // ------------------------------------------------------------------
+  // playlist:preview
+  // ------------------------------------------------------------------
+  socket.on('playlist:preview', async (data) => {
+    const session = socketSession.get(socket.id);
+    if (!session) return;
+
+    const room = store.get(session.roomCode);
+    if (!room) { socket.emit('error', 'Room not found'); return; }
+    if (room.ownerId !== sessionId) { socket.emit('error', 'Only the room owner can preview tracks'); return; }
+
+    try {
+      const cards = await spotify.getTracksForLabel(data.playlistLabel);
+      socket.emit('playlist:previewed', { cards });
+    } catch (err) {
+      socket.emit('error', err instanceof Error ? err.message : 'Failed to fetch tracks for preview');
+    }
+  });
+
+  // ------------------------------------------------------------------
   // turn:place
   // ------------------------------------------------------------------
   socket.on('turn:place', (data) => {

@@ -13,6 +13,8 @@ export interface GameState {
   roundEnded: { winnerId: string | null } | null;
   myTokens: number;
   socketError: string | null;
+  playlistPreviewCards: Card[] | null;
+  playlistPreviewLoading: boolean;
   connect: (displayName: string, email: string) => void;
   createRoom: (topic: string) => void;
   joinRoom: (code: string) => void;
@@ -26,6 +28,8 @@ export interface GameState {
   createTeam: (name: string) => void;
   joinTeam: (teamId: string) => void;
   leaveTeam: () => void;
+  previewPlaylist: (playlistLabel: string) => void;
+  clearPlaylistPreview: () => void;
 }
 
 export function useGame(): GameState {
@@ -39,6 +43,8 @@ export function useGame(): GameState {
   const [roundEnded, setRoundEnded] = useState<{ winnerId: string | null } | null>(null);
   const [myTokens, setMyTokens] = useState(0);
   const [socketError, setSocketError] = useState<string | null>(null);
+  const [playlistPreviewCards, setPlaylistPreviewCards] = useState<Card[] | null>(null);
+  const [playlistPreviewLoading, setPlaylistPreviewLoading] = useState(false);
 
   const sessionId = sessionStorage.getItem('hitster_session_id') ?? '';
 
@@ -153,9 +159,15 @@ export function useGame(): GameState {
       setPlayAt(null);
     });
 
+    socket.on('playlist:previewed', ({ cards }) => {
+      setPlaylistPreviewCards(cards);
+      setPlaylistPreviewLoading(false);
+    });
+
     socket.on('error', (msg) => {
       console.error('[hitster socket error]', msg);
       setSocketError(typeof msg === 'string' ? msg : (msg as { message?: string })?.message ?? 'An error occurred');
+      setPlaylistPreviewLoading(false);
     });
 
     return () => {
@@ -170,6 +182,7 @@ export function useGame(): GameState {
       socket.off('turn:bought');
       socket.off('turn:named');
       socket.off('round:ended');
+      socket.off('playlist:previewed');
       socket.off('error');
     };
   }, [sessionId]);
@@ -245,6 +258,17 @@ export function useGame(): GameState {
     socket.emit('team:leave');
   }, []);
 
+  const previewPlaylist = useCallback((playlistLabel: string) => {
+    setPlaylistPreviewLoading(true);
+    setPlaylistPreviewCards(null);
+    socket.emit('playlist:preview', { playlistLabel });
+  }, []);
+
+  const clearPlaylistPreview = useCallback(() => {
+    setPlaylistPreviewCards(null);
+    setPlaylistPreviewLoading(false);
+  }, []);
+
   return {
     room,
     currentCard,
@@ -256,6 +280,8 @@ export function useGame(): GameState {
     roundEnded,
     myTokens,
     socketError,
+    playlistPreviewCards,
+    playlistPreviewLoading,
     connect,
     createRoom,
     joinRoom,
@@ -269,5 +295,7 @@ export function useGame(): GameState {
     createTeam,
     joinTeam,
     leaveTeam,
+    previewPlaylist,
+    clearPlaylistPreview,
   };
 }
