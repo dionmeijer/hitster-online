@@ -28,10 +28,10 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: 'npm run dev:server',
+      command: 'npm run test:server',
       port: TEST_SERVER_PORT,
       reuseExistingServer: !process.env.CI,
-      timeout: 30_000,
+      timeout: 60_000,
       env: { TEST_MODE: 'true', PORT: String(TEST_SERVER_PORT) },
     },
     {
