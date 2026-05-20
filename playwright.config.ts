@@ -32,7 +32,7 @@ export default defineConfig({
       port: TEST_SERVER_PORT,
       reuseExistingServer: !process.env.CI,
       timeout: 15_000,
-      env: { TEST_MODE: 'true', PORT: String(TEST_SERVER_PORT) },
+      env: { TEST_MODE: 'true', PORT: String(TEST_SERVER_PORT), SPOTIFY_CLIENT_ID: 'test', SPOTIFY_CLIENT_SECRET: 'test' },
     },
     {
       command: 'npm run dev:client',
