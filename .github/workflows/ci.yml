@@ -8,9 +8,6 @@ jobs:
   server:
     name: Server — build & test
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: server
 
     steps:
       - uses: actions/checkout@v4.2.2
@@ -26,17 +23,16 @@ jobs:
         run: npm ci
 
       - name: Type-check
+        working-directory: server
         run: npm run build
 
       - name: Test
+        working-directory: server
         run: npm run test:ci
 
   client:
     name: Client — build
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: client
 
     steps:
       - uses: actions/checkout@v4.2.2
@@ -52,4 +48,5 @@ jobs:
         run: npm ci
 
       - name: Build
+        working-directory: client
         run: npm run build
