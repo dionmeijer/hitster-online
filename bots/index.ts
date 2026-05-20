@@ -2,13 +2,15 @@
  * Hitster Bot Runner
  *
  * Usage:
- *   npm start                              — create a new room, fill with all profiles
- *   npm start -- --room XXXX              — join an existing room (bots won't start round)
+ *   npm start                              — bots join/create rooms autonomously
+ *   npm start -- --room XXXX              — join an existing room (no auto-start unless owner)
  *   npm start -- --count 3                — use only first 3 profiles
- *   npm start -- --room XXXX --count 2
  *   npm start -- --url http://server:3000
  *   npm start -- --mode pro               — game mode (original/pro/expert/cooperative)
  *   npm start -- --genre "90s Pop"        — playlist label / genre for round
+ *
+ * Autonomous mode (default): each bot prefers joining lobbies with fewer than 3
+ * players, otherwise creates a room. The room owner starts when 3+ players are present.
  *
  * Profiles are loaded from ./profiles.yaml. Edit that file to change bot behaviour.
  */
@@ -16,8 +18,20 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { parse } from 'yaml';
+import type { RoomSummary } from '../shared/types';
 import { Bot } from './bot';
+import {
+  effectivePlayerCount,
+  fetchRoomSummaries,
+  pickJoinRoom,
+  randomTopic,
+  shouldJoinOverCreate,
+} from './roomPicker';
 import { BotProfile, ProfilesFile } from './types';
+
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 function parseArgs(): {
   serverUrl: string;
@@ -65,6 +79,37 @@ function pickProfiles(profiles: BotProfile[], count?: number): BotProfile[] {
   return result;
 }
 
+async function placeBotInLobby(
+  bot: Bot,
+  profile: BotProfile,
+  serverUrl: string,
+  localCounts: Map<string, number>
+): Promise<string> {
+  const summaries = await fetchRoomSummaries(serverUrl);
+  const countFor = (room: RoomSummary) => effectivePlayerCount(room, localCounts);
+  const joinable = summaries.filter(
+    r => countFor(r) < 3 && (r.status === 'lobby' || r.status === 'round_ended')
+  );
+
+  if (shouldJoinOverCreate(joinable.length > 0, profile.join_willingness)) {
+    const target = pickJoinRoom(joinable, countFor);
+    if (target) {
+      const code = target.code;
+      bot.joinRoom(code);
+      localCounts.set(code, countFor(target) + 1);
+      return code;
+    }
+  }
+
+  const topic = randomTopic();
+  const code = await new Promise<string>(resolve => {
+    bot.onRoomCode(resolve);
+    bot.createRoom(topic);
+  });
+  localCounts.set(code, 1);
+  return code;
+}
+
 async function main(): Promise<void> {
   const { serverUrl, roomCode: existingRoom, count, mode, genre } = parseArgs();
   const allProfiles = loadProfiles();
@@ -72,15 +117,15 @@ async function main(): Promise<void> {
 
   console.log(`\nHitster Bot Runner`);
   console.log(`Server:  ${serverUrl}`);
-  console.log(`Room:    ${existingRoom ?? '(create new)'}`);
+  console.log(`Room:    ${existingRoom ?? '(autonomous join/create)'}`);
   console.log(`Mode:    ${mode}`);
   console.log(`Genre:   ${genre ?? '(random)'}`);
   console.log(`Bots:    ${profiles.map(p => p.name).join(', ')}`);
   console.log(`────────────────────────────────────\n`);
 
   const bots = profiles.map(profile => new Bot(serverUrl, profile));
+  bots.forEach(b => b.enableAutoStart(mode, genre));
 
-  // Graceful shutdown
   process.on('SIGINT', () => {
     console.log('\nShutting down bots...');
     bots.forEach(b => b.disconnect());
@@ -88,50 +133,29 @@ async function main(): Promise<void> {
   });
 
   if (existingRoom) {
-    // ── Join existing room ────────────────────────────────────────────────────
     for (let i = 0; i < bots.length; i++) {
       bots[i].connect();
-      await new Promise(r => setTimeout(r, 150));
+      await delay(150);
       bots[i].joinRoom(existingRoom);
     }
-    console.log(`All bots joined ${existingRoom}. Waiting for owner to start the round.`);
-  } else {
-    // ── Create new room + start round ─────────────────────────────────────────
-    const [owner, ...others] = bots;
-
-    // 1. Connect owner
-    owner.connect();
-    await new Promise(r => setTimeout(r, 300));
-
-    // 2. Owner creates room; wait for room code
-    const roomCode = await new Promise<string>(resolve => {
-      owner.onRoomCode(resolve);
-      owner.createRoom('Bot Demo Room');
-    });
-
-    // 3. Connect and join remaining bots with a stagger
-    for (let i = 0; i < others.length; i++) {
-      others[i].connect();
-      await new Promise(r => setTimeout(r, 200));
-      others[i].joinRoom(roomCode);
-      await new Promise(r => setTimeout(r, 150));
-    }
-
-    // 4. Short pause to let all joins propagate, then owner starts round
-    await new Promise(r => setTimeout(r, 500));
-    owner.startRound(mode, genre);
-
-    // 5. Optional: restart loop — when round ends, start a new one
-    let roundsPlayed = 0;
-    const restartOnEnd = (winnerId: string | null) => {
-      roundsPlayed++;
-      console.log(`\n── Round ${roundsPlayed} ended (winner: ${winnerId}) ──`);
-      // Uncomment to auto-restart:
-      // setTimeout(() => owner.startRound(mode, genre), 2000);
-    };
-
-    bots.forEach(b => b.onRoundEnded(restartOnEnd));
+    console.log(`All bots joined ${existingRoom}. Owner starts at 3+ players.`);
+    return;
   }
+
+  const localCounts = new Map<string, number>();
+
+  for (let i = 0; i < bots.length; i++) {
+    const bot = bots[i];
+    const profile = profiles[i];
+    bot.connect();
+    await delay(250);
+
+    const code = await placeBotInLobby(bot, profile, serverUrl, localCounts);
+    console.log(`${profile.name} → ${code}`);
+    await delay(200);
+  }
+
+  console.log('\nBots placed. Owners will start rounds when lobbies reach 3 players.');
 }
 
 main().catch(err => {

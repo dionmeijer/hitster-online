@@ -11,7 +11,7 @@
 #   challenge_rate    0.0–1.0  Chance of shouting HITSTER! when a wrong placement is suspected
 #   reaction_time_ms  min/max  Simulated thinking delay in milliseconds
 #   token_strategy    hoard | spend | balanced
-#   join_willingness  0.0–1.0  Chance of joining a room that already has active players
+#   join_willingness  0.0–1.0  Preference for joining a lobby (<3 players) vs creating a new room
 
 bots:
 

@@ -1,5 +1,6 @@
 import { io, Socket } from 'socket.io-client';
 import type { Room } from '../shared/types';
+import { MIN_PLAYERS_TO_START, PLACEMENT_DELAY_MS } from './roomPicker';
 import { BotProfile } from './types';
 
 function randomInt(min: number, max: number): number {
@@ -33,6 +34,11 @@ export class Bot {
   readonly sessionId: string;
   private tokens = 0;
   private roomCode: string | null = null;
+  private isOwner = false;
+  private hasStartedRound = false;
+  private autoStartEnabled = false;
+  private gameMode: 'original' | 'pro' | 'expert' | 'cooperative' = 'original';
+  private playlistLabel?: string;
   private onRoomCodeCb: ((code: string) => void) | null = null;
   private onRoundEndedCb: ((winnerId: string | null) => void) | null = null;
 
@@ -63,6 +69,16 @@ export class Bot {
     this.onRoundEndedCb = cb;
   }
 
+  /** When enabled, room owner starts the round once the lobby has enough players. */
+  enableAutoStart(
+    mode: 'original' | 'pro' | 'expert' | 'cooperative',
+    playlistLabel?: string
+  ): void {
+    this.autoStartEnabled = true;
+    this.gameMode = mode;
+    this.playlistLabel = playlistLabel;
+  }
+
   joinRoom(roomCode: string): void {
     log(this.profile.name, `joining room ${roomCode}`);
     this.socket.emit('room:join', { roomCode });
@@ -89,15 +105,21 @@ export class Bot {
       log(profile.name, 'disconnected');
     });
 
-    this.socket.on('room:created', ({ roomCode }: { roomCode: string; room: Room }) => {
+    this.socket.on('room:created', ({ roomCode, room }: { roomCode: string; room: Room }) => {
       this.roomCode = roomCode;
+      this.isOwner = true;
+      this.hasStartedRound = false;
       log(profile.name, `room created: ${roomCode}`);
       this.onRoomCodeCb?.(roomCode);
+      this.maybeAutoStart(room);
     });
 
-    this.socket.on('room:joined', ({ roomCode }: { roomCode: string; room: Room }) => {
+    this.socket.on('room:joined', ({ roomCode, room }: { roomCode: string; room: Room }) => {
       this.roomCode = roomCode;
+      this.isOwner = room.ownerId === this.sessionId;
+      this.hasStartedRound = room.status === 'round_active';
       log(profile.name, `joined room ${roomCode}`);
+      this.maybeAutoStart(room);
     });
 
     this.socket.on('room:updated', (room: Room) => {
@@ -109,9 +131,12 @@ export class Bot {
       if (room.activeRound?.config.playlistLabel) {
         this.roomGenre = room.activeRound.config.playlistLabel;
       }
+
+      this.maybeAutoStart(room);
     });
 
     this.socket.on('round:started', () => {
+      this.hasStartedRound = true;
       log(profile.name, 'round started');
     });
 
@@ -146,8 +171,8 @@ export class Bot {
     this.socket.on('round:ended', (data: { winnerId: string | null }) => {
       const isWinner = data.winnerId === this.sessionId;
       log(profile.name, isWinner ? 'I WON!' : `round ended — winner: ${data.winnerId ?? 'none'}`);
-      // Reset bot state for potential next round
       this.tokens = 0;
+      this.hasStartedRound = false;
       this.onRoundEndedCb?.(data.winnerId);
     });
 
@@ -156,10 +181,22 @@ export class Bot {
     });
   }
 
+  private maybeAutoStart(room: Room): void {
+    if (!this.autoStartEnabled || !this.isOwner || this.hasStartedRound) return;
+    if (room.status !== 'lobby' && room.status !== 'round_ended') return;
+
+    const playerCount = Object.keys(room.players).length;
+    if (playerCount < MIN_PLAYERS_TO_START) return;
+
+    this.hasStartedRound = true;
+    log(this.profile.name, `lobby full enough (${playerCount}) — starting round`);
+    this.startRound(this.gameMode, this.playlistLabel);
+  }
+
   private async takeTurn(timelineLength: number): Promise<void> {
     const { profile } = this;
-    const thinkMs = randomInt(profile.reaction_time_ms.min, profile.reaction_time_ms.max);
-    log(profile.name, `my turn — thinking for ${thinkMs}ms`);
+    const thinkMs = randomInt(PLACEMENT_DELAY_MS.min, PLACEMENT_DELAY_MS.max);
+    log(profile.name, `my turn — placing in ${thinkMs}ms`);
     await delay(thinkMs);
 
     // Decide whether to skip (spend mode + have tokens + random chance)
