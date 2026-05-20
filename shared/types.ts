@@ -62,7 +62,7 @@ export interface ChatMessage {
   senderId: string;
   senderName: string;
   text: string;
-  sentAt: number; // Unix ms
+  sentAt: number; // Unix timestamp in milliseconds
 }
 
 export interface Room {
@@ -74,7 +74,7 @@ export interface Room {
   teams: Record<string, Team>;
   useTeams: boolean;
   roundHistory: RoundSummary[];
-  chatMessages?: ChatMessage[];
+  chatMessages: ChatMessage[];
   activeRound?: ActiveRound;
 }
 

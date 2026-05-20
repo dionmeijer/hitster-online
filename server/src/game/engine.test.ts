@@ -1099,7 +1099,7 @@ describe('appendChatMessage', () => {
     }
 
     expect(room.chatMessages).toHaveLength(100);
-    expect(room.chatMessages?.[0].id).toBe('m1');
-    expect(room.chatMessages?.[99].id).toBe('m100');
+    expect(room.chatMessages[0].id).toBe('m1');
+    expect(room.chatMessages[99].id).toBe('m100');
   });
 });

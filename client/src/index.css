@@ -1012,6 +1012,10 @@ body {
   color: #e0e0ff;
   margin-bottom: 6px;
   word-break: break-word;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
 }
 
 .chat-message:last-child {
@@ -1021,7 +1025,12 @@ body {
 .chat-sender {
   color: #a78bfa;
   font-weight: 700;
-  margin-right: 6px;
+}
+
+.chat-time {
+  margin-left: auto;
+  color: #6b7280;
+  font-size: 11px;
 }
 
 .chat-empty {

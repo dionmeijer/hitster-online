@@ -58,7 +58,7 @@ export function createRoom(ownerId: string, displayName: string, topic: string):
 }
 
 export function appendChatMessage(room: Room, message: ChatMessage): Room {
-  const chatMessages = [...(room.chatMessages ?? []), message];
+  const chatMessages = [...room.chatMessages, message];
   return {
     ...room,
     chatMessages: chatMessages.slice(-MAX_CHAT_MESSAGES),

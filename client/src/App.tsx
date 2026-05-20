@@ -36,7 +36,7 @@ export default function App() {
       lastFlip={game.lastFlip}
       roundEnded={game.roundEnded}
       myTokens={game.myTokens}
-      chatMessages={game.room.chatMessages ?? []}
+      chatMessages={game.room.chatMessages}
       sessionId={sessionId}
       socketError={game.socketError}
       onStartRound={game.startRound}

@@ -825,6 +825,9 @@ function ChatPanel({ messages, sessionId, onSend }: ChatPanelProps) {
           <div key={message.id} className="chat-message">
             <span className="chat-sender">{message.senderId === sessionId ? 'You' : message.senderName}:</span>
             <span className="chat-text">{message.text}</span>
+            <time className="chat-time" dateTime={new Date(message.sentAt).toISOString()}>
+              {new Date(message.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </time>
           </div>
         ))}
         {messages.length === 0 && (
@@ -838,7 +841,12 @@ function ChatPanel({ messages, sessionId, onSend }: ChatPanelProps) {
           maxLength={280}
           value={chatText}
           onChange={(e) => setChatText(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              handleSend();
+            }
+          }}
         />
         <button
           className="chat-send-btn"
