@@ -72,16 +72,6 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Build server
-        working-directory: server
-        run: npm run build
-
-      - name: Start server
-        run: TEST_MODE=true SPOTIFY_CLIENT_ID=test SPOTIFY_CLIENT_SECRET=test PORT=3000 node dist/server/src/index.js &
-
-      - name: Wait for server
-        run: npx wait-on http://localhost:3000/health --timeout 15000
-
       - name: Run E2E tests
         run: npx playwright test
 
