@@ -19,6 +19,7 @@ export default defineConfig(({ mode }) => {
         '/socket.io': { target: apiTarget, ws: true },
         '/rooms': { target: apiTarget },
         '/health': { target: apiTarget },
+        '/api': { target: apiTarget },
       },
     },
   };

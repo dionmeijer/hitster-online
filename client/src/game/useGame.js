@@ -6,6 +6,7 @@ export function useGame() {
     const [observerCard, setObserverCard] = useState(null);
     const [activePlayerId, setActivePlayerId] = useState(null);
     const [previewUrl, setPreviewUrl] = useState(null);
+    const [streamUrl, setStreamUrl] = useState(null);
     const [playAt, setPlayAt] = useState(null);
     const [turnEndsAt, setTurnEndsAt] = useState(null);
     const [timelineLength, setTimelineLength] = useState(0);
@@ -44,6 +45,7 @@ export function useGame() {
             setObserverCard(null);
             setActivePlayerId(null);
             setPreviewUrl(null);
+            setStreamUrl(null);
             setPlayAt(null);
             setTurnEndsAt(null);
             setLastFlip(null);
@@ -53,11 +55,12 @@ export function useGame() {
                 setMyTokens(r.activeRound.tokens[tokenKey]);
             }
         });
-        socket.on('turn:started', ({ activePlayerId: pid, card, observerCard: obs, previewUrl: url, playAt: pa, timelineLength: tl, turnEndsAt: te }) => {
+        socket.on('turn:started', ({ activePlayerId: pid, card, observerCard: obs, previewUrl: url, streamUrl: su, playAt: pa, timelineLength: tl, turnEndsAt: te }) => {
             setActivePlayerId(pid);
             setCurrentCard(card);
             setObserverCard(obs);
             setPreviewUrl(url);
+            setStreamUrl(su ?? null);
             setPlayAt(pa);
             setTurnEndsAt(te);
             setTimelineLength(tl);
@@ -182,6 +185,7 @@ export function useGame() {
             setObserverCard(null);
             setActivePlayerId(null);
             setPreviewUrl(null);
+            setStreamUrl(null);
             setPlayAt(null);
             setTurnEndsAt(null);
         });
@@ -302,6 +306,7 @@ export function useGame() {
         lastChallenge,
         activePlayerId,
         previewUrl,
+        streamUrl,
         playAt,
         turnEndsAt,
         timelineLength,

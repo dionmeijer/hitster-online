@@ -4,7 +4,7 @@ import type { Room, Card, CardHidden, GameMode, Player, Team } from '../../../sh
 import TrackPreviewModal from './TrackPreviewModal';
 import { PlaylistAutocomplete } from './PlaylistAutocomplete';
 import { TimelineView } from './TimelineView';
-import { isSpotifyTrackPageUrl } from '../spotify';
+import { fetchEmbedPreviewStream, turnPlayableStream } from '../spotify';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -212,8 +212,11 @@ function PlayerList({
 
 // ── AudioPlayer ───────────────────────────────────────────────────────────────
 
+type PlaybackStatus = 'idle' | 'resolving' | 'playing' | 'unavailable';
+
 interface AudioPlayerProps {
   previewUrl: string | null;
+  streamUrl: string | null;
   playAt: number | null;
   currentCard: CardHidden | null;
   revealedCard: Card | null;
@@ -224,6 +227,7 @@ interface AudioPlayerProps {
 
 function AudioPlayer({
   previewUrl,
+  streamUrl,
   playAt,
   currentCard,
   revealedCard,
@@ -237,13 +241,11 @@ function AudioPlayer({
   const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [timeLeft, setTimeLeft] = useState(30);
   const [progress, setProgress] = useState(0);
-  const [showEmbed, setShowEmbed] = useState(false);
-  const spotifyOnly = previewUrl !== null && isSpotifyTrackPageUrl(previewUrl);
+  const [playbackStatus, setPlaybackStatus] = useState<PlaybackStatus>('idle');
 
   // Waveform animation
   useEffect(() => {
     if (!waveformRef.current) return;
-    // Create bars
     waveformRef.current.innerHTML = '';
     const bars: HTMLDivElement[] = [];
     for (let i = 0; i < 60; i++) {
@@ -265,44 +267,24 @@ function AudioPlayer({
     };
   }, []);
 
-  // Reset embed when a new card arrives
+  // Resolve MP3 (API streamUrl or embed HTML) and schedule synced playback at playAt
   useEffect(() => {
-    setShowEmbed(false);
-  }, [currentCard?.trackId]);
-
-  // Show Spotify embed at playAt when no MP3 stream is available
-  useEffect(() => {
-    if (!spotifyOnly || !playAt || !currentCard) return;
-
-    const delay = Math.max(0, playAt - Date.now());
-    const timer = setTimeout(() => setShowEmbed(true), delay);
-    return () => {
-      clearTimeout(timer);
-      setShowEmbed(false);
-    };
-  }, [spotifyOnly, playAt, currentCard?.trackId]);
-
-  // Audio scheduling (MP3 previews only — Spotify track pages open externally)
-  useEffect(() => {
-    if (!previewUrl || !playAt || spotifyOnly) return;
+    if (!previewUrl || !playAt || !currentCard) {
+      setPlaybackStatus('idle');
+      return;
+    }
 
     const audio = audioRef.current;
     if (!audio) return;
 
-    audio.src = previewUrl;
-    audio.load();
+    let cancelled = false;
+    let playTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const now = Date.now();
-    const delay = playAt - now;
-    const startTime = Math.max(0, delay);
-    let timer: ReturnType<typeof setTimeout> | null = null;
-
-    // Progress / countdown
     const startProgress = () => {
       setTimeLeft(30);
       setProgress(0);
       let elapsed = 0;
-
+      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
       progressIntervalRef.current = setInterval(() => {
         elapsed += 0.1;
         const pct = Math.min((elapsed / 30) * 100, 100);
@@ -314,22 +296,60 @@ function AudioPlayer({
       }, 100);
     };
 
-    timer = setTimeout(() => {
-      void audio.play().catch(() => {
-        // autoplay blocked — ignore
-      });
-      startProgress();
-    }, startTime);
+    const schedulePlay = (url: string) => {
+      if (cancelled) return;
+      audio.src = url;
+      audio.load();
+      setPlaybackStatus('playing');
+      const delay = Math.max(0, playAt - Date.now());
+      playTimer = setTimeout(() => {
+        void audio.play().catch(() => {
+          if (!cancelled) setPlaybackStatus('unavailable');
+        });
+        startProgress();
+      }, delay);
+    };
+
+    const run = async () => {
+      let url = turnPlayableStream(previewUrl, streamUrl);
+      if (!url) {
+        setPlaybackStatus('resolving');
+        try {
+          url = await fetchEmbedPreviewStream(currentCard.trackId);
+        } catch {
+          url = null;
+        }
+      }
+      if (cancelled) return;
+      if (!url) {
+        setPlaybackStatus('unavailable');
+        return;
+      }
+      schedulePlay(url);
+    };
+
+    void run();
 
     return () => {
-      if (timer) clearTimeout(timer);
+      cancelled = true;
+      if (playTimer) clearTimeout(playTimer);
       if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
       audio.pause();
       audio.src = '';
       setTimeLeft(30);
       setProgress(0);
+      setPlaybackStatus('idle');
     };
-  }, [previewUrl, playAt, spotifyOnly]);
+  }, [previewUrl, streamUrl, playAt, currentCard?.trackId]);
+
+  const statusMessage = (() => {
+    if (playbackStatus === 'resolving') return 'Loading preview…';
+    if (playbackStatus === 'unavailable') return 'Preview unavailable for this track.';
+    if (playbackStatus === 'playing') {
+      return isActivePlayer ? 'Song is playing…' : 'Song is playing for all…';
+    }
+    return isActivePlayer ? 'Starting preview…' : 'Starting preview for all…';
+  })();
 
   const albumArt = isFlipped
     ? (revealedCard?.albumArt ?? currentCard?.albumArt ?? null)
@@ -374,22 +394,12 @@ function AudioPlayer({
             </>
           ) : (
             <div style={{ fontSize: 13, color: '#6b7280', marginTop: 8 }}>
-              {isActivePlayer
-                ? spotifyOnly
-                  ? showEmbed
-                    ? 'Song is playing…'
-                    : 'Starting preview…'
-                  : 'Song is playing…'
-                : spotifyOnly
-                  ? showEmbed
-                    ? 'Song is playing for all…'
-                    : 'Starting preview…'
-                  : 'Song is playing for all…'}
+              {statusMessage}
             </div>
           )}
         </div>
 
-        {!spotifyOnly && (
+        {playbackStatus === 'playing' && (
           <div className="song-timer-wrap">
             <div className="song-timer-label">TIME LEFT</div>
             <div className="song-timer">
@@ -399,28 +409,11 @@ function AudioPlayer({
         )}
       </div>
 
-      {spotifyOnly ? (
-        showEmbed && currentCard && (
-          <iframe
-            src={`https://open.spotify.com/embed/track/${currentCard.trackId}?utm_source=generator&autoplay=1`}
-            width="100%"
-            height="80"
-            frameBorder={0}
-            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-            loading="eager"
-            title="Spotify Preview"
-            style={{ display: 'block', borderRadius: 8, margin: '8px 0' }}
-          />
-        )
-      ) : (
-        <>
-          <div className="waveform" ref={waveformRef} />
-          <div className="progress-track">
-            <div className="progress-fill" style={{ width: `${progress}%` }} />
-          </div>
-          <audio ref={audioRef} preload="auto" />
-        </>
-      )}
+      <div className="waveform" ref={waveformRef} />
+      <div className="progress-track">
+        <div className="progress-fill" style={{ width: `${progress}%` }} />
+      </div>
+      <audio ref={audioRef} preload="auto" />
     </>
   );
 }
@@ -840,6 +833,7 @@ export interface GameRoomProps {
   observerCard: Card | null;
   activePlayerId: string | null;
   previewUrl: string | null;
+  streamUrl: string | null;
   playAt: number | null;
   turnEndsAt: number | null;
   timelineLength: number;
@@ -879,6 +873,7 @@ export default function GameRoom({
   observerCard,
   activePlayerId,
   previewUrl,
+  streamUrl,
   playAt,
   turnEndsAt,
   lastFlip,
@@ -1206,6 +1201,7 @@ export default function GameRoom({
           )}
           <AudioPlayer
             previewUrl={previewUrl}
+            streamUrl={streamUrl}
             playAt={playAt}
             currentCard={currentCard}
             revealedCard={revealedCard}

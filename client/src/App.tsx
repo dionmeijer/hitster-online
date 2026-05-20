@@ -32,6 +32,7 @@ export default function App() {
       observerCard={game.observerCard}
       activePlayerId={game.activePlayerId}
       previewUrl={game.previewUrl}
+      streamUrl={game.streamUrl}
       playAt={game.playAt}
       turnEndsAt={game.turnEndsAt}
       timelineLength={game.timelineLength}

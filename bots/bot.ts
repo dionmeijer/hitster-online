@@ -143,6 +143,7 @@ export class Bot {
     this.socket.on('turn:started', async (data: {
       activePlayerId: string;
       previewUrl: string;
+      streamUrl: string | null;
       playAt: number;
       timelineLength: number;
     }) => {

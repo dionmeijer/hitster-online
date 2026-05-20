@@ -1720,6 +1720,11 @@ body {
   color: #9ca3af;
   font-variant-numeric: tabular-nums;
 }
+.track-preview-error {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: #fca5a5;
+}
 .track-preview-body {
   flex: 1;
   min-height: 0;
@@ -1848,6 +1853,10 @@ body {
   border-color: #1db954;
   background: #052e16;
   color: #86efac;
+}
+.track-preview-play-btn.is-loading {
+  opacity: 0.6;
+  cursor: wait;
 }
 .track-preview-audio-hidden {
   position: absolute;

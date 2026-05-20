@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback } from 'react';
 import type { Card } from '../../../shared/types';
-import { cardStreamUrl } from '../spotify';
+import { cardStreamUrl, fetchEmbedPreviewStream } from '../spotify';
 
 function formatGenres(genres?: string[]): string {
   if (!genres?.length) return '—';
@@ -17,8 +17,10 @@ interface TrackPreviewModalProps {
 
 export default function TrackPreviewModal({ cards, onClose }: TrackPreviewModalProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [playingId, setPlayingId] = useState<string | null>(null);
-  const [embedId, setEmbedId] = useState<string | null>(null);
+  const resolvedStreams = useRef(new Map<string, string>());
+  const [activeTrackId, setActiveTrackId] = useState<string | null>(null);
+  const [loadingTrackId, setLoadingTrackId] = useState<string | null>(null);
+  const [resolveError, setResolveError] = useState<string | null>(null);
   const hasGenres = cards.some((c) => c.genres && c.genres.length > 0);
 
   const stopPlayback = useCallback(() => {
@@ -28,37 +30,82 @@ export default function TrackPreviewModal({ cards, onClose }: TrackPreviewModalP
       audio.removeAttribute('src');
       audio.load();
     }
-    setPlayingId(null);
+    setActiveTrackId(null);
+    setLoadingTrackId(null);
   }, []);
 
-  const togglePlay = useCallback((card: Card) => {
-    const stream = cardStreamUrl(card);
-
-    if (!stream) {
-      stopPlayback();
-      setEmbedId((prev) => (prev === card.trackId ? null : card.trackId));
-      return;
-    }
-
-    setEmbedId(null);
+  const playStream = useCallback((trackId: string, stream: string) => {
     const audio = audioRef.current;
     if (!audio) return;
-
-    if (playingId === card.trackId) {
-      stopPlayback();
-      return;
-    }
-
-    stopPlayback();
     audio.src = stream;
     audio.load();
-    void audio.play()
-      .then(() => setPlayingId(card.trackId))
-      .catch(() => setPlayingId(null));
-  }, [playingId, stopPlayback]);
+    void audio
+      .play()
+      .then(() => {
+        setActiveTrackId(trackId);
+        setResolveError(null);
+      })
+      .catch(() => {
+        setActiveTrackId(null);
+        setResolveError('Playback blocked — try clicking play again.');
+      });
+  }, []);
+
+  const resolveStreamUrl = useCallback(async (card: Card): Promise<string | null> => {
+    const fromApi = cardStreamUrl(card);
+    if (fromApi) return fromApi;
+
+    const cached = resolvedStreams.current.get(card.trackId);
+    if (cached) return cached;
+
+    const fromEmbed = await fetchEmbedPreviewStream(card.trackId);
+    if (fromEmbed) {
+      resolvedStreams.current.set(card.trackId, fromEmbed);
+    }
+    return fromEmbed;
+  }, []);
+
+  const playCard = useCallback(
+    async (card: Card) => {
+      setResolveError(null);
+      setLoadingTrackId(card.trackId);
+
+      try {
+        const stream = await resolveStreamUrl(card);
+        if (!stream) {
+          setResolveError(`No preview available for “${card.title}”.`);
+          setActiveTrackId(null);
+          return;
+        }
+        playStream(card.trackId, stream);
+      } catch {
+        setResolveError(`Could not load preview for “${card.title}”.`);
+        setActiveTrackId(null);
+      } finally {
+        setLoadingTrackId(null);
+      }
+    },
+    [playStream, resolveStreamUrl],
+  );
+
+  const handleClose = useCallback(() => {
+    stopPlayback();
+    onClose();
+  }, [onClose, stopPlayback]);
+
+  const togglePlay = useCallback(
+    (card: Card) => {
+      if (activeTrackId === card.trackId && !loadingTrackId) {
+        stopPlayback();
+        return;
+      }
+      void playCard(card);
+    },
+    [activeTrackId, loadingTrackId, playCard, stopPlayback],
+  );
 
   return (
-    <div className="modal-overlay" onClick={onClose} data-testid="track-preview-modal">
+    <div className="modal-overlay" onClick={handleClose} data-testid="track-preview-modal">
       <div
         className={`modal-box track-preview-modal${hasGenres ? ' track-preview-modal--with-genre' : ''}`}
         onClick={(e) => e.stopPropagation()}
@@ -67,6 +114,11 @@ export default function TrackPreviewModal({ cards, onClose }: TrackPreviewModalP
           <span className="track-preview-heading">Track preview</span>
           <span className="track-preview-count">{cards.length} tracks</span>
         </div>
+        {resolveError && (
+          <p className="track-preview-error" role="alert">
+            {resolveError}
+          </p>
+        )}
         <div className="track-preview-body">
           <div className="track-preview-colhead" aria-hidden="true">
             <span className="track-preview-colhead-cell" />
@@ -78,69 +130,57 @@ export default function TrackPreviewModal({ cards, onClose }: TrackPreviewModalP
           </div>
           <div className="track-preview-list">
             {cards.map((card) => {
-              const isPlaying = playingId === card.trackId;
-              const isEmbedOpen = embedId === card.trackId;
-              const active = isPlaying || isEmbedOpen;
-              const playLabel = isPlaying
-                ? `Pause ${card.title}`
-                : isEmbedOpen
-                  ? `Close ${card.title} preview`
+              const isActive = activeTrackId === card.trackId;
+              const isLoading = loadingTrackId === card.trackId;
+              const playLabel = isLoading
+                ? `Loading ${card.title}`
+                : isActive
+                  ? `Pause ${card.title}`
                   : `Play ${card.title}`;
 
               return (
-                <div key={card.trackId}>
-                  <div className="track-preview-row">
-                    {card.albumArt ? (
-                      <img src={card.albumArt} alt="" className="track-preview-art" />
-                    ) : (
-                      <div className="track-preview-art track-preview-art--placeholder" aria-hidden />
-                    )}
-                    <span className="track-preview-year" title={String(card.releaseYear)}>
-                      {card.releaseYear}
-                    </span>
-                    <span className="track-preview-title" title={card.title}>
-                      {card.title}
-                    </span>
-                    <span className="track-preview-artist" title={card.artist}>
-                      {card.artist}
-                    </span>
-                    {hasGenres && (
-                      <span
-                        className="track-preview-genre-cell"
-                        title={formatGenres(card.genres)}
-                        data-testid="track-preview-genre-cell"
-                      >
-                        {formatGenres(card.genres)}
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      className={`track-preview-play-btn${active ? ' is-playing' : ''}`}
-                      onClick={() => togglePlay(card)}
-                      aria-label={playLabel}
-                    >
-                      {active ? '❚❚' : '▶'}
-                    </button>
-                  </div>
-                  {isEmbedOpen && (
-                    <iframe
-                      src={`https://open.spotify.com/embed/track/${card.trackId}?utm_source=generator&autoplay=1`}
-                      width="100%"
-                      height="80"
-                      frameBorder={0}
-                      allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                      loading="lazy"
-                      title={`Spotify preview: ${card.title}`}
-                      style={{ display: 'block', borderRadius: 8, marginTop: 4 }}
-                    />
+                <div key={card.trackId} className="track-preview-row">
+                  {card.albumArt ? (
+                    <img src={card.albumArt} alt="" className="track-preview-art" />
+                  ) : (
+                    <div className="track-preview-art track-preview-art--placeholder" aria-hidden />
                   )}
+                  <span className="track-preview-year" title={String(card.releaseYear)}>
+                    {card.releaseYear}
+                  </span>
+                  <span className="track-preview-title" title={card.title}>
+                    {card.title}
+                  </span>
+                  <span className="track-preview-artist" title={card.artist}>
+                    {card.artist}
+                  </span>
+                  {hasGenres && (
+                    <span
+                      className="track-preview-genre-cell"
+                      title={formatGenres(card.genres)}
+                      data-testid="track-preview-genre-cell"
+                    >
+                      {formatGenres(card.genres)}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    className={`track-preview-play-btn is-spotify${isActive ? ' is-playing' : ''}${isLoading ? ' is-loading' : ''}`}
+                    onClick={() => togglePlay(card)}
+                    disabled={isLoading}
+                    aria-label={playLabel}
+                    aria-pressed={isActive}
+                    data-testid={`track-preview-play-${card.trackId}`}
+                  >
+                    {isLoading ? '…' : isActive ? '❚❚' : '▶'}
+                  </button>
                 </div>
               );
             })}
           </div>
         </div>
         <div className="track-preview-footer">
-          <button type="button" className="track-preview-close-btn" onClick={onClose}>
+          <button type="button" className="track-preview-close-btn" onClick={handleClose}>
             Close
           </button>
         </div>

@@ -32,6 +32,11 @@ import type {
   Room,
 } from '../../shared/types';
 import { createSpotifyClient } from './spotify/client';
+import {
+  fetchEmbedPreviewUrl,
+  isSpotifyTrackPageUrl,
+  isValidSpotifyTrackId,
+} from './spotify/embedPreview';
 import { RoomStore } from './rooms/store';
 import * as engine from './game/engine';
 
@@ -102,6 +107,21 @@ app.get('/health', (_req, res) => {
 
 app.get('/rooms', (_req, res) => {
   res.json(store.getSummaries());
+});
+
+app.get('/api/spotify/tracks/:trackId/embed-preview', async (req, res) => {
+  const { trackId } = req.params;
+  if (!isValidSpotifyTrackId(trackId)) {
+    res.status(400).json({ error: 'Invalid Spotify track ID' });
+    return;
+  }
+  try {
+    const streamUrl = await fetchEmbedPreviewUrl(trackId);
+    res.json({ streamUrl } satisfies { streamUrl: string | null });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to resolve embed preview';
+    res.status(502).json({ error: message });
+  }
 });
 
 // Serve built React client if available, otherwise redirect to Vite dev server
@@ -181,7 +201,22 @@ function scheduleDisconnectSkip(roomCode: string, playerId: string): void {
   disconnectTimers.set(playerId, timer);
 }
 
-function startTurn(roomCode: string): void {
+async function resolveTurnStreamUrl(card: {
+  trackId: string;
+  previewUrl: string;
+  streamUrl?: string | null;
+}): Promise<string | null> {
+  if (card.streamUrl) return card.streamUrl;
+  if (!isSpotifyTrackPageUrl(card.previewUrl)) return card.previewUrl;
+  try {
+    return await fetchEmbedPreviewUrl(card.trackId);
+  } catch (err) {
+    console.warn(`[Spotify] embed preview failed for ${card.trackId}:`, err);
+    return null;
+  }
+}
+
+async function startTurn(roomCode: string): Promise<void> {
   const room = store.get(roomCode);
   if (!room?.activeRound) return;
 
@@ -203,7 +238,7 @@ function startTurn(roomCode: string): void {
     store.set(advanced);
     io.to(roomCode).emit('turn:auto-skipped', { playerId: activeId, reason: 'buy' });
     io.to(roomCode).emit('room:updated', advanced);
-    startTurn(roomCode);
+    await startTurn(roomCode);
     return;
   }
 
@@ -213,7 +248,10 @@ function startTurn(roomCode: string): void {
     return;
   }
 
-  const { card, hidden, remaining } = engine.drawCard(deck);
+  const { card, hidden: baseHidden, remaining } = engine.drawCard(deck);
+  const streamUrl = await resolveTurnStreamUrl(card);
+  const hidden = { ...baseHidden, streamUrl };
+
   liveDecks.set(roomCode, remaining);
   pendingCards.set(roomCode, card);
   pendingChallenges.set(roomCode, []);
@@ -243,6 +281,7 @@ function startTurn(roomCode: string): void {
     card: hidden,
     observerCard: card,
     previewUrl: hidden.previewUrl,
+    streamUrl,
     playAt: Date.now() + 600,
     timelineLength: timelineLen,
     turnEndsAt,

@@ -8,6 +8,7 @@ export interface GameState {
   observerCard: Card | null;
   activePlayerId: string | null;
   previewUrl: string | null;
+  streamUrl: string | null;
   playAt: number | null;
   turnEndsAt: number | null;
   timelineLength: number;
@@ -50,6 +51,7 @@ export function useGame(): GameState {
   const [observerCard, setObserverCard] = useState<Card | null>(null);
   const [activePlayerId, setActivePlayerId] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [playAt, setPlayAt] = useState<number | null>(null);
   const [turnEndsAt, setTurnEndsAt] = useState<number | null>(null);
   const [timelineLength, setTimelineLength] = useState(0);
@@ -93,6 +95,7 @@ export function useGame(): GameState {
       setObserverCard(null);
       setActivePlayerId(null);
       setPreviewUrl(null);
+      setStreamUrl(null);
       setPlayAt(null);
       setTurnEndsAt(null);
       setLastFlip(null);
@@ -103,11 +106,12 @@ export function useGame(): GameState {
       }
     });
 
-    socket.on('turn:started', ({ activePlayerId: pid, card, observerCard: obs, previewUrl: url, playAt: pa, timelineLength: tl, turnEndsAt: te }) => {
+    socket.on('turn:started', ({ activePlayerId: pid, card, observerCard: obs, previewUrl: url, streamUrl: su, playAt: pa, timelineLength: tl, turnEndsAt: te }) => {
       setActivePlayerId(pid);
       setCurrentCard(card);
       setObserverCard(obs);
       setPreviewUrl(url);
+      setStreamUrl(su ?? null);
       setPlayAt(pa);
       setTurnEndsAt(te);
       setTimelineLength(tl);
@@ -239,6 +243,7 @@ export function useGame(): GameState {
       setObserverCard(null);
       setActivePlayerId(null);
       setPreviewUrl(null);
+      setStreamUrl(null);
       setPlayAt(null);
       setTurnEndsAt(null);
     });
@@ -383,6 +388,7 @@ export function useGame(): GameState {
     lastChallenge,
     activePlayerId,
     previewUrl,
+    streamUrl,
     playAt,
     turnEndsAt,
     timelineLength,

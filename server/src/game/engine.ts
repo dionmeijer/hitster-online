@@ -304,6 +304,7 @@ export function drawCard(deck: Card[]): { card: Card; hidden: CardHidden; remain
     trackId: card.trackId,
     previewUrl: card.previewUrl,
     albumArt: card.albumArt,
+    streamUrl: card.streamUrl ?? null,
   };
   return { card, hidden, remaining };
 }

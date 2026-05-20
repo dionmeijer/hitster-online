@@ -43,7 +43,7 @@ export interface Card {
 }
 
 /** Hidden card — sent to clients when the turn starts. Year/title/artist hidden until flip. */
-export type CardHidden = Pick<Card, 'trackId' | 'previewUrl' | 'albumArt'>;
+export type CardHidden = Pick<Card, 'trackId' | 'previewUrl' | 'albumArt' | 'streamUrl'>;
 
 export interface Timeline {
   ownerId: string;   // playerId or teamId
@@ -144,6 +144,8 @@ export interface ServerToClientEvents {
     /** Full track for non-placing players (active player UI ignores this). */
     observerCard: Card;
     previewUrl: string;
+    /** 30s MP3 for in-browser playback (API preview_url and/or embed-resolved). */
+    streamUrl: string | null;
     playAt: number;        // Unix ms — start audio at exactly this time
     timelineLength: number; // number of cards already on the active player's timeline
     /** Unix ms — auto-skip if still in place phase */
@@ -237,4 +239,9 @@ export interface SocketAuth {
   sessionId: string;     // UUID, generated client-side
   displayName: string;   // shown to other players
   email?: string;        // never shared
+}
+
+/** GET /api/spotify/tracks/:trackId/embed-preview */
+export interface EmbedPreviewResponse {
+  streamUrl: string | null;
 }
