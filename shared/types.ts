@@ -9,13 +9,15 @@
 
 export type GameMode = 'original' | 'pro' | 'expert' | 'cooperative';
 export type RoomStatus = 'lobby' | 'round_active' | 'round_ended' | 'game_over';
-export type TurnPhase = 'reveal' | 'place' | 'challenge' | 'flip';
+export type TurnPhase = 'place' | 'challenge' | 'flip';
+export type TokenStrategy = 'hoard' | 'spend' | 'balanced';
 
 export interface Player {
   id: string;         // sessionId (UUID, generated client-side)
-  name: string;
-  teamId?: string;
+  displayName: string;
+  email?: string;     // never shared with other clients
   isConnected: boolean;
+  missedTurns: number;
 }
 
 export interface Team {
@@ -24,7 +26,7 @@ export interface Team {
   playerIds: string[];
 }
 
-/** Full card — includes year. Shown after flip, and on starting cards. */
+/** Full card — year revealed. Used after flip, on starting cards, and in timelines. */
 export interface Card {
   trackId: string;
   title: string;
@@ -34,37 +36,22 @@ export interface Card {
   albumArt: string;
 }
 
-/** Hidden card — sent to the placing player during REVEAL/PLACE phase. Year is omitted. */
-export type CardHidden = Omit<Card, 'releaseYear' | 'title' | 'artist'>;
-
-export interface Challenge {
-  challengerId: string;  // playerId or teamId
-  position: number;      // index in timeline they're challenging
-}
-
-export interface Turn {
-  activeId: string;      // playerId or teamId whose turn it is
-  phase: TurnPhase;
-  placedPosition?: number;
-  challengeDeadline?: number;  // Unix ms — when challenge window closes
-  challenges: Challenge[];
-}
+/** Hidden card — sent to clients when the turn starts. Year/title/artist hidden until flip. */
+export type CardHidden = Pick<Card, 'trackId' | 'previewUrl' | 'albumArt'>;
 
 export interface Timeline {
   ownerId: string;   // playerId or teamId
-  cards: Card[];     // in placement order (left to right = oldest to newest)
+  cards: Card[];     // chronological order: oldest (index 0) → newest
 }
 
 export interface RoundConfig {
-  playlistUrl?: string;       // Spotify playlist URL (optional — genre used if omitted)
-  genre?: string;             // e.g. "90s Pop"
+  playlistLabel?: string;     // Spotify playlist label / genre tag
   mode: GameMode;
-  tokensEnabled: boolean;
-  cardsToWin: number;
+  cardsToWin: number;         // default 10
 }
 
 export interface RoundSummary {
-  winnerId: string | null;    // playerId, teamId, or null (cooperative loss)
+  winnerId: string | null;    // playerId, teamId, or null (cooperative loss / deck empty tie)
   mode: GameMode;
   roundNumber: number;
 }
@@ -72,22 +59,53 @@ export interface RoundSummary {
 export interface Room {
   code: string;
   ownerId: string;
-  description: string;
+  topic: string;
   status: RoomStatus;
   players: Record<string, Player>;
   teams: Record<string, Team>;
   useTeams: boolean;
   roundHistory: RoundSummary[];
-  // Active round state (present only when status === 'round_active' | 'round_ended')
-  activeRound?: {
-    config: RoundConfig;
-    turnOrder: string[];         // ordered list of playerIds or teamIds
-    turnIndex: number;
-    timelines: Record<string, Timeline>;
-    tokens: Record<string, number>;
-    currentTurn?: Turn;
-    deckRemaining: number;       // how many cards are left
-  };
+  activeRound?: ActiveRound;
+}
+
+export interface ActiveRound {
+  config: RoundConfig;
+  roundNumber: number;
+  turnOrder: string[];              // ordered playerIds / teamIds
+  turnIndex: number;
+  timelines: Record<string, Timeline>;
+  tokens: Record<string, number>;
+  currentCard?: CardHidden;         // card in play this turn
+  currentTurn?: CurrentTurn;
+  deckRemaining: number;
+}
+
+export interface Challenge {
+  challengerId: string;
+}
+
+export interface CurrentTurn {
+  activeId: string;          // playerId / teamId whose turn it is
+  phase: TurnPhase;
+  placedPosition?: number;
+  challengeDeadline?: number; // Unix ms
+  challenges: Challenge[];
+}
+
+// ----------------------------
+// Room browser (lobby list)
+// ----------------------------
+
+export interface RoomSummary {
+  code: string;
+  topic: string;
+  status: RoomStatus;
+  playerCount: number;
+  genre?: string;
+  roundNumber?: number;
+  leaderName?: string;
+  leaderCards?: number;
+  cardsToWin?: number;
 }
 
 // ----------------------------
@@ -95,58 +113,81 @@ export interface Room {
 // ----------------------------
 
 export interface ServerToClientEvents {
-  /** Full room state — sent on join and after any state change */
+  /** Emitted to creator after room:create succeeds */
+  'room:created': (data: { roomCode: string; room: Room }) => void;
+
+  /** Emitted to joiner after room:join succeeds */
+  'room:joined': (data: { roomCode: string; room: Room }) => void;
+
+  /** Broadcast to all room members when room state changes */
   'room:updated': (room: Room) => void;
 
-  /** Turn starts — card hidden from placing player */
+  /** Broadcast when round is ready to start (starting cards dealt) */
+  'round:started': (data: { room: Room }) => void;
+
+  /** Broadcast at the start of each turn */
   'turn:started': (data: {
+    activePlayerId: string;
     card: CardHidden;
     previewUrl: string;
-    playAt: number;       // Unix ms — start audio at exactly this time
-    activeId: string;
+    playAt: number;        // Unix ms — start audio at exactly this time
+    timelineLength: number; // number of cards already on the active player's timeline
   }) => void;
 
-  /** Placing player confirmed their position */
-  'turn:placed': (data: { position: number }) => void;
+  /** Broadcast after active player places their card */
+  'turn:placed': (data: { position: number; activePlayerId: string }) => void;
 
-  /** A player challenged the placement */
-  'turn:challenged': (data: { challengerId: string; position: number }) => void;
+  /** Broadcast when a player challenges the placement */
+  'turn:challenged': (data: { challengerId: string }) => void;
 
-  /** Card flipped — result revealed */
+  /** Broadcast after challenge window closes — reveals card & result */
   'turn:flipped': (data: {
     card: Card;
     correct: boolean;
+    activePlayerId: string;
     updatedTimeline: Timeline;
     tokensUpdated: Record<string, number>;
   }) => void;
 
-  /** Round ended */
-  'round:ended': (summary: RoundSummary) => void;
+  /** Broadcast when a player correctly names the song (+1 token) */
+  'turn:named': (data: { playerId: string; tokensUpdated: Record<string, number> }) => void;
 
-  /** Error message */
+  /** Broadcast when the round ends */
+  'round:ended': (data: { winnerId: string | null; summary: RoundSummary }) => void;
+
+  /** Error — emitted only to the socket that caused it */
   'error': (message: string) => void;
 }
 
 export interface ClientToServerEvents {
-  'room:create': (
-    data: { playerName: string; description: string },
-    callback: (result: { room: Room } | { error: string }) => void
-  ) => void;
+  /** Create a new room. Player identity comes from socket.handshake.auth */
+  'room:create': (data: { topic: string }) => void;
 
-  'room:join': (
-    data: { playerName: string; code: string },
-    callback: (result: { room: Room } | { error: string }) => void
-  ) => void;
+  /** Join an existing room by code */
+  'room:join': (data: { roomCode: string }) => void;
 
-  'round:configure': (config: RoundConfig) => void;
-  'round:start': () => void;
+  /** Owner starts the round */
+  'round:start': (data: { playlistLabel?: string; mode: GameMode }) => void;
 
-  'team:create': (name: string, callback: (result: { teamId: string } | { error: string }) => void) => void;
-  'team:join': (teamId: string) => void;
-  'team:leave': () => void;
+  /** Active player places their card at position (0 = before all, n = after all) */
+  'turn:place': (data: { position: number }) => void;
 
-  'turn:place': (position: number) => void;
-  'turn:challenge': (position: number) => void;
-  'turn:skip': () => void;        // spend 1 token to skip current card
-  'turn:buy': () => void;         // spend 3 tokens to buy a card directly
+  /** Any non-active player challenges the current placement */
+  'turn:challenge': () => void;
+
+  /** Active player spends 1 token to skip their current card */
+  'turn:skip': () => void;
+
+  /** Active player attempts to name the song for +1 token */
+  'turn:name': (data: { title: string; artist: string }) => void;
+}
+
+// ----------------------------
+// Socket auth (handshake)
+// ----------------------------
+
+export interface SocketAuth {
+  sessionId: string;     // UUID, generated client-side
+  displayName: string;   // shown to other players
+  email?: string;        // never shared
 }

@@ -31,3 +31,9 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+.claude/
+
+# Compiled JS files in source dirs (from tsc --outDir leaks)
+client/src/**/*.js
+shared/*.js
+bots/src/**/*.js
