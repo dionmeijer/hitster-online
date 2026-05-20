@@ -184,6 +184,7 @@ function startTurn(roomCode: string): void {
   };
   store.set(updatedRoom);
 
+  io.to(roomCode).emit('room:updated', updatedRoom);
   io.to(roomCode).emit('turn:started', {
     activePlayerId: activeId,
     card: hidden,

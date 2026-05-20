@@ -335,12 +335,12 @@ test('disconnected player turn auto-advances after timeout', async ({ browser }:
     await fillEmailAndName(p1, 'host-dc@example.com', 'HostBot');
     const roomCode = await createRoom(p1, 'Disconnect Test');
 
-    // p2 joins
+    // p2 joins via the "Join by code" inline flow
     await fillEmailAndName(p2, 'joiner-dc@example.com', 'JoinerBot');
-    await p2.click('button:has-text("Join a room")');
-    await p2.waitForSelector('.modal-box');
-    await p2.fill('.modal-box input[type="text"]', roomCode);
-    await p2.click('.modal-box button:has-text("Join")');
+    await p2.click('button:has-text("Join by code")');
+    await p2.waitForSelector('.join-open');
+    await p2.fill('.join-open input[type="text"]', roomCode);
+    await p2.click('.btn-go');
     await expect(p2.locator('[data-testid="lobby-room-code"]')).toBeVisible({ timeout: 5_000 });
 
     await startRound(p1);
