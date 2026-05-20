@@ -16,6 +16,8 @@ export interface GameState {
   playlistPreviewCards: Card[] | null;
   playlistPreviewLoading: boolean;
   connect: (displayName: string, email: string) => void;
+  connectAndCreateRoom: (displayName: string, email: string, topic: string) => void;
+  connectAndJoinRoom: (displayName: string, email: string, roomCode: string) => void;
   createRoom: (topic: string) => void;
   joinRoom: (code: string) => void;
   startRound: (mode: GameMode, playlistLabel?: string, cardsToWin?: number, tokensEnabled?: boolean) => void;
@@ -108,8 +110,25 @@ export function useGame(): GameState {
       });
     });
 
-    socket.on('turn:placed', ({ activePlayerId: pid }) => {
+    socket.on('turn:placed', ({ activePlayerId: pid, position, challengeEndsAt }) => {
       setActivePlayerId(pid);
+      setRoom((prev) => {
+        if (!prev?.activeRound?.currentTurn) return prev;
+        return {
+          ...prev,
+          activeRound: {
+            ...prev.activeRound,
+            currentTurn: {
+              ...prev.activeRound.currentTurn,
+              activeId: pid,
+              phase: 'challenge' as const,
+              placedPosition: position,
+              challengeDeadline: challengeEndsAt,
+              challenges: prev.activeRound.currentTurn.challenges ?? [],
+            },
+          },
+        };
+      });
     });
 
     socket.on('turn:challenged', () => {
@@ -200,36 +219,55 @@ export function useGame(): GameState {
     };
   }, [sessionId]);
 
-  const connect = useCallback((displayName: string, email: string) => {
+  const applySocketAuth = useCallback((displayName: string, email: string) => {
     sessionStorage.setItem('hitster_display_name', displayName);
     sessionStorage.setItem('hitster_email', email);
-    // Update auth before connecting
     socket.auth = {
       ...(socket.auth as object),
       sessionId: sessionStorage.getItem('hitster_session_id') ?? '',
       displayName,
       email,
     };
-    if (!socket.connected) {
+  }, []);
+
+  const ensureConnected = useCallback((onConnected: () => void) => {
+    if (socket.connected) {
+      onConnected();
+      return;
+    }
+    socket.once('connect', onConnected);
+    if (!socket.active) {
       socket.connect();
     }
   }, []);
 
-  const createRoom = useCallback((topic: string) => {
-    if (socket.connected) {
-      socket.emit('room:create', { topic });
-    } else {
-      socket.once('connect', () => socket.emit('room:create', { topic }));
+  const connect = useCallback((displayName: string, email: string) => {
+    applySocketAuth(displayName, email);
+    if (!socket.connected && !socket.active) {
+      socket.connect();
     }
-  }, []);
+  }, [applySocketAuth]);
+
+  const connectAndCreateRoom = useCallback((displayName: string, email: string, topic: string) => {
+    applySocketAuth(displayName, email);
+    const trimmed = topic.trim();
+    ensureConnected(() => socket.emit('room:create', { topic: trimmed }));
+  }, [applySocketAuth, ensureConnected]);
+
+  const connectAndJoinRoom = useCallback((displayName: string, email: string, roomCode: string) => {
+    applySocketAuth(displayName, email);
+    const code = roomCode.trim().toUpperCase();
+    ensureConnected(() => socket.emit('room:join', { roomCode: code }));
+  }, [applySocketAuth, ensureConnected]);
+
+  const createRoom = useCallback((topic: string) => {
+    ensureConnected(() => socket.emit('room:create', { topic }));
+  }, [ensureConnected]);
 
   const joinRoom = useCallback((code: string) => {
-    if (socket.connected) {
-      socket.emit('room:join', { roomCode: code });
-    } else {
-      socket.once('connect', () => socket.emit('room:join', { roomCode: code }));
-    }
-  }, []);
+    const roomCode = code.trim().toUpperCase();
+    ensureConnected(() => socket.emit('room:join', { roomCode }));
+  }, [ensureConnected]);
 
   const startRound = useCallback((mode: GameMode, playlistLabel?: string, cardsToWin?: number, tokensEnabled?: boolean) => {
     socket.emit('round:start', { mode, playlistLabel, cardsToWin, tokensEnabled });
@@ -300,6 +338,8 @@ export function useGame(): GameState {
     playlistPreviewCards,
     playlistPreviewLoading,
     connect,
+    connectAndCreateRoom,
+    connectAndJoinRoom,
     createRoom,
     joinRoom,
     startRound,

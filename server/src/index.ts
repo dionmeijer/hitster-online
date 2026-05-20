@@ -19,6 +19,7 @@ for (const envPath of [
     break;
   }
 }
+import { CHALLENGE_WINDOW_MS as DEFAULT_CHALLENGE_WINDOW_MS } from '../../shared/constants';
 import type {
   ServerToClientEvents,
   ClientToServerEvents,
@@ -52,7 +53,8 @@ const store = new RoomStore();
 const spotify = createSpotifyClient();
 
 // In TEST_MODE the challenge window is much shorter to keep tests fast
-const CHALLENGE_WINDOW_MS = process.env.TEST_MODE === 'true' ? 500 : 10_000;
+const CHALLENGE_WINDOW_MS =
+  process.env.TEST_MODE === 'true' ? 500 : DEFAULT_CHALLENGE_WINDOW_MS;
 
 // socketId → { sessionId, roomCode }
 const socketSession = new Map<string, { sessionId: string; roomCode: string }>();
@@ -405,10 +407,15 @@ io.on('connection', (socket) => {
     if (!engine.isActiveParticipant(room, sessionId)) { socket.emit('error', 'Not your turn'); return; }
 
     try {
-      const placedRoom = engine.applyPlacement(room, sessionId, data.position);
+      const challengeEndsAt = Date.now() + CHALLENGE_WINDOW_MS;
+      const placedRoom = engine.applyPlacement(room, sessionId, data.position, CHALLENGE_WINDOW_MS);
       store.set(placedRoom);
 
-      io.to(session.roomCode).emit('turn:placed', { position: data.position, activePlayerId: sessionId });
+      io.to(session.roomCode).emit('turn:placed', {
+        position: data.position,
+        activePlayerId: sessionId,
+        challengeEndsAt,
+      });
       io.to(session.roomCode).emit('room:updated', placedRoom);
 
       clearChallengeTimer(session.roomCode);
@@ -630,10 +637,12 @@ io.on('connection', (socket) => {
       pendingDeletes.set(session.roomCode, t);
     }
 
-    // If it was this player's turn during an active round, schedule auto-skip
+    // Auto-skip only while they must listen and place — not during the challenge window
+    const currentTurn = updatedRoom.activeRound?.currentTurn;
     if (
       updatedRoom.status === 'round_active' &&
-      updatedRoom.activeRound?.turnOrder[updatedRoom.activeRound.turnIndex] === sessionId
+      updatedRoom.activeRound?.turnOrder[updatedRoom.activeRound.turnIndex] === sessionId &&
+      currentTurn?.phase === 'place'
     ) {
       scheduleDisconnectSkip(session.roomCode, sessionId);
     }

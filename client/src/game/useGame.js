@@ -69,8 +69,26 @@ export function useGame() {
                 };
             });
         });
-        socket.on('turn:placed', ({ activePlayerId: pid }) => {
+        socket.on('turn:placed', ({ activePlayerId: pid, position, challengeEndsAt }) => {
             setActivePlayerId(pid);
+            setRoom((prev) => {
+                if (!prev?.activeRound?.currentTurn)
+                    return prev;
+                return {
+                    ...prev,
+                    activeRound: {
+                        ...prev.activeRound,
+                        currentTurn: {
+                            ...prev.activeRound.currentTurn,
+                            activeId: pid,
+                            phase: 'challenge',
+                            placedPosition: position,
+                            challengeDeadline: challengeEndsAt,
+                            challenges: prev.activeRound.currentTurn.challenges ?? [],
+                        },
+                    },
+                };
+            });
         });
         socket.on('turn:challenged', () => {
             // challenge acknowledged — state updates come via turn:flipped
@@ -155,36 +173,49 @@ export function useGame() {
             socket.off('error');
         };
     }, [sessionId]);
-    const connect = useCallback((displayName, email) => {
+    const applySocketAuth = useCallback((displayName, email) => {
         sessionStorage.setItem('hitster_display_name', displayName);
         sessionStorage.setItem('hitster_email', email);
-        // Update auth before connecting
         socket.auth = {
             ...socket.auth,
             sessionId: sessionStorage.getItem('hitster_session_id') ?? '',
             displayName,
             email,
         };
-        if (!socket.connected) {
+    }, []);
+    const ensureConnected = useCallback((onConnected) => {
+        if (socket.connected) {
+            onConnected();
+            return;
+        }
+        socket.once('connect', onConnected);
+        if (!socket.active) {
             socket.connect();
         }
     }, []);
+    const connect = useCallback((displayName, email) => {
+        applySocketAuth(displayName, email);
+        if (!socket.connected && !socket.active) {
+            socket.connect();
+        }
+    }, [applySocketAuth]);
+    const connectAndCreateRoom = useCallback((displayName, email, topic) => {
+        applySocketAuth(displayName, email);
+        const trimmed = topic.trim();
+        ensureConnected(() => socket.emit('room:create', { topic: trimmed }));
+    }, [applySocketAuth, ensureConnected]);
+    const connectAndJoinRoom = useCallback((displayName, email, roomCode) => {
+        applySocketAuth(displayName, email);
+        const code = roomCode.trim().toUpperCase();
+        ensureConnected(() => socket.emit('room:join', { roomCode: code }));
+    }, [applySocketAuth, ensureConnected]);
     const createRoom = useCallback((topic) => {
-        if (socket.connected) {
-            socket.emit('room:create', { topic });
-        }
-        else {
-            socket.once('connect', () => socket.emit('room:create', { topic }));
-        }
-    }, []);
+        ensureConnected(() => socket.emit('room:create', { topic }));
+    }, [ensureConnected]);
     const joinRoom = useCallback((code) => {
-        if (socket.connected) {
-            socket.emit('room:join', { roomCode: code });
-        }
-        else {
-            socket.once('connect', () => socket.emit('room:join', { roomCode: code }));
-        }
-    }, []);
+        const roomCode = code.trim().toUpperCase();
+        ensureConnected(() => socket.emit('room:join', { roomCode }));
+    }, [ensureConnected]);
     const startRound = useCallback((mode, playlistLabel, cardsToWin, tokensEnabled) => {
         socket.emit('round:start', { mode, playlistLabel, cardsToWin, tokensEnabled });
     }, []);
@@ -241,6 +272,8 @@ export function useGame() {
         playlistPreviewCards,
         playlistPreviewLoading,
         connect,
+        connectAndCreateRoom,
+        connectAndJoinRoom,
         createRoom,
         joinRoom,
         startRound,

@@ -145,7 +145,11 @@ export interface ServerToClientEvents {
   }) => void;
 
   /** Broadcast after active player places their card */
-  'turn:placed': (data: { position: number; activePlayerId: string }) => void;
+  'turn:placed': (data: {
+    position: number;
+    activePlayerId: string;
+    challengeEndsAt: number; // Unix ms — same instant as server challenge timer
+  }) => void;
 
   /** Broadcast when a player challenges the placement */
   'turn:challenged': (data: { challengerId: string }) => void;

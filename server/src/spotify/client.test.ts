@@ -23,6 +23,7 @@ function makeTrack(
     name: string;
     artists: { name: string }[];
     preview_url: string | null;
+    popularity: number;
     external_urls: { spotify: string };
     release_date: string;
     images: { url: string; width: number; height: number }[];
@@ -34,6 +35,7 @@ function makeTrack(
     name: overrides.name ?? 'Song Title',
     artists: overrides.artists ?? [{ name: 'Artist' }],
     preview_url: overrides.preview_url !== undefined ? overrides.preview_url : 'https://p.scdn.co/preview.mp3',
+    popularity: overrides.popularity ?? 80,
     external_urls: overrides.external_urls ?? { spotify: `https://open.spotify.com/track/${id}` },
     album: {
       images: overrides.images ?? [{ url: 'https://img.example.com/art.jpg', width: 640, height: 640 }],
@@ -257,28 +259,30 @@ describe('SpotifyClient', () => {
 
   // ── getGenreTracks ──────────────────────────────────────────────────────────
 
-  describe('getGenreTracks', () => {
-    it('returns cards matching the genre', async () => {
+  describe('getRecommendationsForGenre', () => {
+    it('returns cards from the recommendations endpoint', async () => {
       mockFetch
         .mockResolvedValueOnce(tokenOk())
-        .mockResolvedValueOnce(
-          apiOk({ tracks: { items: [makeTrack({ id: 'g1' })], next: null } }),
-        );
+        .mockResolvedValueOnce(apiOk({ tracks: [makeTrack({ id: 'g1' })] }));
 
-      const cards = await client.getGenreTracks('pop');
+      const cards = await client.getRecommendationsForGenre('pop');
       expect(cards).toHaveLength(1);
       expect(cards[0].trackId).toBe('g1');
     });
 
-    it('URL-encodes the genre in the search query', async () => {
+    it('calls recommendations with seed_genres and min_popularity', async () => {
       mockFetch
         .mockResolvedValueOnce(tokenOk())
-        .mockResolvedValueOnce(apiOk({ tracks: { items: [], next: null } }));
+        .mockResolvedValueOnce(apiOk({ tracks: [] }));
 
-      await client.getGenreTracks('90s pop');
+      await client.getRecommendationsForGenre("90's Rock");
 
       const [url] = mockFetch.mock.calls[1] as [string];
-      expect(url).toContain('genre%3A90s%20pop');
+      expect(url).toContain('/recommendations?');
+      expect(url).toContain('seed_genres=rock');
+      expect(url).toContain('min_popularity=70');
+      expect(url).toContain('market=US');
+      expect(url).toContain('limit=100');
     });
 
     it('uses Spotify play URL instead of preview_url MP3', async () => {
@@ -286,58 +290,70 @@ describe('SpotifyClient', () => {
         .mockResolvedValueOnce(tokenOk())
         .mockResolvedValueOnce(
           apiOk({
+            tracks: [
+              makeTrack({ id: 'g1', preview_url: null }),
+              makeTrack({ id: 'g2', preview_url: 'https://p.scdn.co/g2.mp3' }),
+            ],
+          }),
+        );
+
+      const cards = await client.getRecommendationsForGenre('rock');
+      expect(cards).toHaveLength(2);
+      expect(cards[0].previewUrl).toBe('https://open.spotify.com/track/g1');
+      expect(cards[1].previewUrl).toBe('https://open.spotify.com/track/g2');
+    });
+  });
+
+  describe('getGenreTracks', () => {
+
+    it('caps recommendations at 100 tracks per request', async () => {
+      const tracks = Array.from({ length: 100 }, (_, i) => makeTrack({ id: `g${i}` }));
+      mockFetch
+        .mockResolvedValueOnce(tokenOk())
+        .mockResolvedValueOnce(apiOk({ tracks }));
+
+      const cards = await client.getGenreTracks('jazz', 200);
+      expect(cards).toHaveLength(100);
+      const [url] = mockFetch.mock.calls[1] as [string];
+      expect(url).toContain('limit=100');
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('falls back to popularity-ranked search when recommendations return 404', async () => {
+      const popular = Array.from({ length: 12 }, (_, i) =>
+        makeTrack({ id: `hit${i}`, popularity: 90 - i }),
+      );
+      mockFetch
+        .mockResolvedValueOnce(tokenOk())
+        .mockResolvedValueOnce(apiFail(404))
+        .mockResolvedValueOnce(
+          apiOk({
             tracks: {
-              items: [
-                makeTrack({ id: 'g1', preview_url: null }),
-                makeTrack({ id: 'g2', preview_url: 'https://p.scdn.co/g2.mp3' }),
-              ],
+              items: [makeTrack({ id: 'low', popularity: 40 }), ...popular],
               next: null,
             },
           }),
         );
 
       const cards = await client.getGenreTracks('rock');
-      expect(cards).toHaveLength(2);
-      expect(cards[0].previewUrl).toBe('https://open.spotify.com/track/g1');
-      expect(cards[1].previewUrl).toBe('https://open.spotify.com/track/g2');
+      expect(cards.length).toBeGreaterThanOrEqual(10);
+      expect(cards[0].trackId).toBe('hit0');
+      expect(cards.find((c) => c.trackId === 'low')).toBeUndefined();
+
+      const [recUrl, searchUrl] = [mockFetch.mock.calls[1], mockFetch.mock.calls[2]].map(
+        (c) => c[0] as string,
+      );
+      expect(recUrl).toContain('/recommendations?');
+      expect(searchUrl).toContain('/search?');
+      expect(searchUrl).toContain('genre%3Arock');
     });
+  });
 
-    it('paginates genre results across pages', async () => {
-      const page1 = Array.from({ length: 50 }, (_, i) => makeTrack({ id: `g${i}` }));
-      const page2 = Array.from({ length: 10 }, (_, i) => makeTrack({ id: `g${i + 50}` }));
-
-      mockFetch
-        .mockResolvedValueOnce(tokenOk())
-        .mockResolvedValueOnce(
-          apiOk({
-            tracks: { items: page1, next: 'https://api.spotify.com/v1/search?offset=50' },
-          }),
-        )
-        .mockResolvedValueOnce(apiOk({ tracks: { items: page2, next: null } }));
-
-      const cards = await client.getGenreTracks('jazz', 100);
-      expect(cards).toHaveLength(60);
-    });
-
-    it('stops when next is null', async () => {
-      mockFetch
-        .mockResolvedValueOnce(tokenOk())
-        .mockResolvedValueOnce(apiOk({ tracks: { items: [makeTrack()], next: null } }));
-
-      await client.getGenreTracks('blues');
-      expect(mockFetch).toHaveBeenCalledTimes(2); // token + one page
-    });
-
-    it('stops when the page is empty', async () => {
-      mockFetch
-        .mockResolvedValueOnce(tokenOk())
-        .mockResolvedValueOnce(
-          apiOk({ tracks: { items: [], next: 'https://api.spotify.com/v1/search?offset=50' } }),
-        );
-
-      const cards = await client.getGenreTracks('jazz');
-      expect(cards).toHaveLength(0);
-      expect(mockFetch).toHaveBeenCalledTimes(2);
+  describe('resolveSeedGenres', () => {
+    it('maps friendly labels to Spotify seed genres', () => {
+      expect(client.resolveSeedGenres("90's Rock")).toEqual(['rock']);
+      expect(client.resolveSeedGenres('Hip Hop')).toEqual(['hip-hop']);
+      expect(client.resolveSeedGenres('EDM')).toEqual(['electronic', 'dance']);
     });
   });
 

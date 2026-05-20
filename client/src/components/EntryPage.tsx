@@ -2,9 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Room, RoomSummary } from '../../../shared/types';
 
 interface EntryPageProps {
-  onConnect: (displayName: string, email: string) => void;
-  onCreateRoom: (topic: string) => void;
-  onJoinRoom: (code: string) => void;
+  onConnectAndCreateRoom: (displayName: string, email: string, topic: string) => void;
+  onConnectAndJoinRoom: (displayName: string, email: string, roomCode: string) => void;
   serverUrl?: string;
   serverError?: string | null;
   roomJoined?: Room | null;
@@ -38,22 +37,25 @@ function statusBadgeText(status: string): string {
 }
 
 function isRoomJoinable(status: string): boolean {
-  return status === 'lobby';
+  return status === 'lobby' || status === 'round_ended' || status === 'round_active';
 }
 
-export default function EntryPage({ onConnect, onCreateRoom, onJoinRoom, serverUrl, serverError, roomJoined }: EntryPageProps) {
+export default function EntryPage({
+  onConnectAndCreateRoom,
+  onConnectAndJoinRoom,
+  serverUrl,
+  serverError,
+  roomJoined,
+}: EntryPageProps) {
   const [email, setEmail] = useState(() => sessionStorage.getItem('hitster_email') ?? '');
   const [emailDirty, setEmailDirty] = useState(() => !!sessionStorage.getItem('hitster_email'));
   const [emailError, setEmailError] = useState(false);
   const [displayName, setDisplayName] = useState(() => sessionStorage.getItem('hitster_display_name') ?? '');
-  const [joinOpen, setJoinOpen] = useState(false);
-  const [code, setCode] = useState('');
   const [joinTopic, setJoinTopic] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [roomsLoading, setRoomsLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
-  const codeInputRef = useRef<HTMLInputElement>(null);
   const topicInputRef = useRef<HTMLInputElement>(null);
 
   // Clear connecting spinner when room is joined or an error arrives
@@ -102,45 +104,29 @@ export default function EntryPage({ onConnect, onCreateRoom, onJoinRoom, serverU
     setEmailDirty(true);
   }
 
-  function openJoin() {
-    setJoinOpen(true);
-    setTimeout(() => codeInputRef.current?.focus(), 50);
-  }
-
-  function closeJoin() {
-    setJoinOpen(false);
-    setCode('');
-  }
-
-  function handleCodeInput(v: string) {
-    setCode(v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4));
-  }
-
   function handleCreateClick() {
     if (!emailValid) return;
     setShowCreateModal(true);
     setTimeout(() => topicInputRef.current?.focus(), 50);
   }
 
-  function handleJoinSubmit() {
-    if (code.length !== 4 || !emailValid) return;
+  function handleJoinRoom(roomCode: string) {
+    if (!emailValid) {
+      setEmailError(true);
+      setEmailDirty(true);
+      return;
+    }
+    if (connecting) return;
     setConnecting(true);
-    onConnect(resolvedName || email, email);
-    onJoinRoom(code);
+    onConnectAndJoinRoom(resolvedName || email, email, roomCode);
   }
 
   function handleCreateSubmit() {
     if (!emailValid || !joinTopic.trim()) return;
     setConnecting(true);
-    onConnect(resolvedName || email, email);
-    onCreateRoom(joinTopic.trim());
+    onConnectAndCreateRoom(resolvedName || email, email, joinTopic.trim());
     setShowCreateModal(false);
     setJoinTopic('');
-  }
-
-  function prefillCode(roomCode: string) {
-    openJoin();
-    setCode(roomCode);
   }
 
   const openRoomCount = rooms.filter(r => r.status !== 'game_over').length;
@@ -241,41 +227,6 @@ export default function EntryPage({ onConnect, onCreateRoom, onJoinRoom, serverU
             </div>
           )}
 
-          {/* Join section */}
-          {!joinOpen ? (
-            <button
-              className="btn btn-join"
-              disabled={!emailValid || connecting}
-              onClick={openJoin}
-            >
-              → Join a room
-            </button>
-          ) : (
-            <div className="join-open">
-              <div className="join-row">
-                <input
-                  ref={codeInputRef}
-                  className="form-input code-input"
-                  type="text"
-                  placeholder="XXXX"
-                  maxLength={4}
-                  value={code}
-                  onChange={e => handleCodeInput(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleJoinSubmit()}
-                />
-                <button
-                  className="btn-go"
-                  onClick={handleJoinSubmit}
-                  disabled={code.length !== 4 || !emailValid || connecting}
-                >
-                  {connecting ? '…' : 'Join'}
-                </button>
-              </div>
-              <button className="btn-cancel" onClick={closeJoin}>
-                ← Back
-              </button>
-            </div>
-          )}
         </div>
 
         {/* RIGHT: Room Browser */}
@@ -298,8 +249,29 @@ export default function EntryPage({ onConnect, onCreateRoom, onJoinRoom, serverU
             <div
               key={room.code}
               className={`room-card${room.status === 'lobby' ? ' lobby' : ''}${room.status === 'game_over' ? ' over' : ''}`}
-              onClick={() => isRoomJoinable(room.status) ? prefillCode(room.code) : undefined}
+              data-testid={isRoomJoinable(room.status) ? 'room-card-joinable' : undefined}
+              role={isRoomJoinable(room.status) ? 'button' : undefined}
+              tabIndex={isRoomJoinable(room.status) ? 0 : undefined}
+              onClick={() => {
+                if (isRoomJoinable(room.status)) handleJoinRoom(room.code);
+              }}
+              onKeyDown={(e) => {
+                if (
+                  isRoomJoinable(room.status) &&
+                  (e.key === 'Enter' || e.key === ' ')
+                ) {
+                  e.preventDefault();
+                  handleJoinRoom(room.code);
+                }
+              }}
               style={{ cursor: isRoomJoinable(room.status) ? 'pointer' : 'default' }}
+              title={
+                isRoomJoinable(room.status)
+                  ? room.status === 'round_active'
+                    ? 'Click to spectate'
+                    : 'Click to join'
+                  : undefined
+              }
             >
               <div className="rc-top">
                 <div>
@@ -355,7 +327,9 @@ export default function EntryPage({ onConnect, onCreateRoom, onJoinRoom, serverU
               </div>
 
               {isRoomJoinable(room.status) && (
-                <div className="rc-join-hint">CLICK TO JOIN →</div>
+                <div className="rc-join-hint">
+                  {room.status === 'round_active' ? 'CLICK TO SPECTATE' : 'CLICK TO JOIN'}
+                </div>
               )}
             </div>
           ))}

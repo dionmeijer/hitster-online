@@ -28,10 +28,8 @@ async function createRoom(page: Page, topic: string): Promise<string> {
   await page.waitForSelector('.modal-box');
   await page.fill('.modal-box input[type="text"]', topic);
   await page.click('.modal-box button:has-text("Create")');
-  // Wait until we're in the lobby and the room code is visible
-  const codeEl = page.locator('[data-testid="lobby-room-code"]');
-  await expect(codeEl).toBeVisible({ timeout: 8_000 });
-  return (await codeEl.textContent()) ?? '';
+  await expect(page.locator('[data-testid="lobby-screen"]')).toBeVisible({ timeout: 8_000 });
+  return topic;
 }
 
 async function startRound(page: Page, playlistLabel?: string) {
@@ -46,6 +44,14 @@ async function waitForRooms(page: Page, timeout = 6_000): Promise<void> {
   await expect(page.locator('.room-card').first()).toBeVisible({ timeout });
 }
 
+async function joinRoomByClick(page: Page, roomTopic: string): Promise<void> {
+  await waitForRooms(page);
+  const card = page.locator('[data-testid="room-card-joinable"]', { hasText: roomTopic });
+  await expect(card).toBeVisible();
+  await card.click();
+  await expect(page.locator('[data-testid="lobby-screen"]')).toBeVisible({ timeout: 8_000 });
+}
+
 // ---------------------------------------------------------------------------
 // 1. Email and name persist when returning to the lobby
 // ---------------------------------------------------------------------------
@@ -55,7 +61,7 @@ test('email and name persist after leaving a room', async ({ page }) => {
   await createRoom(page, 'Persistence Test');
 
   // Verify we're in the room lobby
-  await expect(page.locator('[data-testid="lobby-room-code"]')).toBeVisible();
+  await expect(page.locator('[data-testid="lobby-screen"]')).toBeVisible();
 
   // Leave the room
   await page.click('[data-testid="leave-btn"]');
@@ -214,7 +220,7 @@ test('start round button transitions lobby to active game', async ({ page }) => 
   await createRoom(page, 'Start Button Test');
 
   // Verify we are in the lobby
-  await expect(page.locator('[data-testid="lobby-room-code"]')).toBeVisible();
+  await expect(page.locator('[data-testid="lobby-screen"]')).toBeVisible();
 
   // Click Start Round
   await page.click('[data-testid="start-round-btn"]');
@@ -335,13 +341,9 @@ test('disconnected player turn auto-advances after timeout', async ({ browser }:
     await fillEmailAndName(p1, 'host-dc@example.com', 'HostBot');
     const roomCode = await createRoom(p1, 'Disconnect Test');
 
-    // p2 joins — join uses an inline form, not a modal
+    // p2 joins by double-clicking the room in the lobby list
     await fillEmailAndName(p2, 'joiner-dc@example.com', 'JoinerBot');
-    await p2.click('button:has-text("Join a room")');
-    await p2.waitForSelector('input[placeholder="XXXX"]');
-    await p2.fill('input[placeholder="XXXX"]', roomCode);
-    await p2.click('button.btn-go');
-    await expect(p2.locator('[data-testid="lobby-room-code"]')).toBeVisible({ timeout: 5_000 });
+    await joinRoomByClick(p2, roomCode);
 
     await startRound(p1);
 
@@ -383,7 +385,7 @@ test('disconnected player turn auto-advances after timeout', async ({ browser }:
 test('mode selector shows all modes and can be changed', async ({ page }) => {
   await fillEmailAndName(page, 'mode-host@example.com', 'ModeHost');
   await createRoom(page, 'Mode Test');
-  await expect(page.locator('[data-testid="lobby-room-code"]')).toBeVisible({ timeout: 8_000 });
+  await expect(page.locator('[data-testid="lobby-screen"]')).toBeVisible({ timeout: 8_000 });
 
   // Mode selector should be visible to the room owner
   await expect(page.locator('[data-testid="mode-selector"]')).toBeVisible();

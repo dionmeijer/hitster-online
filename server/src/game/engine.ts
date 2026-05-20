@@ -1,3 +1,4 @@
+import { CHALLENGE_WINDOW_MS } from '../../../shared/constants';
 import type {
   Room,
   Player,
@@ -325,7 +326,12 @@ export function isPlacementCorrect(timeline: Card[], card: Card, position: numbe
 }
 
 /** Apply a placement: update room's currentTurn phase to 'challenge' */
-export function applyPlacement(room: Room, playerId: string, position: number): Room {
+export function applyPlacement(
+  room: Room,
+  playerId: string,
+  position: number,
+  challengeWindowMs: number = CHALLENGE_WINDOW_MS,
+): Room {
   if (!room.activeRound) throw new Error('No active round');
   const currentTurn = room.activeRound.currentTurn;
   if (!currentTurn) throw new Error('No current turn');
@@ -339,7 +345,7 @@ export function applyPlacement(room: Room, playerId: string, position: number): 
         ...currentTurn,
         phase: 'challenge',
         placedPosition: position,
-        challengeDeadline: Date.now() + 10_000,
+        challengeDeadline: Date.now() + challengeWindowMs,
       },
     },
   };

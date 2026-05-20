@@ -17,9 +17,8 @@ export default function App() {
     return (
       <EntryPage
         serverUrl={serverUrl}
-        onConnect={game.connect}
-        onCreateRoom={game.createRoom}
-        onJoinRoom={game.joinRoom}
+        onConnectAndCreateRoom={game.connectAndCreateRoom}
+        onConnectAndJoinRoom={game.connectAndJoinRoom}
         serverError={game.socketError}
         roomJoined={game.room}
       />

@@ -11,6 +11,7 @@ interface SpotifyTrack {
   name: string;
   artists: Array<{ name: string }>;
   preview_url: string | null;
+  popularity?: number;
   external_urls?: { spotify?: string };
   album: {
     images: Array<{ url: string; width: number; height: number }>;
@@ -31,9 +32,98 @@ interface SearchTracksPage {
   };
 }
 
+interface RecommendationsPage {
+  tracks: SpotifyTrack[];
+}
+
 const SPOTIFY_TOKEN_URL = 'https://accounts.spotify.com/api/token';
 const SPOTIFY_API_BASE = 'https://api.spotify.com/v1';
 const MIN_PLAYABLE_TRACKS = 6;
+const DEFAULT_MIN_POPULARITY = 70;
+const DEFAULT_MARKET = 'US';
+const MAX_RECOMMENDATIONS = 100;
+
+/** Spotify seed_genres values (subset + aliases). See GET /recommendations/available-genre-seeds */
+const SPOTIFY_SEED_GENRES = new Set([
+  'acoustic', 'afrobeat', 'alt-rock', 'alternative', 'ambient', 'anime', 'blues', 'bossanova',
+  'classical', 'club', 'country', 'dance', 'dancehall', 'deep-house', 'disco', 'drum-and-bass',
+  'dub', 'dubstep', 'electronic', 'folk', 'funk', 'garage', 'gospel', 'grunge', 'guitar',
+  'happy', 'heavy-metal', 'hip-hop', 'house', 'indie', 'indie-pop', 'jazz', 'k-pop', 'latin',
+  'metal', 'new-age', 'opera', 'party', 'piano', 'pop', 'punk', 'r-n-b', 'reggae', 'rock',
+  'salsa', 'samba', 'singer-songwriter', 'soul', 'spanish', 'study', 'summer', 'synth-pop',
+  'tango', 'techno', 'trance', 'trip-hop', 'turkish', 'world-music',
+]);
+
+/** Friendly playlist labels → up to 5 Spotify seed_genres */
+const GENRE_LABEL_SEEDS: Record<string, string[]> = {
+  '90s rock': ['rock'],
+  "90's rock": ['rock'],
+  '80s pop': ['pop'],
+  '70s disco': ['disco'],
+  '60s rock': ['rock'],
+  '2000s pop': ['pop'],
+  "2010's edm": ['electronic', 'dance'],
+  '2020s hits': ['pop'],
+  'y2k pop': ['pop'],
+  'classic rock': ['rock'],
+  'hard rock': ['rock'],
+  'soft rock': ['rock'],
+  'alternative rock': ['alt-rock', 'rock'],
+  'indie rock': ['indie', 'rock'],
+  'grunge': ['grunge', 'rock'],
+  'punk rock': ['punk', 'rock'],
+  'pop punk': ['punk', 'pop'],
+  'emo': ['rock', 'punk'],
+  'metal': ['metal'],
+  'heavy metal': ['heavy-metal', 'metal'],
+  'pop': ['pop'],
+  'dance pop': ['pop', 'dance'],
+  'synth pop': ['synth-pop', 'pop'],
+  'new wave': ['synth-pop'],
+  'teen pop': ['pop'],
+  'k-pop': ['k-pop'],
+  'j-pop': ['anime', 'pop'],
+  'latin pop': ['latin', 'pop'],
+  'reggaeton': ['latin', 'dance'],
+  'salsa': ['salsa', 'latin'],
+  'bachata': ['latin'],
+  'afrobeats': ['afrobeat'],
+  'dancehall': ['dancehall'],
+  'hip hop': ['hip-hop'],
+  'rap': ['hip-hop'],
+  'old school hip hop': ['hip-hop'],
+  'trap': ['hip-hop'],
+  'r&b': ['r-n-b'],
+  'rnb': ['r-n-b'],
+  'soul': ['soul'],
+  'funk': ['funk'],
+  'disco': ['disco'],
+  'house': ['house'],
+  'techno': ['techno'],
+  'trance': ['trance'],
+  'drum and bass': ['drum-and-bass'],
+  'dubstep': ['dubstep'],
+  'edm': ['electronic', 'dance'],
+  'country': ['country'],
+  'modern country': ['country'],
+  'bluegrass': ['country', 'folk'],
+  'folk': ['folk'],
+  'americana': ['country', 'folk'],
+  'blues': ['blues'],
+  'jazz': ['jazz'],
+  'smooth jazz': ['jazz'],
+  'classical': ['classical'],
+  'soundtrack': ['ambient', 'classical'],
+  'movie soundtracks': ['ambient', 'classical'],
+  'reggae': ['reggae'],
+  'ska': ['ska'],
+  'britpop': ['indie', 'rock'],
+  'motown': ['soul', 'funk'],
+  'gospel': ['gospel'],
+  'christian': ['gospel'],
+  'rock': ['rock'],
+  '90s pop': ['pop'],
+};
 
 function shuffleArray<T>(arr: T[]): T[] {
   const copy = [...arr];
@@ -79,7 +169,25 @@ export class SpotifyClient {
     return this.accessToken;
   }
 
+  private minPopularity(): number {
+    const n = parseInt(process.env.SPOTIFY_MIN_POPULARITY ?? String(DEFAULT_MIN_POPULARITY), 10);
+    return Number.isNaN(n) ? DEFAULT_MIN_POPULARITY : n;
+  }
+
+  private spotifyMarket(): string {
+    return process.env.SPOTIFY_MARKET ?? DEFAULT_MARKET;
+  }
+
   private async apiGet<T>(path: string): Promise<T> {
+    const result = await this.tryApiGet<T>(path);
+    if (!result.ok) {
+      throw new Error(`Spotify API error ${result.status} for ${path}`);
+    }
+    return result.data;
+  }
+
+  /** Returns status on failure instead of throwing (for optional endpoints like /recommendations). */
+  private async tryApiGet<T>(path: string): Promise<{ ok: true; data: T } | { ok: false; status: number }> {
     const token = await this.ensureToken();
     const url = path.startsWith('http') ? path : `${SPOTIFY_API_BASE}${path}`;
     const res = await fetch(url, {
@@ -87,10 +195,10 @@ export class SpotifyClient {
     });
 
     if (!res.ok) {
-      throw new Error(`Spotify API error ${res.status} for ${path}`);
+      return { ok: false, status: res.status };
     }
 
-    return res.json() as Promise<T>;
+    return { ok: true, data: (await res.json()) as T };
   }
 
   private trackArtists(track: SpotifyTrack): string {
@@ -178,26 +286,133 @@ export class SpotifyClient {
     return cards;
   }
 
-  /** Search for tracks by genre keyword. */
-  async getGenreTracks(genre: string, limit = 100): Promise<Card[]> {
-    const cards: Card[] = [];
-    const q = encodeURIComponent(`genre:${genre}`);
-    let nextPath: string | null = `/search?q=${q}&type=track&limit=50&offset=0`;
+  /**
+   * Map a user-facing genre/theme label to Spotify recommendation seed_genres (max 5).
+   */
+  resolveSeedGenres(label: string): string[] {
+    const key = label.toLowerCase().trim();
+    if (GENRE_LABEL_SEEDS[key]) return GENRE_LABEL_SEEDS[key].slice(0, 5);
 
-    while (nextPath && cards.length < limit) {
-      const data: SearchTracksPage = await this.apiGet<SearchTracksPage>(nextPath);
-      const items: SpotifyTrack[] = data.tracks?.items ?? [];
+    const decadeStripped = key
+      .replace(/['']/g, '')
+      .replace(/^(19|20)\d{0,2}s?\s+/, '')
+      .trim();
+    if (GENRE_LABEL_SEEDS[decadeStripped]) return GENRE_LABEL_SEEDS[decadeStripped].slice(0, 5);
 
-      for (const track of items) {
-        const card = this.trackToCard(track);
-        if (card) cards.push(card);
-      }
+    const seeds: string[] = [];
+    const add = (g: string) => {
+      if (SPOTIFY_SEED_GENRES.has(g) && !seeds.includes(g)) seeds.push(g);
+    };
 
-      nextPath = items.length === 0 ? null : (data.tracks?.next ?? null);
+    if (decadeStripped.includes('hip hop') || decadeStripped.includes('hip-hop')) add('hip-hop');
+    if (decadeStripped.includes('r&b') || decadeStripped.includes('rnb')) add('r-n-b');
+    if (decadeStripped.includes('edm')) add('electronic');
+    if (decadeStripped.includes('k pop') || decadeStripped.includes('k-pop')) add('k-pop');
+
+    for (const token of decadeStripped.split(/[\s/,&+]+/).filter(Boolean)) {
+      const normalized = token.replace(/[^a-z0-9-]/g, '');
+      if (normalized === 'rnb') add('r-n-b');
+      else if (normalized === 'hiphop') add('hip-hop');
+      else add(normalized);
+      if (seeds.length >= 5) break;
     }
 
-    console.log(`[Spotify] genre "${genre}": ${cards.length} tracks included`);
+    if (seeds.length === 0) {
+      console.warn(`[Spotify] unknown genre label "${label}", defaulting seed_genres to pop`);
+      return ['pop'];
+    }
+    return seeds.slice(0, 5);
+  }
+
+  /**
+   * Popular tracks for a genre via GET /recommendations (seed_genres + min_popularity).
+   * Works with Client Credentials; optional market improves preview_url availability.
+   */
+  async getRecommendationsForGenre(genre: string, limit = 100): Promise<Card[]> {
+    if (process.env.SPOTIFY_USE_RECOMMENDATIONS === 'false') {
+      return [];
+    }
+
+    const seeds = this.resolveSeedGenres(genre);
+    const cappedLimit = Math.min(limit, MAX_RECOMMENDATIONS);
+    const params = new URLSearchParams({
+      seed_genres: seeds.join(','),
+      min_popularity: String(this.minPopularity()),
+      limit: String(cappedLimit),
+      market: this.spotifyMarket(),
+    });
+
+    const path = `/recommendations?${params.toString()}`;
+    const result = await this.tryApiGet<RecommendationsPage>(path);
+    if (!result.ok) {
+      if (result.status === 404 || result.status === 403) {
+        console.warn(
+          `[Spotify] GET /recommendations returned ${result.status} (unavailable for new/dev apps since 2024-11); using search by popularity`,
+        );
+        return [];
+      }
+      throw new Error(`Spotify API error ${result.status} for ${path}`);
+    }
+
+    const cards: Card[] = [];
+    for (const track of result.data.tracks ?? []) {
+      const card = this.trackToCard(track);
+      if (card) cards.push(card);
+    }
+
+    console.log(
+      `[Spotify] recommendations genre="${genre}" seeds=${seeds.join(',')} min_popularity=${params.get('min_popularity')}: ${cards.length} tracks included`,
+    );
     return cards;
+  }
+
+  /**
+   * Fallback when /recommendations is blocked: search genre:SEED, filter by popularity, sort desc.
+   */
+  async searchPopularGenreTracks(genre: string, limit = 100): Promise<Card[]> {
+    const seeds = this.resolveSeedGenres(genre);
+    const minPop = this.minPopularity();
+    const market = this.spotifyMarket();
+    const seen = new Set<string>();
+    const ranked: SpotifyTrack[] = [];
+
+    for (const seed of seeds) {
+      const q = encodeURIComponent(`genre:${seed}`);
+      let nextPath: string | null =
+        `/search?q=${q}&type=track&limit=50&market=${encodeURIComponent(market)}`;
+
+      for (let page = 0; page < 6 && nextPath && ranked.length < limit * 3; page++) {
+        const data: SearchTracksPage = await this.apiGet<SearchTracksPage>(nextPath);
+        const items: SpotifyTrack[] = data.tracks?.items ?? [];
+
+        for (const track of items) {
+          if (seen.has(track.id)) continue;
+          seen.add(track.id);
+          const pop = track.popularity ?? 0;
+          if (pop >= minPop) ranked.push(track);
+        }
+
+        nextPath = items.length === 0 ? null : (data.tracks?.next ?? null);
+      }
+    }
+
+    ranked.sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0));
+
+    const cards: Card[] = [];
+    for (const track of ranked.slice(0, limit)) {
+      const card = this.trackToCard(track);
+      if (card) cards.push(card);
+    }
+
+    console.log(
+      `[Spotify] search popular genre="${genre}" seeds=${seeds.join(',')} min_popularity=${minPop}: ${cards.length} tracks included`,
+    );
+    return cards;
+  }
+
+  /** Popular tracks for a genre/theme label (recommendations when allowed, else popularity-ranked search). */
+  async getGenreTracks(genre: string, limit = 100): Promise<Card[]> {
+    return this.getGenreTracksWithFallback(genre, limit);
   }
 
   /**
@@ -227,22 +442,25 @@ export class SpotifyClient {
     return shuffleArray(cards).slice(0, count);
   }
 
-  /** Strict genre:tag search with broad-keyword fallback when fewer than 10 results return. */
+  /** Recommendations when available; else popularity-ranked genre search; then keyword search. */
   private async getGenreTracksWithFallback(genre: string, limit = 50): Promise<Card[]> {
-    const strict = await this.getGenreTracks(genre, limit);
-    if (strict.length >= 10) return strict;
+    const fromRecs = await this.getRecommendationsForGenre(genre, limit);
+    if (fromRecs.length >= 10) return fromRecs;
 
-    const cards: Card[] = [];
+    const fromSearch = await this.searchPopularGenreTracks(genre, limit);
+    if (fromSearch.length >= 10) return fromSearch;
+
     const q = encodeURIComponent(genre);
     const data: SearchTracksPage = await this.apiGet<SearchTracksPage>(
       `/search?q=${q}&type=track&limit=50`,
     );
+    const cards: Card[] = [];
     for (const track of data.tracks?.items ?? []) {
       const card = this.trackToCard(track);
       if (card) cards.push(card);
     }
-    console.log(`[Spotify] genre fallback "${genre}": ${cards.length} tracks included`);
-    return cards;
+    console.log(`[Spotify] keyword fallback "${genre}": ${cards.length} tracks included`);
+    return cards.length > 0 ? cards : fromRecs;
   }
 
   private assertMinTracks(cards: Card[], label: string): void {

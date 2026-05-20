@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
+import { CHALLENGE_WINDOW_MS } from '../../../shared/constants';
 import type { Room, Card, CardHidden, GameMode } from '../../../shared/types';
 import TrackPreviewModal from './TrackPreviewModal';
 import { PlaylistAutocomplete } from './PlaylistAutocomplete';
@@ -397,7 +398,7 @@ interface ChallengeBarProps {
 }
 
 function ChallengeBar({ deadline, onChallenge, isActivePlayer }: ChallengeBarProps) {
-  const [seconds, setSeconds] = useState<number>(10);
+  const [seconds, setSeconds] = useState<number>(CHALLENGE_WINDOW_MS / 1000);
 
   useEffect(() => {
     if (!deadline) return;
@@ -587,7 +588,6 @@ function LobbyScreen({ room, sessionId, onStartRound, onCreateTeam, onJoinTeam, 
   const [tokensEnabled, setTokensEnabled] = useState(true);
   const [starting, setStarting] = useState(false);
   const [newTeamName, setNewTeamName] = useState('');
-  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (socketError) setStarting(false);
@@ -608,21 +608,9 @@ function LobbyScreen({ room, sessionId, onStartRound, onCreateTeam, onJoinTeam, 
     setNewTeamName('');
   }
 
-  function handleCopyLink() {
-    const url = `${window.location.origin}/?room=${room.code}`;
-    navigator.clipboard.writeText(url).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
-  }
-
   return (
-    <div className="lobby-screen">
-      <div className="lobby-code" data-testid="lobby-room-code">{room.code}</div>
-      <div className="lobby-code-label">Share this code to invite friends</div>
-      <button className="lobby-copy-link-btn" onClick={handleCopyLink}>
-        {copied ? '✓ Copied!' : '🔗 Copy invite link'}
-      </button>
+    <div className="lobby-screen" data-testid="lobby-screen">
+      <div className="lobby-topic">{room.topic}</div>
 
       <div className="lobby-player-list">
         {players.map(p => {
