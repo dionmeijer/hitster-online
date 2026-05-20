@@ -18,6 +18,7 @@ export interface Player {
   email?: string;     // never shared with other clients
   isConnected: boolean;
   missedTurns: number;
+  isSpectator?: boolean;
 }
 
 export interface Team {
@@ -201,6 +202,9 @@ export interface ClientToServerEvents {
 
   /** Leave your current team */
   'team:leave': () => void;
+
+  /** Room owner ends the game session permanently */
+  'room:end': () => void;
 }
 
 // ----------------------------

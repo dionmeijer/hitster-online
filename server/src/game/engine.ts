@@ -56,22 +56,18 @@ export function createRoom(ownerId: string, displayName: string, topic: string):
 
 /** Add a player to an existing room; returns updated Room or throws Error */
 export function addPlayer(room: Room, playerId: string, displayName: string): Room {
-  if (room.status !== 'lobby') {
-    throw new Error('Cannot join a room that has already started');
-  }
   if (room.players[playerId]) {
     // Re-joining (reconnect with same sessionId) — just mark connected
     return markReconnected(room, playerId);
   }
+  if (room.status === 'game_over') {
+    throw new Error('Cannot join a room that has ended');
+  }
   if (Object.keys(room.players).length >= 12) {
     throw new Error('Room is full (max 12 players)');
   }
-  const player: Player = {
-    id: playerId,
-    displayName,
-    isConnected: true,
-    missedTurns: 0,
-  };
+  const isSpectator = room.status === 'round_active';
+  const player: Player = { id: playerId, displayName, isConnected: true, missedTurns: 0, isSpectator };
   return {
     ...room,
     players: { ...room.players, [playerId]: player },
@@ -198,7 +194,13 @@ export function initRound(
   config: RoundConfig,
   deck: Card[]
 ): { room: Room; deck: Card[] } {
-  const playerIds = Object.keys(room.players);
+  const clearedRoom: Room = {
+    ...room,
+    players: Object.fromEntries(
+      Object.entries(room.players).map(([id, p]) => [id, { ...p, isSpectator: false }])
+    ),
+  };
+  const playerIds = Object.keys(clearedRoom.players);
   const remaining = [...deck];
 
   const timelines: Record<string, Timeline> = {};
@@ -221,10 +223,10 @@ export function initRound(
       cards: sharedCards.sort((a, b) => a.releaseYear - b.releaseYear),
     };
     tokens['cooperative'] = startTokens;
-  } else if (room.useTeams) {
+  } else if (clearedRoom.useTeams) {
     // Team mode: one timeline + token pool per team; turn order = teamIds
-    const activeTeamIds = Object.keys(room.teams).filter(
-      tid => room.teams[tid].playerIds.length > 0
+    const activeTeamIds = Object.keys(clearedRoom.teams).filter(
+      tid => clearedRoom.teams[tid].playerIds.length > 0
     );
     if (activeTeamIds.length < 2) throw new Error('Need at least 2 teams with players to start');
     for (const teamId of activeTeamIds) {
@@ -240,11 +242,11 @@ export function initRound(
     );
     return {
       room: {
-        ...room,
+        ...clearedRoom,
         status: 'round_active',
         activeRound: {
           config,
-          roundNumber: room.roundHistory.length + 1,
+          roundNumber: clearedRoom.roundHistory.length + 1,
           turnOrder: sortedTeamIds,
           turnIndex: 0,
           timelines,
@@ -270,10 +272,10 @@ export function initRound(
     (a, b) => startingCards[a].releaseYear - startingCards[b].releaseYear
   );
 
-  const roundNumber = room.roundHistory.length + 1;
+  const roundNumber = clearedRoom.roundHistory.length + 1;
 
   const updatedRoom: Room = {
-    ...room,
+    ...clearedRoom,
     status: 'round_active',
     activeRound: {
       config,
@@ -634,4 +636,9 @@ export function buildRoundSummary(
     mode: room.activeRound?.config.mode ?? 'original',
     roundNumber: room.roundHistory.length + 1,
   };
+}
+
+/** Room owner explicitly ends the game — locks the room from new joins. */
+export function endGame(room: Room): Room {
+  return { ...room, status: 'game_over' };
 }
