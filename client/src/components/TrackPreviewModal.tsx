@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback } from 'react';
 import type { Card } from '../../../shared/types';
-import { cardStreamUrl, isSpotifyTrackPageUrl } from '../spotify';
+import { cardStreamUrl } from '../spotify';
 
 interface TrackPreviewModalProps {
   cards: Card[];
@@ -10,6 +10,7 @@ interface TrackPreviewModalProps {
 export default function TrackPreviewModal({ cards, onClose }: TrackPreviewModalProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
+  const [embedId, setEmbedId] = useState<string | null>(null);
 
   const stopPlayback = useCallback(() => {
     const audio = audioRef.current;
@@ -21,18 +22,17 @@ export default function TrackPreviewModal({ cards, onClose }: TrackPreviewModalP
     setPlayingId(null);
   }, []);
 
-  const spotifyUrlFor = (card: Card) =>
-    isSpotifyTrackPageUrl(card.previewUrl)
-      ? card.previewUrl
-      : `https://open.spotify.com/track/${card.trackId}`;
-
   const togglePlay = useCallback((card: Card) => {
     const stream = cardStreamUrl(card);
+
     if (!stream) {
-      window.open(spotifyUrlFor(card), '_blank', 'noopener,noreferrer');
+      // No MP3 — toggle embedded Spotify player
+      stopPlayback();
+      setEmbedId(prev => (prev === card.trackId ? null : card.trackId));
       return;
     }
 
+    setEmbedId(null);
     const audio = audioRef.current;
     if (!audio) return;
 
@@ -66,37 +66,53 @@ export default function TrackPreviewModal({ cards, onClose }: TrackPreviewModalP
           </div>
           <div className="track-preview-list">
           {cards.map(card => {
-            const stream = cardStreamUrl(card);
             const isPlaying = playingId === card.trackId;
-            const playLabel = stream
-              ? (isPlaying ? `Pause ${card.title}` : `Play ${card.title}`)
-              : `Open ${card.title} in Spotify`;
+            const isEmbedOpen = embedId === card.trackId;
+            const active = isPlaying || isEmbedOpen;
+            const playLabel = isPlaying
+              ? `Pause ${card.title}`
+              : isEmbedOpen
+                ? `Close ${card.title} preview`
+                : `Play ${card.title}`;
 
             return (
-              <div key={card.trackId} className="track-preview-row">
-                {card.albumArt ? (
-                  <img src={card.albumArt} alt="" className="track-preview-art" />
-                ) : (
-                  <div className="track-preview-art track-preview-art--placeholder" aria-hidden />
+              <div key={card.trackId}>
+                <div className="track-preview-row">
+                  {card.albumArt ? (
+                    <img src={card.albumArt} alt="" className="track-preview-art" />
+                  ) : (
+                    <div className="track-preview-art track-preview-art--placeholder" aria-hidden />
+                  )}
+                  <span className="track-preview-year" title={String(card.releaseYear)}>
+                    {card.releaseYear}
+                  </span>
+                  <span className="track-preview-title" title={card.title}>
+                    {card.title}
+                  </span>
+                  <span className="track-preview-artist" title={card.artist}>
+                    {card.artist}
+                  </span>
+                  <button
+                    type="button"
+                    className={`track-preview-play-btn${active ? ' is-playing' : ''}`}
+                    onClick={() => togglePlay(card)}
+                    aria-label={playLabel}
+                  >
+                    {active ? '❚❚' : '▶'}
+                  </button>
+                </div>
+                {isEmbedOpen && (
+                  <iframe
+                    src={`https://open.spotify.com/embed/track/${card.trackId}?utm_source=generator&autoplay=1`}
+                    width="100%"
+                    height="80"
+                    frameBorder={0}
+                    allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                    loading="lazy"
+                    title={`Spotify preview: ${card.title}`}
+                    style={{ display: 'block', borderRadius: 8, marginTop: 4 }}
+                  />
                 )}
-                <span className="track-preview-year" title={String(card.releaseYear)}>
-                  {card.releaseYear}
-                </span>
-                <span className="track-preview-title" title={card.title}>
-                  {card.title}
-                </span>
-                <span className="track-preview-artist" title={card.artist}>
-                  {card.artist}
-                </span>
-                <button
-                  type="button"
-                  className={`track-preview-play-btn${isPlaying ? ' is-playing' : ''}${stream ? '' : ' is-spotify'}`}
-                  onClick={() => togglePlay(card)}
-                  aria-label={playLabel}
-                  title={stream ? undefined : 'No preview — opens Spotify'}
-                >
-                  {isPlaying ? '❚❚' : '▶'}
-                </button>
               </div>
             );
           })}

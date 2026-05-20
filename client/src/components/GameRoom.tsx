@@ -140,6 +140,7 @@ function AudioPlayer({ previewUrl, playAt, currentCard, revealedCard, isFlipped 
   const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [timeLeft, setTimeLeft] = useState(30);
   const [progress, setProgress] = useState(0);
+  const [showEmbed, setShowEmbed] = useState(false);
   const spotifyOnly = previewUrl !== null && isSpotifyTrackPageUrl(previewUrl);
 
   // Waveform animation
@@ -166,6 +167,23 @@ function AudioPlayer({ previewUrl, playAt, currentCard, revealedCard, isFlipped 
       if (waveIntervalRef.current) clearInterval(waveIntervalRef.current);
     };
   }, []);
+
+  // Reset embed when a new card arrives
+  useEffect(() => {
+    setShowEmbed(false);
+  }, [currentCard?.trackId]);
+
+  // Show Spotify embed at playAt when no MP3 stream is available
+  useEffect(() => {
+    if (!spotifyOnly || !playAt || !currentCard) return;
+
+    const delay = Math.max(0, playAt - Date.now());
+    const timer = setTimeout(() => setShowEmbed(true), delay);
+    return () => {
+      clearTimeout(timer);
+      setShowEmbed(false);
+    };
+  }, [spotifyOnly, playAt, currentCard?.trackId]);
 
   // Audio scheduling (MP3 previews only — Spotify track pages open externally)
   useEffect(() => {
@@ -248,40 +266,14 @@ function AudioPlayer({ previewUrl, playAt, currentCard, revealedCard, isFlipped 
                 <div className="song-year">{revealedCard.releaseYear}</div>
               </div>
             </>
-          ) : spotifyOnly ? (
-            <div style={{ fontSize: 13, color: '#6b7280', marginTop: 8 }}>
-              No in-browser preview — listen on Spotify
-            </div>
           ) : (
             <div style={{ fontSize: 13, color: '#6b7280', marginTop: 8 }}>
-              Song is playing for all...
+              {spotifyOnly ? (showEmbed ? 'Song is playing for all...' : 'Starting preview...') : 'Song is playing for all...'}
             </div>
           )}
         </div>
 
-        {spotifyOnly && previewUrl ? (
-          <a
-            href={previewUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="song-timer"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '10px 16px',
-              background: '#1db954',
-              color: '#fff',
-              borderRadius: 999,
-              fontSize: 14,
-              fontWeight: 600,
-              textDecoration: 'none',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            Open in Spotify
-          </a>
-        ) : (
+        {!spotifyOnly && (
           <div className="song-timer-wrap">
             <div className="song-timer-label">TIME LEFT</div>
             <div className="song-timer">
@@ -291,7 +283,20 @@ function AudioPlayer({ previewUrl, playAt, currentCard, revealedCard, isFlipped 
         )}
       </div>
 
-      {!spotifyOnly && (
+      {spotifyOnly ? (
+        showEmbed && currentCard && (
+          <iframe
+            src={`https://open.spotify.com/embed/track/${currentCard.trackId}?utm_source=generator&autoplay=1`}
+            width="100%"
+            height="80"
+            frameBorder={0}
+            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+            loading="eager"
+            title="Spotify Preview"
+            style={{ display: 'block', borderRadius: 8, margin: '8px 0' }}
+          />
+        )
+      ) : (
         <>
           <div className="waveform" ref={waveformRef} />
           <div className="progress-track">
