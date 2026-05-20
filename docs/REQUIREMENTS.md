@@ -28,7 +28,7 @@ _What the system does from a player's perspective. No technical detail._
   - **Genre / playlist** (e.g. "90s Night", "Pop Classics") — the song source label
   - **Participants**: player count and leader name
   - **Round status**: lobby waiting, or current round number
-  - **Progress**: for in-progress rounds, the leading player/team's card count and the target (e.g. "Mike — 6 / 10 cards")
+  - **Progress**: for in-progress rounds, the leading player/team's card count and the target (e.g. "Mike — 4 / 6 cards")
 - Clicking a room card pre-fills the join code. The player still needs to have entered a valid email before joining.
 - Rooms in **LOBBY** state can be joined freely.
 - Rooms in **ROUND_ACTIVE** state can be observed but the player joins the next round only.
@@ -58,7 +58,7 @@ Before each round, the room owner sets:
 | Song source | Spotify playlist URL or genre/theme | — |
 | Game mode | Original / Pro / Expert / Cooperative | Original |
 | Tokens enabled | Yes / No | Yes |
-| Cards needed to win | 1–20 | 10 |
+| Cards needed to win | 1–6 | 6 |
 
 ### 1.5 Gameplay — Hitster Rules (Digital)
 

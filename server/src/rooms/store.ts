@@ -27,7 +27,7 @@ export class RoomStore {
       const config = room.activeRound?.config;
       const genre = config?.playlistLabel ?? '';
       const roundNumber = room.roundHistory.length + (room.status === 'round_active' ? 1 : 0);
-      const cardsToWin = config?.cardsToWin ?? 10;
+      const cardsToWin = config?.cardsToWin ?? 6;
 
       // Find the player with the most cards on their timeline
       let leaderName = '';

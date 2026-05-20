@@ -19,7 +19,6 @@ export interface GameState {
     placedPosition: number;
     challengeResults: Array<{ challengerId: string; outcome: 'stole_card' | 'lost_token' }>;
   } | null;
-  lastChallenge: { challengerId: string } | null;
   roundEnded: { winnerId: string | null } | null;
   myTokens: number;
   socketError: string | null;
@@ -45,6 +44,26 @@ export interface GameState {
   endGame: () => void;
 }
 
+/** Restore turn UI when joining or reconnecting mid-round (before turn:started snapshot). */
+function hydrateTurnFromRoom(r: Room): {
+  activePlayerId: string | null;
+  currentCard: CardHidden | null;
+  previewUrl: string | null;
+  streamUrl: string | null;
+} {
+  const ar = r.activeRound;
+  if (r.status !== 'round_active' || !ar?.currentTurn?.activeId) {
+    return { activePlayerId: null, currentCard: null, previewUrl: null, streamUrl: null };
+  }
+  const card = ar.currentCard ?? null;
+  return {
+    activePlayerId: ar.currentTurn.activeId,
+    currentCard: card,
+    previewUrl: card?.previewUrl ?? null,
+    streamUrl: card?.streamUrl ?? null,
+  };
+}
+
 export function useGame(): GameState {
   const [room, setRoom] = useState<Room | null>(null);
   const [currentCard, setCurrentCard] = useState<CardHidden | null>(null);
@@ -56,7 +75,6 @@ export function useGame(): GameState {
   const [turnEndsAt, setTurnEndsAt] = useState<number | null>(null);
   const [timelineLength, setTimelineLength] = useState(0);
   const [lastFlip, setLastFlip] = useState<GameState['lastFlip']>(null);
-  const [lastChallenge, setLastChallenge] = useState<{ challengerId: string } | null>(null);
   const [roundEnded, setRoundEnded] = useState<{ winnerId: string | null } | null>(null);
   const [myTokens, setMyTokens] = useState(0);
   const [socketError, setSocketError] = useState<string | null>(null);
@@ -78,6 +96,14 @@ export function useGame(): GameState {
       setRoundEnded(null);
       setLastFlip(null);
       setSocketError(null);
+      const hydrated = hydrateTurnFromRoom(r);
+      setActivePlayerId(hydrated.activePlayerId);
+      setCurrentCard(hydrated.currentCard);
+      setPreviewUrl(hydrated.previewUrl);
+      setStreamUrl(hydrated.streamUrl);
+      setPlayAt(null);
+      setObserverCard(null);
+      setTurnEndsAt(null);
     });
 
     socket.on('room:updated', (r) => {
@@ -112,19 +138,31 @@ export function useGame(): GameState {
       setObserverCard(obs);
       setPreviewUrl(url);
       setStreamUrl(su ?? null);
-      setPlayAt(pa);
+      setPlayAt(pa > Date.now() ? pa : null);
       setTurnEndsAt(te);
       setTimelineLength(tl);
       setLastFlip(null);
-      setLastChallenge(null);
-      // Sync currentTurn phase locally so phase-gated UI (buy-btn) renders correctly
-      // without waiting for the next room:updated broadcast.
+      // New turns start in place phase; mid-turn join snapshots must keep challenge/flip state.
       setRoom(prev => {
         if (!prev?.activeRound) return prev;
+        const serverTurn = prev.activeRound.currentTurn;
+        if (
+          serverTurn?.activeId === pid &&
+          (serverTurn.phase === 'challenge' || serverTurn.phase === 'flip')
+        ) {
+          return {
+            ...prev,
+            activeRound: {
+              ...prev.activeRound,
+              currentCard: card,
+            },
+          };
+        }
         return {
           ...prev,
           activeRound: {
             ...prev.activeRound,
+            currentCard: card,
             currentTurn: { activeId: pid, phase: 'place' as const, challenges: [] },
           },
         };
@@ -153,7 +191,6 @@ export function useGame(): GameState {
     });
 
     socket.on('turn:challenged', ({ challengerId }) => {
-      setLastChallenge({ challengerId });
       setRoom((prev) => {
         if (!prev?.activeRound?.currentTurn) return prev;
         const existing = prev.activeRound.currentTurn.challenges ?? [];
@@ -187,7 +224,6 @@ export function useGame(): GameState {
         placedPosition: flipPosition,
         challengeResults,
       });
-      setLastChallenge(null);
       setCurrentCard(null);
       setObserverCard(null);
       setTurnEndsAt(null);
@@ -385,7 +421,6 @@ export function useGame(): GameState {
     room,
     currentCard,
     observerCard,
-    lastChallenge,
     activePlayerId,
     previewUrl,
     streamUrl,

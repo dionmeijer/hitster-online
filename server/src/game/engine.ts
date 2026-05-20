@@ -288,6 +288,7 @@ export function initRound(
       timelines,
       tokens,
       deckRemaining: remaining.length,
+      gameLog: [],
     },
   };
 

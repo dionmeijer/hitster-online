@@ -16,7 +16,7 @@ This file is read by Claude Code at the start of every session. Read it fully be
 
 ## What this project is
 
-A browser-based multiplayer implementation of the **Hitster** card game. Players build a chronological timeline of songs by listening to 30-second audio previews and guessing whether each song belongs before or after the ones already on their timeline. First to correctly place 10 cards wins.
+A browser-based multiplayer implementation of the **Hitster** card game. Players build a chronological timeline of songs by listening to 30-second audio previews and guessing whether each song belongs before or after the ones already on their timeline. First to correctly place 6 cards wins.
 
 The full functional requirements, architecture, and game rules are in `docs/REQUIREMENTS.md`. Read that file if you need detail on game mechanics.
 
@@ -155,7 +155,7 @@ Each client uses `setTimeout` to start `<audio>.play()` at exactly `playAt`. Do 
 | Token: skip | Spend 1 to discard current card, draw new one |
 | Token: buy | Spend 3 to place a card directly (before hearing song). Skip next turn. |
 | Token: earn | Name song title + artist correctly = +1 token (max 5) |
-| Win | First to 10 correct cards on timeline |
+| Win | First to 6 correct cards on timeline |
 | Deck empty | Player/team with most cards wins. Tiebreaker: highest avg release year. |
 | Disconnect | Skip turn after 15s timeout. Remove from rotation after 2 missed turns. |
 

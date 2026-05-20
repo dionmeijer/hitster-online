@@ -53,6 +53,15 @@ async function joinRoomByClick(page: Page, roomTopic: string): Promise<void> {
   await expect(page.locator('[data-testid="lobby-screen"]')).toBeVisible({ timeout: 8_000 });
 }
 
+async function spectateActiveRoom(page: Page, roomTopic: string): Promise<void> {
+  await waitForRooms(page);
+  const card = page.locator('[data-testid="room-card-joinable"]', { hasText: roomTopic }).first();
+  await expect(card).toBeVisible({ timeout: 15_000 });
+  await card.click();
+  await expect(page.locator('[data-testid="round-active"]')).toBeVisible({ timeout: 8_000 });
+  await expect(page.locator('.spectator-banner')).toBeVisible({ timeout: 8_000 });
+}
+
 // ---------------------------------------------------------------------------
 // 1. Email and name persist when returning to the lobby
 // ---------------------------------------------------------------------------
@@ -346,6 +355,38 @@ test('joiner sees host timeline and placement during challenge', async ({ browse
     await expect(p2.locator('[data-testid="watch-timeline"] .timeline-card.face-down')).toBeVisible({
       timeout: 8_000,
     });
+  } finally {
+    await ctx1.close();
+    await ctx2.close();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 9b. Mid-round joiner spectates active timeline and hears current turn
+// ---------------------------------------------------------------------------
+
+test('mid-round joiner sees active timeline and now playing', async ({ browser }: { browser: Browser }) => {
+  test.setTimeout(120_000);
+
+  const ctx1: BrowserContext = await browser.newContext();
+  const ctx2: BrowserContext = await browser.newContext();
+  const p1: Page = await ctx1.newPage();
+  const p2: Page = await ctx2.newPage();
+
+  try {
+    await fillEmailAndName(p1, 'host-spec@example.com', 'HostSpec');
+    const roomTopic = await createRoom(p1, 'Mid Spectate Test');
+    await startRound(p1);
+
+    await expect(p1.locator('[data-testid="round-active"]')).toBeVisible({ timeout: 8_000 });
+
+    await fillEmailAndName(p2, 'late-spec@example.com', 'LateSpec');
+    await spectateActiveRoom(p2, roomTopic);
+
+    await expect(p2.locator('[data-testid="watch-timeline"]')).toBeVisible({ timeout: 15_000 });
+    await expect(p2.locator('[data-testid="watch-timeline"]')).toContainText("HOSTSPEC'S TIMELINE");
+    await expect(p2.locator('.now-playing .song-title')).toBeVisible({ timeout: 15_000 });
+    await expect(p2.locator('.now-playing .song-title')).not.toHaveText('');
   } finally {
     await ctx1.close();
     await ctx2.close();

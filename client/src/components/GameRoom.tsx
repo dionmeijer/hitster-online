@@ -1,9 +1,15 @@
-import { useRef, useEffect, useState, useCallback } from 'react';
-import { CHALLENGE_WINDOW_MS } from '../../../shared/constants';
+import { useRef, useEffect, useState, useMemo } from 'react';
+import {
+  CARDS_TO_WIN_DEFAULT,
+  CARDS_TO_WIN_MAX,
+  CARDS_TO_WIN_MIN,
+  CHALLENGE_WINDOW_MS,
+} from '../../../shared/constants';
 import type { Room, Card, CardHidden, GameMode, Player, Team } from '../../../shared/types';
 import TrackPreviewModal from './TrackPreviewModal';
 import { PlaylistAutocomplete } from './PlaylistAutocomplete';
 import { TimelineView } from './TimelineView';
+import { renderGameLog } from '../game/gameLog';
 import { fetchEmbedPreviewStream, turnPlayableStream } from '../spotify';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -54,12 +60,6 @@ function activePlayerDisplayName(room: Room, activePlayerId: string | null): str
   if (room.players[activePlayerId]) return room.players[activePlayerId].displayName;
   if (room.teams[activePlayerId]) return room.teams[activePlayerId].name;
   return '...';
-}
-
-function playerDisplayName(room: Room, playerId: string): string {
-  if (room.players[playerId]) return room.players[playerId].displayName;
-  const team = Object.values(room.teams).find((t) => t.playerIds.includes(playerId));
-  return team?.name ?? playerId;
 }
 
 function HitsterLogo() {
@@ -467,7 +467,7 @@ function WinScreen({ winnerId, room, sessionId, onBackToLobby, onLeave, onEndGam
   const winnerTeam = isTeamWin && winnerId ? room.teams[winnerId] : null;
   const isMe = winnerId === sessionId;
   const isMyTeam = winnerId !== null && room.teams[winnerId ?? '']?.playerIds.includes(sessionId);
-  const cardsToWin = room.activeRound?.config.cardsToWin ?? 10;
+  const cardsToWin = room.activeRound?.config.cardsToWin ?? CARDS_TO_WIN_DEFAULT;
 
   let title: string;
   let subtitle: string;
@@ -567,7 +567,7 @@ function LobbyScreen({ room, sessionId, onStartRound, onCreateTeam, onJoinTeam, 
   const players = Object.values(room.players);
   const [playlistLabel, setPlaylistLabel] = useState('');
   const [mode, setMode] = useState<GameMode>('original');
-  const [cardsToWin, setCardsToWin] = useState(10);
+  const [cardsToWin, setCardsToWin] = useState(CARDS_TO_WIN_DEFAULT);
   const [tokensEnabled, setTokensEnabled] = useState(true);
   const [starting, setStarting] = useState(false);
   const [newTeamName, setNewTeamName] = useState('');
@@ -671,10 +671,17 @@ function LobbyScreen({ room, sessionId, onStartRound, onCreateTeam, onJoinTeam, 
                 id="cards-to-win"
                 className="form-input"
                 type="number"
-                min={1}
-                max={20}
+                min={CARDS_TO_WIN_MIN}
+                max={CARDS_TO_WIN_MAX}
                 value={cardsToWin}
-                onChange={e => setCardsToWin(Math.max(1, Math.min(20, Number(e.target.value))))}
+                onChange={e =>
+                  setCardsToWin(
+                    Math.max(
+                      CARDS_TO_WIN_MIN,
+                      Math.min(CARDS_TO_WIN_MAX, Number(e.target.value)),
+                    ),
+                  )
+                }
                 data-testid="cards-to-win-input"
                 style={{ width: 72 }}
               />
@@ -786,13 +793,6 @@ function LobbyScreen({ room, sessionId, onStartRound, onCreateTeam, onJoinTeam, 
   );
 }
 
-// ── GameLog ───────────────────────────────────────────────────────────────────
-
-interface LogEntry {
-  id: number;
-  html: string;
-}
-
 // ── TokenPanel ────────────────────────────────────────────────────────────────
 
 interface TokenPanelProps {
@@ -844,7 +844,6 @@ export interface GameRoomProps {
     placedPosition: number;
     challengeResults: Array<{ challengerId: string; outcome: 'stole_card' | 'lost_token' }>;
   } | null;
-  lastChallenge: { challengerId: string } | null;
   roundEnded: { winnerId: string | null } | null;
   myTokens: number;
   sessionId: string;
@@ -877,7 +876,6 @@ export default function GameRoom({
   playAt,
   turnEndsAt,
   lastFlip,
-  lastChallenge,
   roundEnded,
   myTokens,
   sessionId,
@@ -901,12 +899,8 @@ export default function GameRoom({
 }: GameRoomProps) {
   const [selectedPosition, setSelectedPosition] = useState<number | null>(null);
   const [showFlipResult, setShowFlipResult] = useState(false);
-  const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
-  const logCounter = useRef(0);
   const [turnSecondsLeft, setTurnSecondsLeft] = useState<number | null>(null);
   const [hasChallenged, setHasChallenged] = useState(false);
-  const lastChallengeIdRef = useRef<string | null>(null);
-  const lastPlacementLogRef = useRef<number | null>(null);
   const [nameSongTitle, setNameSongTitle] = useState('');
   const [nameSongArtist, setNameSongArtist] = useState('');
   const [nameSongYear, setNameSongYear] = useState('');
@@ -915,22 +909,26 @@ export default function GameRoom({
   const isCooperative = round?.config.mode === 'cooperative';
   const myTeamId = Object.entries(room.teams).find(([, t]) => t.playerIds.includes(sessionId))?.[0];
   const isSpectator = room.players[sessionId]?.isSpectator === true;
+  const resolvedActivePlayerId =
+    activePlayerId ?? round?.currentTurn?.activeId ?? null;
   const isActivePlayer = !isSpectator && (isCooperative
-    ? activePlayerId !== null  // anyone can act in cooperative (handled server-side)
+    ? resolvedActivePlayerId !== null  // anyone can act in cooperative (handled server-side)
     : room.useTeams && myTeamId
-      ? activePlayerId === myTeamId
-      : activePlayerId === sessionId);
+      ? resolvedActivePlayerId === myTeamId
+      : resolvedActivePlayerId === sessionId);
   const timelineKey = isCooperative ? 'cooperative' : (room.useTeams && myTeamId ? myTeamId : sessionId);
   const myTimeline = round?.timelines[timelineKey];
   const myCards = myTimeline?.cards ?? [];
-
   const activeEntityId =
-    activePlayerId && round ? activeEntityIdFromRoom(room, activePlayerId) : null;
+    resolvedActivePlayerId && round
+      ? activeEntityIdFromRoom(room, resolvedActivePlayerId)
+      : null;
   const activeTimeline =
     activeEntityId && round ? round.timelines[activeEntityId] : undefined;
   const activeCards = activeTimeline?.cards ?? [];
   const watchingOther =
-    room.status === 'round_active' && !isCooperative && !isActivePlayer;
+    room.status === 'round_active' &&
+    (isSpectator || (!isCooperative && !isActivePlayer));
 
   // Current turn phase
   const currentTurn = round?.currentTurn;
@@ -942,7 +940,7 @@ export default function GameRoom({
       : null;
   const challengeDeadline = isInChallengePhase ? (currentTurn?.challengeDeadline ?? null) : null;
 
-  const activeName = activePlayerDisplayName(room, activePlayerId);
+  const activeName = activePlayerDisplayName(room, resolvedActivePlayerId);
   const mainTimelineLabel = watchingOther
     ? `${activeName.toUpperCase()}'S TIMELINE — watch where they place`
     : isActivePlayer
@@ -961,10 +959,10 @@ export default function GameRoom({
         }
       : null;
 
-  const appendLog = useCallback((who: string, action: string, consequence: string) => {
-    const html = `<span class="log-who">${who}</span> <span class="log-action">${action}</span> — <span class="log-result">${consequence}</span>`;
-    setLogEntries((prev) => [{ id: logCounter.current++, html }, ...prev].slice(0, 50));
-  }, []);
+  const logEntries = useMemo(
+    () => renderGameLog(round?.gameLog),
+    [round?.gameLog],
+  );
 
   useEffect(() => {
     if (!turnEndsAt || currentTurn?.phase !== 'place') {
@@ -984,72 +982,14 @@ export default function GameRoom({
     if (currentTurn?.phase === 'place') {
       setHasChallenged(false);
     }
-  }, [activePlayerId, currentTurn?.phase]);
-
-  // Log when someone enters the challenge window after placing
-  useEffect(() => {
-    if (!isInChallengePhase || placedPosition === null || !round) return;
-    const key = round.turnIndex * 1000 + placedPosition;
-    if (lastPlacementLogRef.current === key) return;
-    lastPlacementLogRef.current = key;
-    const placer = activePlayerDisplayName(room, activePlayerId);
-    appendLog(
-      placer,
-      'placed a card',
-      '3s to challenge if the spot looks wrong',
-    );
-  }, [isInChallengePhase, placedPosition, round?.turnIndex, room, activePlayerId, appendLog]);
-
-  // Log HITSTER! challenges (all clients)
-  useEffect(() => {
-    if (!lastChallenge) return;
-    const key = lastChallenge.challengerId + (challengeDeadline ?? '');
-    if (lastChallengeIdRef.current === key) return;
-    lastChallengeIdRef.current = key;
-    const challenger = playerDisplayName(room, lastChallenge.challengerId);
-    const isMe = lastChallenge.challengerId === sessionId;
-    if (isMe) {
-      appendLog('You', 'Challenge', 'Registered — result after flip');
-    } else {
-      appendLog(challenger, 'Challenge', 'Challenged the placement');
-    }
-  }, [lastChallenge, challengeDeadline, room, sessionId, appendLog]);
+  }, [resolvedActivePlayerId, currentTurn?.phase]);
 
   // Show flip result when lastFlip changes
   useEffect(() => {
     if (!lastFlip) return;
     setShowFlipResult(true);
     setSelectedPosition(null);
-
-    const placer = activePlayerDisplayName(room, lastFlip.activePlayerId);
-    const placementResult = lastFlip.correct
-      ? `${placer} was correct — card stays on their timeline`
-      : `${placer} was wrong — card discarded`;
-
-    appendLog(placer, 'card revealed', placementResult);
-
-    for (const cr of lastFlip.challengeResults) {
-      const challenger = playerDisplayName(room, cr.challengerId);
-      if (cr.outcome === 'stole_card') {
-        appendLog(
-          challenger,
-          'Challenge',
-          `${placer} was wrong — ${challenger} steals the card`,
-        );
-      } else {
-        appendLog(
-          challenger,
-          'Challenge',
-          `${placer} was correct — ${challenger} loses 1 token`,
-        );
-      }
-    }
-
-    const msg = lastFlip.correct
-      ? `<span class="log-highlight">${lastFlip.card.title}</span> — <span class="log-correct">✓ Correct!</span>`
-      : `<span class="log-highlight">${lastFlip.card.title}</span> — <span class="log-wrong">✗ Wrong</span>`;
-    setLogEntries((prev) => [{ id: logCounter.current++, html: msg }, ...prev].slice(0, 50));
-  }, [lastFlip, room, appendLog]);
+  }, [lastFlip]);
 
   useEffect(() => {
     if (!showFlipResult) return;
@@ -1184,7 +1124,7 @@ export default function GameRoom({
         {/* LEFT: Player list */}
         <PlayerList
           room={room}
-          activePlayerId={activePlayerId}
+          activePlayerId={resolvedActivePlayerId}
           activeTurnLabel={activeName}
           isMyTurn={isActivePlayer && !isSpectator}
           turnIndex={round?.turnIndex ?? 0}
@@ -1195,8 +1135,16 @@ export default function GameRoom({
         {/* CENTER: Gameplay */}
         <div className={`center-col${showFlipResult ? ' center-col--reveal-active' : ''}`}>
           {isSpectator && (
-            <div className="spectator-banner">
-              👁 Spectating — you'll join the next round automatically
+            <div className="spectator-banner" role="status" aria-live="polite">
+              <div className="spectator-banner__title">
+                <span className="spectator-banner__icon" aria-hidden>
+                  👁
+                </span>
+                Spectator mode
+              </div>
+              <p className="spectator-banner__hint">
+                You&apos;re watching this round. You&apos;ll play when the next round starts.
+              </p>
             </div>
           )}
           <AudioPlayer

@@ -9,7 +9,7 @@ Built during [BlueConic Builders Day](https://blueconic.com) — May 2026.
 1. One player creates a room and pastes a Spotify playlist URL
 2. Other players join using the room code
 3. Each turn: a song plays, you place it on your timeline where you think it belongs chronologically
-4. First to correctly place 10 cards wins
+4. First to correctly place 6 cards wins
 
 Full rules in [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
 

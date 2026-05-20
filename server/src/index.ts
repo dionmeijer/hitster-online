@@ -20,9 +20,13 @@ for (const envPath of [
   }
 }
 import {
+  CARDS_TO_WIN_DEFAULT,
+  CARDS_TO_WIN_MAX,
+  CARDS_TO_WIN_MIN,
   CHALLENGE_WINDOW_MS as DEFAULT_CHALLENGE_WINDOW_MS,
   TURN_PLACE_TIMEOUT_MS as DEFAULT_TURN_PLACE_TIMEOUT_MS,
 } from '../../shared/constants';
+import type { Socket } from 'socket.io';
 import type {
   ServerToClientEvents,
   ClientToServerEvents,
@@ -30,6 +34,8 @@ import type {
   RoundConfig,
   Challenge,
   Room,
+  Card,
+  CardHidden,
 } from '../../shared/types';
 import { createSpotifyClient } from './spotify/client';
 import {
@@ -39,6 +45,7 @@ import {
 } from './spotify/embedPreview';
 import { RoomStore } from './rooms/store';
 import * as engine from './game/engine';
+import * as gameLog from './game/gameLog';
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -175,7 +182,10 @@ function autoSkipActiveTurn(
   if (cur.activeRound.turnOrder[cur.activeRound.turnIndex] !== playerId) return;
   if (cur.activeRound.currentTurn?.phase !== 'place') return;
 
-  const withMissed = engine.incrementMissedTurns(cur, playerId);
+  const withMissed = engine.incrementMissedTurns(
+    gameLog.logAutoSkip(cur, playerId, reason),
+    playerId,
+  );
   const missed = withMissed.players[playerId]?.missedTurns ?? 0;
 
   io.to(roomCode).emit('turn:auto-skipped', { playerId, reason });
@@ -229,6 +239,58 @@ async function resolveTurnStreamUrl(card: {
   }
 }
 
+type TurnStartedPayload = Parameters<ServerToClientEvents['turn:started']>[0];
+
+function buildTurnStartedPayload(
+  room: Room,
+  activeId: string,
+  hidden: CardHidden,
+  observerCard: Card,
+  streamUrl: string | null,
+  turnEndsAt: number,
+  playAt: number,
+): TurnStartedPayload {
+  return {
+    activePlayerId: activeId,
+    card: hidden,
+    observerCard,
+    previewUrl: hidden.previewUrl,
+    streamUrl,
+    playAt,
+    timelineLength: engine.timelineLength(room, activeId),
+    turnEndsAt,
+  };
+}
+
+/** Catch up joiners / reconnects who missed the room-wide turn:started broadcast. */
+async function emitTurnSnapshot(
+  socket: Socket<ClientToServerEvents, ServerToClientEvents>,
+  room: Room,
+): Promise<void> {
+  const ar = room.activeRound;
+  if (room.status !== 'round_active' || !ar?.currentCard || !ar.currentTurn) return;
+
+  const observerCard = pendingCards.get(room.code);
+  if (!observerCard) return;
+
+  const activeId = ar.currentTurn.activeId;
+  const streamUrl = await resolveTurnStreamUrl(ar.currentCard);
+  const inPlacePhase = ar.currentTurn.phase === 'place';
+
+  socket.emit(
+    'turn:started',
+    buildTurnStartedPayload(
+      room,
+      activeId,
+      ar.currentCard,
+      observerCard,
+      streamUrl,
+      Date.now() + TURN_PLACE_TIMEOUT_MS,
+      inPlacePhase ? Date.now() + 600 : 0,
+    ),
+  );
+}
+
 async function startTurn(roomCode: string): Promise<void> {
   const room = store.get(roomCode);
   if (!room?.activeRound) return;
@@ -269,8 +331,6 @@ async function startTurn(roomCode: string): Promise<void> {
   pendingCards.set(roomCode, card);
   pendingChallenges.set(roomCode, []);
 
-  const timelineLen = engine.timelineLength(room, activeId);
-
   const updatedRoom = {
     ...room,
     activeRound: {
@@ -289,16 +349,10 @@ async function startTurn(roomCode: string): Promise<void> {
   const turnEndsAt = Date.now() + TURN_PLACE_TIMEOUT_MS;
   schedulePlaceTurnTimeout(roomCode, activeId);
 
-  io.to(roomCode).emit('turn:started', {
-    activePlayerId: activeId,
-    card: hidden,
-    observerCard: card,
-    previewUrl: hidden.previewUrl,
-    streamUrl,
-    playAt: Date.now() + 600,
-    timelineLength: timelineLen,
-    turnEndsAt,
-  });
+  io.to(roomCode).emit(
+    'turn:started',
+    buildTurnStartedPayload(room, activeId, hidden, card, streamUrl, turnEndsAt, Date.now() + 600),
+  );
 }
 
 function resolveAndAdvance(roomCode: string): void {
@@ -328,16 +382,25 @@ function resolveAndAdvance(roomCode: string): void {
   pendingCards.delete(roomCode);
   pendingChallenges.delete(roomCode);
 
-  const entityId = engine.activeEntityId(flippedRoom, activePlayerId);
-  const updatedTimeline = flippedRoom.activeRound?.timelines[entityId]
-    ?? { ownerId: entityId, cards: [] };
-  const tokensUpdated = flippedRoom.activeRound?.tokens ?? {};
-  const timelines = flippedRoom.activeRound?.timelines ?? {};
   const challenges = roomWithChallenges.activeRound?.currentTurn?.challenges ?? [];
   const challengeResults = challenges.map((c) => ({
     challengerId: c.challengerId,
     outcome: (correct ? 'lost_token' : 'stole_card') as 'stole_card' | 'lost_token',
   }));
+
+  const flippedWithLog = gameLog.logFlipResolution(
+    flippedRoom,
+    activePlayerId,
+    card,
+    correct,
+    challengeResults,
+  );
+
+  const entityId = engine.activeEntityId(flippedWithLog, activePlayerId);
+  const updatedTimeline = flippedWithLog.activeRound?.timelines[entityId]
+    ?? { ownerId: entityId, cards: [] };
+  const tokensUpdated = flippedWithLog.activeRound?.tokens ?? {};
+  const timelines = flippedWithLog.activeRound?.timelines ?? {};
 
   io.to(roomCode).emit('turn:flipped', {
     card,
@@ -350,12 +413,12 @@ function resolveAndAdvance(roomCode: string): void {
     challengeResults,
   });
 
-  if (winnerId || flippedRoom.status === 'round_ended') {
-    const summary = engine.buildRoundSummary(flippedRoom, winnerId ?? null);
+  if (winnerId || flippedWithLog.status === 'round_ended') {
+    const summary = engine.buildRoundSummary(flippedWithLog, winnerId ?? null);
     const finalRoom = {
-      ...flippedRoom,
+      ...flippedWithLog,
       status: 'round_ended' as const,
-      roundHistory: [...flippedRoom.roundHistory, summary],
+      roundHistory: [...flippedWithLog.roundHistory, summary],
     };
     store.set(finalRoom);
     io.to(roomCode).emit('room:updated', finalRoom);
@@ -363,7 +426,7 @@ function resolveAndAdvance(roomCode: string): void {
     return;
   }
 
-  const advancedRoom = engine.advanceTurn(flippedRoom);
+  const advancedRoom = engine.advanceTurn(flippedWithLog);
   store.set(advancedRoom);
   io.to(roomCode).emit('room:updated', advancedRoom);
   startTurn(roomCode);
@@ -430,6 +493,7 @@ io.on('connection', (socket) => {
 
       socket.emit('room:joined', { roomCode: updatedRoom.code, room: updatedRoom });
       io.to(updatedRoom.code).emit('room:updated', updatedRoom);
+      void emitTurnSnapshot(socket, updatedRoom);
     } catch (err) {
       socket.emit('error', err instanceof Error ? err.message : 'Failed to join room');
     }
@@ -450,7 +514,10 @@ io.on('connection', (socket) => {
     }
 
     try {
-      const cardsToWin = Math.max(1, data.cardsToWin ?? 10);
+      const cardsToWin = Math.min(
+        CARDS_TO_WIN_MAX,
+        Math.max(CARDS_TO_WIN_MIN, data.cardsToWin ?? CARDS_TO_WIN_DEFAULT),
+      );
       const config: RoundConfig = {
         playlistLabel: data.playlistLabel,
         mode: data.mode,
@@ -467,11 +534,12 @@ io.on('connection', (socket) => {
       }
 
       const { room: initedRoom, deck } = engine.initRound(room, config, cards);
+      const initedWithLog = gameLog.logRoundStarted(initedRoom);
       liveDecks.set(session.roomCode, deck);
-      store.set(initedRoom);
+      store.set(initedWithLog);
 
-      io.to(session.roomCode).emit('round:started', { room: initedRoom });
-      io.to(session.roomCode).emit('room:updated', initedRoom);
+      io.to(session.roomCode).emit('round:started', { room: initedWithLog });
+      io.to(session.roomCode).emit('room:updated', initedWithLog);
 
       await startTurn(session.roomCode);
     } catch (err) {
@@ -514,14 +582,15 @@ io.on('connection', (socket) => {
       clearPlaceTurnTimer(session.roomCode);
       const challengeEndsAt = Date.now() + CHALLENGE_WINDOW_MS;
       const placedRoom = engine.applyPlacement(room, sessionId, data.position, CHALLENGE_WINDOW_MS);
-      store.set(placedRoom);
+      const placedWithLog = gameLog.logPlacement(placedRoom, sessionId);
+      store.set(placedWithLog);
 
       io.to(session.roomCode).emit('turn:placed', {
         position: data.position,
         activePlayerId: sessionId,
         challengeEndsAt,
       });
-      io.to(session.roomCode).emit('room:updated', placedRoom);
+      io.to(session.roomCode).emit('room:updated', placedWithLog);
 
       clearChallengeTimer(session.roomCode);
       const roomCode = session.roomCode;
@@ -558,7 +627,10 @@ io.on('connection', (socket) => {
     challenges.push({ challengerId: sessionId });
     pendingChallenges.set(session.roomCode, challenges);
 
+    const withLog = gameLog.logChallenge(room, sessionId);
+    store.set(withLog);
     io.to(session.roomCode).emit('turn:challenged', { challengerId: sessionId });
+    io.to(session.roomCode).emit('room:updated', withLog);
   });
 
   // ------------------------------------------------------------------
@@ -577,9 +649,10 @@ io.on('connection', (socket) => {
       clearPlaceTurnTimer(session.roomCode);
       clearChallengeTimer(session.roomCode);
       const skippedRoom = engine.applySkip(room, sessionId);
+      const skippedWithLog = gameLog.logSkip(skippedRoom, sessionId);
       pendingCards.delete(session.roomCode);
-      store.set(skippedRoom);
-      io.to(session.roomCode).emit('room:updated', skippedRoom);
+      store.set(skippedWithLog);
+      io.to(session.roomCode).emit('room:updated', skippedWithLog);
       startTurn(session.roomCode);
     } catch (err) {
       socket.emit('error', err instanceof Error ? err.message : 'Skip failed');

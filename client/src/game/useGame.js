@@ -1,5 +1,19 @@
 import { useState, useEffect, useCallback } from 'react';
 import { socket } from '../socket/client';
+/** Restore turn UI when joining or reconnecting mid-round (before turn:started snapshot). */
+function hydrateTurnFromRoom(r) {
+    const ar = r.activeRound;
+    if (r.status !== 'round_active' || !ar?.currentTurn?.activeId) {
+        return { activePlayerId: null, currentCard: null, previewUrl: null, streamUrl: null };
+    }
+    const card = ar.currentCard ?? null;
+    return {
+        activePlayerId: ar.currentTurn.activeId,
+        currentCard: card,
+        previewUrl: card?.previewUrl ?? null,
+        streamUrl: card?.streamUrl ?? null,
+    };
+}
 export function useGame() {
     const [room, setRoom] = useState(null);
     const [currentCard, setCurrentCard] = useState(null);
@@ -11,7 +25,6 @@ export function useGame() {
     const [turnEndsAt, setTurnEndsAt] = useState(null);
     const [timelineLength, setTimelineLength] = useState(0);
     const [lastFlip, setLastFlip] = useState(null);
-    const [lastChallenge, setLastChallenge] = useState(null);
     const [roundEnded, setRoundEnded] = useState(null);
     const [myTokens, setMyTokens] = useState(0);
     const [socketError, setSocketError] = useState(null);
@@ -30,6 +43,14 @@ export function useGame() {
             setRoundEnded(null);
             setLastFlip(null);
             setSocketError(null);
+            const hydrated = hydrateTurnFromRoom(r);
+            setActivePlayerId(hydrated.activePlayerId);
+            setCurrentCard(hydrated.currentCard);
+            setPreviewUrl(hydrated.previewUrl);
+            setStreamUrl(hydrated.streamUrl);
+            setPlayAt(null);
+            setObserverCard(null);
+            setTurnEndsAt(null);
         });
         socket.on('room:updated', (r) => {
             setRoom(r);
@@ -61,20 +82,30 @@ export function useGame() {
             setObserverCard(obs);
             setPreviewUrl(url);
             setStreamUrl(su ?? null);
-            setPlayAt(pa);
+            setPlayAt(pa > Date.now() ? pa : null);
             setTurnEndsAt(te);
             setTimelineLength(tl);
             setLastFlip(null);
-            setLastChallenge(null);
-            // Sync currentTurn phase locally so phase-gated UI (buy-btn) renders correctly
-            // without waiting for the next room:updated broadcast.
+            // New turns start in place phase; mid-turn join snapshots must keep challenge/flip state.
             setRoom(prev => {
                 if (!prev?.activeRound)
                     return prev;
+                const serverTurn = prev.activeRound.currentTurn;
+                if (serverTurn?.activeId === pid &&
+                    (serverTurn.phase === 'challenge' || serverTurn.phase === 'flip')) {
+                    return {
+                        ...prev,
+                        activeRound: {
+                            ...prev.activeRound,
+                            currentCard: card,
+                        },
+                    };
+                }
                 return {
                     ...prev,
                     activeRound: {
                         ...prev.activeRound,
+                        currentCard: card,
                         currentTurn: { activeId: pid, phase: 'place', challenges: [] },
                     },
                 };
@@ -102,7 +133,6 @@ export function useGame() {
             });
         });
         socket.on('turn:challenged', ({ challengerId }) => {
-            setLastChallenge({ challengerId });
             setRoom((prev) => {
                 if (!prev?.activeRound?.currentTurn)
                     return prev;
@@ -129,7 +159,6 @@ export function useGame() {
                 placedPosition: flipPosition,
                 challengeResults,
             });
-            setLastChallenge(null);
             setCurrentCard(null);
             setObserverCard(null);
             setTurnEndsAt(null);
@@ -303,7 +332,6 @@ export function useGame() {
         room,
         currentCard,
         observerCard,
-        lastChallenge,
         activePlayerId,
         previewUrl,
         streamUrl,

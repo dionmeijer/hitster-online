@@ -53,7 +53,7 @@ export interface Timeline {
 export interface RoundConfig {
   playlistLabel?: string;     // Spotify playlist label / genre tag
   mode: GameMode;
-  cardsToWin: number;         // default 10
+  cardsToWin: number;         // default 6, max 6
   tokensEnabled: boolean;     // false disables all token mechanics
 }
 
@@ -75,6 +75,27 @@ export interface Room {
   activeRound?: ActiveRound;
 }
 
+/** Standard game-log line (who / action / consequence). */
+export interface GameLogLine {
+  id: string;
+  who: string;
+  action: string;
+  consequence: string;
+}
+
+/** Flip reveal line shown after a card is revealed. */
+export interface GameLogFlipLine {
+  id: string;
+  title: string;
+  correct: boolean;
+}
+
+export type GameLogEntry = GameLogLine | GameLogFlipLine;
+
+export function isGameLogFlipLine(entry: GameLogEntry): entry is GameLogFlipLine {
+  return 'title' in entry && 'correct' in entry;
+}
+
 export interface ActiveRound {
   config: RoundConfig;
   roundNumber: number;
@@ -86,6 +107,8 @@ export interface ActiveRound {
   currentTurn?: CurrentTurn;
   deckRemaining: number;
   pendingSkips?: string[];          // playerIds whose NEXT turn is auto-skipped (after buying)
+  /** Chronological log for late joiners / spectators (newest at end). */
+  gameLog?: GameLogEntry[];
 }
 
 export interface Challenge {

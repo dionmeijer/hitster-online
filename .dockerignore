@@ -12,6 +12,7 @@ playwright-report
 *.md
 !README.md
 e2e
-bots
+bots/*
+!bots/package.json
 scripts
 assets

@@ -37,7 +37,6 @@ export default function App() {
       turnEndsAt={game.turnEndsAt}
       timelineLength={game.timelineLength}
       lastFlip={game.lastFlip}
-      lastChallenge={game.lastChallenge}
       roundEnded={game.roundEnded}
       myTokens={game.myTokens}
       sessionId={sessionId}

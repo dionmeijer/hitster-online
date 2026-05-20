@@ -91,7 +91,7 @@ export class Bot {
 
   startRound(mode: 'original' | 'pro' | 'expert' | 'cooperative' = 'original', playlistLabel?: string): void {
     log(this.profile.name, `starting round (mode=${mode})`);
-    this.socket.emit('round:start', { mode, playlistLabel, cardsToWin: 10, tokensEnabled: true });
+    this.socket.emit('round:start', { mode, playlistLabel, cardsToWin: 6, tokensEnabled: true });
   }
 
   private registerHandlers(): void {

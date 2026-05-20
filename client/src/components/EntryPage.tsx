@@ -156,7 +156,7 @@ export default function EntryPage({
             HIT<span className="hero-title-green">STER</span>
           </div>
           <div className="hero-sub">
-            Build your timeline. Guess the decade. First to 10 songs wins.
+            Build your timeline. Guess the decade. First to 6 songs wins.
           </div>
 
           {/* Email */}
