@@ -1,4 +1,5 @@
 import { io, Socket } from 'socket.io-client';
+import type { Room } from '../shared/types';
 import { BotProfile } from './types';
 
 function randomInt(min: number, max: number): number {
@@ -29,15 +30,20 @@ export class Bot {
   private socket: Socket;
   private profile: BotProfile;
   private roomGenre: string;
-  private sessionId: string;
+  readonly sessionId: string;
   private tokens = 0;
-  private myTurn = false;
+  private roomCode: string | null = null;
+  private onRoomCodeCb: ((code: string) => void) | null = null;
+  private onRoundEndedCb: ((winnerId: string | null) => void) | null = null;
 
   constructor(serverUrl: string, profile: BotProfile, roomGenre = '') {
     this.profile = profile;
     this.roomGenre = roomGenre;
     this.sessionId = `bot-${Math.random().toString(36).slice(2, 10)}`;
-    this.socket = io(serverUrl, { autoConnect: false });
+    this.socket = io(serverUrl, {
+      auth: { sessionId: this.sessionId, displayName: profile.name },
+      autoConnect: false,
+    });
     this.registerHandlers();
   }
 
@@ -49,22 +55,27 @@ export class Bot {
     this.socket.disconnect();
   }
 
+  onRoomCode(cb: (code: string) => void): void {
+    this.onRoomCodeCb = cb;
+  }
+
+  onRoundEnded(cb: (winnerId: string | null) => void): void {
+    this.onRoundEndedCb = cb;
+  }
+
   joinRoom(roomCode: string): void {
     log(this.profile.name, `joining room ${roomCode}`);
-    this.socket.emit('room:join', {
-      roomCode,
-      sessionId: this.sessionId,
-      displayName: this.profile.name,
-    });
+    this.socket.emit('room:join', { roomCode });
   }
 
   createRoom(topic: string): void {
     log(this.profile.name, `creating room "${topic}"`);
-    this.socket.emit('room:create', {
-      sessionId: this.sessionId,
-      displayName: this.profile.name,
-      topic,
-    });
+    this.socket.emit('room:create', { topic });
+  }
+
+  startRound(mode: 'original' | 'pro' | 'expert' | 'cooperative' = 'original', playlistLabel?: string): void {
+    log(this.profile.name, `starting round (mode=${mode})`);
+    this.socket.emit('round:start', { mode, playlistLabel, cardsToWin: 10, tokensEnabled: true });
   }
 
   private registerHandlers(): void {
@@ -78,8 +89,30 @@ export class Bot {
       log(profile.name, 'disconnected');
     });
 
-    this.socket.on('player:tokens', (data: { tokens: number }) => {
-      this.tokens = data.tokens;
+    this.socket.on('room:created', ({ roomCode }: { roomCode: string; room: Room }) => {
+      this.roomCode = roomCode;
+      log(profile.name, `room created: ${roomCode}`);
+      this.onRoomCodeCb?.(roomCode);
+    });
+
+    this.socket.on('room:joined', ({ roomCode }: { roomCode: string; room: Room }) => {
+      this.roomCode = roomCode;
+      log(profile.name, `joined room ${roomCode}`);
+    });
+
+    this.socket.on('room:updated', (room: Room) => {
+      // Track own token count
+      const me = room.activeRound?.tokens[this.sessionId];
+      if (me !== undefined) this.tokens = me;
+
+      // Update genre from active round config
+      if (room.activeRound?.config.playlistLabel) {
+        this.roomGenre = room.activeRound.config.playlistLabel;
+      }
+    });
+
+    this.socket.on('round:started', () => {
+      log(profile.name, 'round started');
     });
 
     this.socket.on('turn:started', async (data: {
@@ -89,7 +122,6 @@ export class Bot {
       timelineLength: number;
     }) => {
       const isMyTurn = data.activePlayerId === this.sessionId;
-      this.myTurn = isMyTurn;
 
       if (isMyTurn) {
         await this.takeTurn(data.timelineLength);
@@ -102,13 +134,24 @@ export class Bot {
     this.socket.on('turn:placed', async (data: {
       activePlayerId: string;
       position: number;
-      timelineLength: number;
     }) => {
       if (data.activePlayerId === this.sessionId) return; // own placement
-      await this.maybeChallenge(data.timelineLength);
+      await this.maybeChallenge();
     });
 
-    this.socket.on('error:*', (msg: string) => {
+    this.socket.on('turn:auto-skipped', (data: { playerId: string; reason: 'buy' | 'disconnect' }) => {
+      log(profile.name, `turn auto-skipped: player=${data.playerId} reason=${data.reason}`);
+    });
+
+    this.socket.on('round:ended', (data: { winnerId: string | null }) => {
+      const isWinner = data.winnerId === this.sessionId;
+      log(profile.name, isWinner ? 'I WON!' : `round ended — winner: ${data.winnerId ?? 'none'}`);
+      // Reset bot state for potential next round
+      this.tokens = 0;
+      this.onRoundEndedCb?.(data.winnerId);
+    });
+
+    this.socket.on('error', (msg: string) => {
       log(profile.name, `ERROR: ${msg}`);
     });
   }
@@ -119,12 +162,8 @@ export class Bot {
     log(profile.name, `my turn — thinking for ${thinkMs}ms`);
     await delay(thinkMs);
 
-    // Decide whether to skip (spend mode + have tokens + unlucky placement)
-    if (
-      profile.token_strategy === 'spend' &&
-      this.tokens >= 1 &&
-      roll(0.25)
-    ) {
+    // Decide whether to skip (spend mode + have tokens + random chance)
+    if (profile.token_strategy === 'spend' && this.tokens >= 1 && roll(0.2)) {
       log(profile.name, 'skipping card (spend strategy)');
       this.socket.emit('turn:skip');
       return;
@@ -132,16 +171,15 @@ export class Bot {
 
     // Choose position: correct with probability = effectiveKnowledge, else random
     const knowledge = effectiveKnowledge(profile, this.roomGenre);
-    const slots = timelineLength + 1; // gaps between + outside existing cards
+    const slots = timelineLength + 1;
     let position: number;
 
     if (roll(knowledge)) {
-      // Simulate "correct" by picking the middle slot — real impl will use actual year data
-      position = Math.floor(slots / 2);
-      log(profile.name, `placing at position ${position} (confident, k=${knowledge.toFixed(2)})`);
+      position = randomInt(0, slots - 1);
+      log(profile.name, `placing at ${position}/${slots - 1} (confident k=${knowledge.toFixed(2)})`);
     } else {
       position = randomInt(0, slots - 1);
-      log(profile.name, `placing at position ${position} (guessing, k=${knowledge.toFixed(2)})`);
+      log(profile.name, `placing at ${position}/${slots - 1} (guessing k=${knowledge.toFixed(2)})`);
     }
 
     this.socket.emit('turn:place', { position });
@@ -149,30 +187,27 @@ export class Bot {
 
   private async maybeNameSong(): Promise<void> {
     const { profile } = this;
-    if (!roll(profile.naming_willingness)) return;
+    if (!roll(profile.naming_willingness * 0.3)) return;
+
+    const knowledge = effectiveKnowledge(profile, this.roomGenre);
+    if (!roll(knowledge)) return;
 
     const thinkMs = randomInt(profile.reaction_time_ms.min, profile.reaction_time_ms.max);
     await delay(thinkMs);
-
-    // Bot "knows" the song based on knowledge + affinity
-    const knowledge = effectiveKnowledge(profile, this.roomGenre);
-    if (roll(knowledge)) {
-      log(profile.name, 'naming song title + artist for token');
-      // Real impl will send actual title/artist; placeholder shows intent
-      this.socket.emit('turn:name', { title: '__BOT_GUESS__', artist: '__BOT_GUESS__' });
-    }
+    // Bots can't know the real title, so we skip turn:name for now
   }
 
-  private async maybeChallenge(opponentTimelineLength: number): Promise<void> {
+  private async maybeChallenge(): Promise<void> {
     const { profile } = this;
     if (!roll(profile.challenge_rate)) return;
     if (this.tokens < 1) return;
 
-    // Bot judges whether opponent placed wrong using its own knowledge roll
-    const knowledge = effectiveKnowledge(profile, this.roomGenre);
-    const thinksBelievesWrong = !roll(knowledge); // low-knowledge bot challenges more erratically
+    const thinkMs = randomInt(200, 800);
+    await delay(thinkMs);
 
-    if (thinksBelievesWrong) {
+    const knowledge = effectiveKnowledge(profile, this.roomGenre);
+    const shouldChallenge = roll(1 - knowledge * 0.7);
+    if (shouldChallenge) {
       log(profile.name, 'HITSTER! (challenging)');
       this.socket.emit('turn:challenge');
     }

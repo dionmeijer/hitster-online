@@ -665,6 +665,16 @@ describe('addPlayer', () => {
     const { room: active } = initRound(room, defaultConfig, deck);
     expect(() => addPlayer(active, 'p2', 'Bob')).toThrow();
   });
+
+  it('addPlayer throws when room has 12 players', () => {
+    // createRoom creates owner (p1) = 1 player; add p2–p12 = 11 more → 12 total
+    let room = createRoom('p1', 'Alice', 'Test');
+    for (let i = 2; i <= 12; i++) {
+      room = addPlayer(room, `p${i}`, `Player${i}`);
+    }
+    expect(Object.keys(room.players)).toHaveLength(12);
+    expect(() => addPlayer(room, 'p13', 'Player13')).toThrow('Room is full (max 12 players)');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -956,6 +966,15 @@ describe('createTeam', () => {
     const deck = Array.from({ length: 15 }, (_, i) => makeCard(`t${i}`, 1980 + i));
     const { room: started } = initRound(room, defaultConfig, deck);
     expect(() => createTeam(started, 'team1', 'Red Team', 'p1')).toThrow();
+  });
+
+  it('createTeam throws when room has 6 teams', () => {
+    let room = createRoom('p1', 'Alice', 'Test');
+    for (let i = 1; i <= 6; i++) {
+      room = createTeam(room, `team${i}`, `Team ${i}`, 'p1');
+    }
+    expect(Object.keys(room.teams)).toHaveLength(6);
+    expect(() => createTeam(room, 'team7', 'Team 7', 'p1')).toThrow('Maximum of 6 teams allowed');
   });
 });
 

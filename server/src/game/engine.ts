@@ -63,6 +63,9 @@ export function addPlayer(room: Room, playerId: string, displayName: string): Ro
     // Re-joining (reconnect with same sessionId) — just mark connected
     return markReconnected(room, playerId);
   }
+  if (Object.keys(room.players).length >= 12) {
+    throw new Error('Room is full (max 12 players)');
+  }
   const player: Player = {
     id: playerId,
     displayName,
@@ -106,6 +109,9 @@ export function markReconnected(room: Room, playerId: string): Room {
 /** Create a new team and add the creator to it */
 export function createTeam(room: Room, teamId: string, teamName: string, creatorId: string): Room {
   if (room.status !== 'lobby') throw new Error('Cannot create teams after round has started');
+  if (Object.keys(room.teams).length >= 6) {
+    throw new Error('Maximum of 6 teams allowed');
+  }
   const newTeam: Team = { id: teamId, name: teamName.trim(), playerIds: [creatorId] };
   // Remove creator from any existing teams
   const cleanedTeams = removePlayerFromTeams(room.teams, creatorId);
