@@ -291,8 +291,8 @@ test('skip and buy buttons are visible during active turn', async ({ page }) => 
   await expect(page.locator('[data-testid="skip-btn"]')).toBeVisible({ timeout: 8_000 });
   await expect(page.locator('[data-testid="buy-btn"]')).toBeVisible({ timeout: 8_000 });
 
-  // Both buttons are disabled (0 tokens at start)
-  await expect(page.locator('[data-testid="skip-btn"]')).toBeDisabled();
+  // Original mode starts with 2 tokens: skip (costs 1) enabled, buy (costs 3) disabled
+  await expect(page.locator('[data-testid="skip-btn"]')).toBeEnabled();
   await expect(page.locator('[data-testid="buy-btn"]')).toBeDisabled();
 });
 
@@ -335,12 +335,12 @@ test('disconnected player turn auto-advances after timeout', async ({ browser }:
     await fillEmailAndName(p1, 'host-dc@example.com', 'HostBot');
     const roomCode = await createRoom(p1, 'Disconnect Test');
 
-    // p2 joins
+    // p2 joins — join uses an inline form, not a modal
     await fillEmailAndName(p2, 'joiner-dc@example.com', 'JoinerBot');
     await p2.click('button:has-text("Join a room")');
-    await p2.waitForSelector('.modal-box');
-    await p2.fill('.modal-box input[type="text"]', roomCode);
-    await p2.click('.modal-box button:has-text("Join")');
+    await p2.waitForSelector('input[placeholder="XXXX"]');
+    await p2.fill('input[placeholder="XXXX"]', roomCode);
+    await p2.click('button.btn-go');
     await expect(p2.locator('[data-testid="lobby-room-code"]')).toBeVisible({ timeout: 5_000 });
 
     await startRound(p1);
@@ -349,21 +349,25 @@ test('disconnected player turn auto-advances after timeout', async ({ browser }:
     await expect(p1.locator('[data-testid="round-active"]')).toBeVisible({ timeout: 8_000 });
     await expect(p2.locator('[data-testid="round-active"]')).toBeVisible({ timeout: 8_000 });
 
-    // Record which player has the first turn
+    // Record which player has the first turn and disconnect them
+    // p2 sees "You" when p2 is active, "HostBot" when p1 is active
     const firstActivePlayerEl = p2.locator('.active-player .player-name');
     const firstActiveName = await firstActivePlayerEl.textContent({ timeout: 5_000 });
 
-    // Close the first active player's context to simulate disconnect
-    if (firstActiveName?.includes('HostBot') || firstActiveName === 'You') {
-      await ctx1.close();
+    // Disconnect the active player; observe from the other
+    let observerPage: Page;
+    if (firstActiveName?.includes('HostBot')) {
+      await ctx1.close(); // p1 (HostBot) is active — disconnect p1, observe from p2
+      observerPage = p2;
     } else {
-      await ctx2.close();
+      await ctx2.close(); // p2 (JoinerBot/You) is active — disconnect p2, observe from p1
+      observerPage = p1;
     }
 
-    // TURN_TIMEOUT_MS = 3s in TEST_MODE — after it fires the other player becomes active
+    // TURN_TIMEOUT_MS = 3s in TEST_MODE — after it fires the remaining player becomes active
     // Allow up to 10s for the auto-skip + turn advance to propagate
     await expect(async () => {
-      const activeNow = await p2.locator('.active-player').isVisible().catch(() => false);
+      const activeNow = await observerPage.locator('.active-player').isVisible().catch(() => false);
       expect(activeNow).toBe(true);
     }).toPass({ timeout: 10_000, intervals: [1_000] });
   } finally {

@@ -53,6 +53,17 @@ export function useGame() {
             setPlayAt(pa);
             setTimelineLength(tl);
             setLastFlip(null);
+            setRoom((prev) => {
+                if (!prev?.activeRound)
+                    return prev;
+                return {
+                    ...prev,
+                    activeRound: {
+                        ...prev.activeRound,
+                        currentTurn: { activeId: pid, phase: 'place', challenges: [] },
+                    },
+                };
+            });
         });
         socket.on('turn:placed', ({ activePlayerId: pid }) => {
             setActivePlayerId(pid);
