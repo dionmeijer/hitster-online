@@ -363,8 +363,12 @@ export function resolveFlip(
 
   const correct = isPlacementCorrect(timeline.cards, card, position);
 
+  // In Pro/Expert mode, a correct placement only keeps the card if the player named the song
+  const effectivelyCorrect = correct &&
+    (config.mode !== 'pro' && config.mode !== 'expert' || currentTurn.named === true);
+
   let updatedCards: Card[];
-  if (correct) {
+  if (effectivelyCorrect) {
     updatedCards = [
       ...timeline.cards.slice(0, position),
       card,

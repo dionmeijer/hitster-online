@@ -1045,6 +1045,100 @@ describe('isActiveParticipant', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Pro/Expert naming requirement
+// ---------------------------------------------------------------------------
+
+describe('resolveFlip — Pro/Expert naming requirement', () => {
+  function makeRoomWithTurnAndMode(
+    cards: Card[],
+    cardToPlace: Card,
+    position: number,
+    mode: RoundConfig['mode'],
+    named?: boolean,
+  ): Room {
+    const room = createRoom('player1', 'Alice', 'Test Room');
+    const roomWithPlayer = addPlayer(room, 'player2', 'Bob');
+    const config: RoundConfig = { mode, cardsToWin: 10, tokensEnabled: true };
+
+    const deck = [
+      ...cards,
+      cardToPlace,
+      ...Array.from({ length: 20 }, (_, i) => makeCard(`filler-${i}`, 2000 + i)),
+    ];
+
+    const { room: initedRoom, deck: remainingDeck } = initRound(roomWithPlayer, config, deck);
+
+    return {
+      ...initedRoom,
+      activeRound: {
+        ...initedRoom.activeRound!,
+        timelines: {
+          ...initedRoom.activeRound!.timelines,
+          player1: { ownerId: 'player1', cards },
+        },
+        currentTurn: {
+          activeId: 'player1',
+          phase: 'challenge',
+          placedPosition: position,
+          challengeDeadline: Date.now() + 10_000,
+          challenges: [],
+          named,
+        },
+        deckRemaining: remainingDeck.length,
+      },
+    };
+  }
+
+  it('Pro mode: correctly placed card is discarded if not named', () => {
+    const existingCards = [makeCard('c1', 1990), makeCard('c2', 2010)];
+    const newCard = makeCard('new', 2000);
+    const room = makeRoomWithTurnAndMode(existingCards, newCard, 1, 'pro', undefined);
+
+    const { room: updatedRoom, correct } = resolveFlip(room, newCard);
+    expect(correct).toBe(true); // raw placement is correct
+    const timeline = updatedRoom.activeRound!.timelines['player1'];
+    expect(timeline.cards).toHaveLength(2); // card was NOT kept
+    expect(timeline.cards.find(c => c.trackId === 'new')).toBeUndefined();
+  });
+
+  it('Pro mode: correctly placed card stays if named', () => {
+    const existingCards = [makeCard('c1', 1990), makeCard('c2', 2010)];
+    const newCard = makeCard('new', 2000);
+    const room = makeRoomWithTurnAndMode(existingCards, newCard, 1, 'pro', true);
+
+    const { room: updatedRoom, correct } = resolveFlip(room, newCard);
+    expect(correct).toBe(true);
+    const timeline = updatedRoom.activeRound!.timelines['player1'];
+    expect(timeline.cards).toHaveLength(3); // card was kept
+    expect(timeline.cards[1].trackId).toBe('new');
+  });
+
+  it('Expert mode: named but wrong year discards card', () => {
+    // named=false simulates correct title+artist but wrong year (or simply not named)
+    const existingCards = [makeCard('c1', 1990), makeCard('c2', 2010)];
+    const newCard = makeCard('new', 2000);
+    const room = makeRoomWithTurnAndMode(existingCards, newCard, 1, 'expert', false);
+
+    const { room: updatedRoom, correct } = resolveFlip(room, newCard);
+    expect(correct).toBe(true); // raw placement correct
+    const timeline = updatedRoom.activeRound!.timelines['player1'];
+    expect(timeline.cards).toHaveLength(2); // card discarded
+  });
+
+  it('Expert mode: named with correct year keeps card', () => {
+    const existingCards = [makeCard('c1', 1990), makeCard('c2', 2010)];
+    const newCard = makeCard('new', 2000);
+    const room = makeRoomWithTurnAndMode(existingCards, newCard, 1, 'expert', true);
+
+    const { room: updatedRoom, correct } = resolveFlip(room, newCard);
+    expect(correct).toBe(true);
+    const timeline = updatedRoom.activeRound!.timelines['player1'];
+    expect(timeline.cards).toHaveLength(3); // card kept
+    expect(timeline.cards[1].trackId).toBe('new');
+  });
+});
+
 describe('initRound with teams', () => {
   it('uses teamIds for turnOrder and creates team timelines', () => {
     let room = createRoom('p1', 'Alice', 'Test');

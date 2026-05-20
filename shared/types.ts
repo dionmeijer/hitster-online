@@ -92,6 +92,7 @@ export interface CurrentTurn {
   placedPosition?: number;
   challengeDeadline?: number; // Unix ms
   challenges: Challenge[];
+  named?: boolean;   // Pro/Expert: placing player named song correctly this turn
 }
 
 // ----------------------------
@@ -187,7 +188,7 @@ export interface ClientToServerEvents {
   'turn:skip': () => void;
 
   /** Active player attempts to name the song for +1 token */
-  'turn:name': (data: { title: string; artist: string }) => void;
+  'turn:name': (data: { title: string; artist: string; year?: number }) => void;
 
   /** Active player spends 3 tokens to place the current card without hearing the song; their next turn is skipped */
   'turn:buy': () => void;

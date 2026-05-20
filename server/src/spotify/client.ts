@@ -121,6 +121,8 @@ export class SpotifyClient {
   async getPlaylistTracks(playlistUrl: string, limit = 200): Promise<Card[]> {
     const playlistId = this.extractPlaylistId(playlistUrl);
     const cards: Card[] = [];
+    let nullPreviews = 0;
+    let totalTracks = 0;
     let nextPath: string | null = `/playlists/${playlistId}/tracks?limit=50`;
 
     while (nextPath && cards.length < limit) {
@@ -128,11 +130,20 @@ export class SpotifyClient {
 
       for (const item of data.items) {
         if (!item.track) continue;
+        totalTracks++;
+        if (!item.track.preview_url) {
+          nullPreviews++;
+          continue;
+        }
         const card = this.trackToCard(item.track);
         if (card) cards.push(card);
       }
 
       nextPath = data.next ?? null;
+    }
+
+    if (nullPreviews > 0) {
+      console.warn(`[Spotify] ${nullPreviews} of ${totalTracks} tracks have no preview URL and will be excluded`);
     }
 
     return cards;
@@ -141,6 +152,8 @@ export class SpotifyClient {
   /** Search for tracks by genre keyword. Tracks without a preview_url are excluded. */
   async getGenreTracks(genre: string, limit = 100): Promise<Card[]> {
     const cards: Card[] = [];
+    let nullPreviews = 0;
+    let totalTracks = 0;
     const q = encodeURIComponent(`genre:${genre}`);
     let nextPath: string | null = `/search?q=${q}&type=track&limit=50&offset=0`;
 
@@ -149,11 +162,20 @@ export class SpotifyClient {
       const items: SpotifyTrack[] = data.tracks?.items ?? [];
 
       for (const track of items) {
+        totalTracks++;
+        if (!track.preview_url) {
+          nullPreviews++;
+          continue;
+        }
         const card = this.trackToCard(track);
         if (card) cards.push(card);
       }
 
       nextPath = items.length === 0 ? null : (data.tracks?.next ?? null);
+    }
+
+    if (nullPreviews > 0) {
+      console.warn(`[Spotify] ${nullPreviews} of ${totalTracks} tracks have no preview URL and will be excluded`);
     }
 
     return cards;
