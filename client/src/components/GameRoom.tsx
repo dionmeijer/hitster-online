@@ -432,9 +432,10 @@ interface WinScreenProps {
   sessionId: string;
   onBackToLobby: () => void;
   onLeave: () => void;
+  onEndGame: () => void;
 }
 
-function WinScreen({ winnerId, room, sessionId, onBackToLobby, onLeave }: WinScreenProps) {
+function WinScreen({ winnerId, room, sessionId, onBackToLobby, onLeave, onEndGame }: WinScreenProps) {
   const isCoopWin = winnerId === 'cooperative';
   const isCoopLoss = !winnerId && room.activeRound?.config.mode === 'cooperative';
   const isTeamWin = winnerId && room.teams[winnerId] !== undefined;
@@ -503,6 +504,11 @@ function WinScreen({ winnerId, room, sessionId, onBackToLobby, onLeave }: WinScr
         <button className="win-leave" onClick={onLeave}>
           Leave Room
         </button>
+        {isOwner && (
+          <button className="win-end-game" onClick={onEndGame}>
+            ✕ End Game
+          </button>
+        )}
       </div>
     </div>
   );
@@ -550,6 +556,7 @@ function LobbyScreen({
   const [tokensEnabled, setTokensEnabled] = useState(true);
   const [starting, setStarting] = useState(false);
   const [newTeamName, setNewTeamName] = useState('');
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (socketError) setStarting(false);
@@ -570,10 +577,21 @@ function LobbyScreen({
     setNewTeamName('');
   }
 
+  function handleCopyLink() {
+    const url = `${window.location.origin}/?room=${room.code}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }
+
   return (
     <div className="lobby-screen">
       <div className="lobby-code" data-testid="lobby-room-code">{room.code}</div>
       <div className="lobby-code-label">Share this code to invite friends</div>
+      <button className="lobby-copy-link-btn" onClick={handleCopyLink}>
+        {copied ? '✓ Copied!' : '🔗 Copy invite link'}
+      </button>
 
       <div className="lobby-player-list">
         {players.map(p => {
@@ -879,13 +897,14 @@ export interface GameRoomProps {
   onPlaceCard: (position: number) => void;
   onChallengeCard: () => void;
   onSkipCard: () => void;
-  onNameSong: (title: string, artist: string) => void;
+  onNameSong: (title: string, artist: string, year?: number) => void;
   onBuyCard: () => void;
   onSendChatMessage: (text: string) => void;
   onDismissRoundEnd: () => void;
   onCreateTeam: (name: string) => void;
   onJoinTeam: (teamId: string) => void;
   onLeaveTeam: () => void;
+  onEndGame: () => void;
   onLeave: () => void;
 }
 
@@ -912,6 +931,7 @@ export default function GameRoom({
   onCreateTeam,
   onJoinTeam,
   onLeaveTeam,
+  onEndGame,
   onLeave,
 }: GameRoomProps) {
   const [selectedPosition, setSelectedPosition] = useState<number | null>(null);
@@ -920,15 +940,17 @@ export default function GameRoom({
   const logCounter = useRef(0);
   const [nameSongTitle, setNameSongTitle] = useState('');
   const [nameSongArtist, setNameSongArtist] = useState('');
+  const [nameSongYear, setNameSongYear] = useState('');
 
   const round = room.activeRound;
   const isCooperative = round?.config.mode === 'cooperative';
   const myTeamId = Object.entries(room.teams).find(([, t]) => t.playerIds.includes(sessionId))?.[0];
-  const isActivePlayer = isCooperative
+  const isSpectator = room.players[sessionId]?.isSpectator === true;
+  const isActivePlayer = !isSpectator && (isCooperative
     ? activePlayerId !== null  // anyone can act in cooperative (handled server-side)
     : room.useTeams && myTeamId
       ? activePlayerId === myTeamId
-      : activePlayerId === sessionId;
+      : activePlayerId === sessionId);
   const timelineKey = isCooperative ? 'cooperative' : (room.useTeams && myTeamId ? myTeamId : sessionId);
   const myTimeline = round?.timelines[timelineKey];
   const myCards = myTimeline?.cards ?? [];
@@ -968,6 +990,40 @@ export default function GameRoom({
     onPlaceCard(selectedPosition);
   }
 
+  // Game over screen — room permanently ended by owner
+  if (room.status === 'game_over') {
+    return (
+      <div className="win-screen">
+        <div className="scanlines" />
+        <div className="win-trophy">🎮</div>
+        <div className="win-title">Game Over</div>
+        <div className="win-subtitle">Thanks for playing!</div>
+        {room.roundHistory.length > 0 && (
+          <div className="win-history">
+            <div className="win-history-title">Round History</div>
+            {room.roundHistory.map((r, i) => {
+              const rWinner = r.winnerId && room.players[r.winnerId]
+                ? room.players[r.winnerId].displayName
+                : r.winnerId === 'cooperative' ? 'Team'
+                : r.winnerId && room.teams[r.winnerId] ? room.teams[r.winnerId].name
+                : 'No winner';
+              return (
+                <div key={i} className="win-history-row">
+                  <span className="win-history-round">Round {r.roundNumber}</span>
+                  <span className="win-history-mode">{r.mode}</span>
+                  <span className="win-history-winner">{rWinner}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <div className="win-actions">
+          <button className="win-leave" onClick={onLeave}>← Leave</button>
+        </div>
+      </div>
+    );
+  }
+
   // Win screen — shown first so dismiss → lobby transition works
   if (roundEnded) {
     return (
@@ -977,6 +1033,7 @@ export default function GameRoom({
         sessionId={sessionId}
         onBackToLobby={onDismissRoundEnd}
         onLeave={onLeave}
+        onEndGame={onEndGame}
       />
     );
   }
@@ -1026,7 +1083,7 @@ export default function GameRoom({
         <div className="room-code-badge">ROOM: {room.code}</div>
         <TokenPanel
           myTokens={myTokens}
-          canSkip={isActivePlayer && !isInChallengePhase && currentCard !== null}
+          canSkip={!isSpectator && isActivePlayer && !isInChallengePhase && currentCard !== null}
           onSkip={onSkipCard}
         />
       </header>
@@ -1037,6 +1094,11 @@ export default function GameRoom({
 
         {/* CENTER: Gameplay */}
         <div className="center-col">
+          {isSpectator && (
+            <div className="spectator-banner">
+              👁 Spectating — you'll join the next round automatically
+            </div>
+          )}
           <AudioPlayer
             previewUrl={previewUrl}
             playAt={playAt}
@@ -1096,7 +1158,7 @@ export default function GameRoom({
               </button>
             )}
 
-            {!isActivePlayer && isInChallengePhase && !isCooperative && (
+            {!isActivePlayer && !isSpectator && isInChallengePhase && !isCooperative && (
               <button
                 className="action-btn btn-hitster"
                 onClick={onChallengeCard}
@@ -1126,7 +1188,7 @@ export default function GameRoom({
           <div className="panel-title">Game Log</div>
 
           <ChallengeBar
-            deadline={isCooperative ? null : challengeDeadline}
+            deadline={isCooperative || isSpectator ? null : challengeDeadline}
             onChallenge={onChallengeCard}
             isActivePlayer={isActivePlayer}
           />
@@ -1153,7 +1215,11 @@ export default function GameRoom({
           {/* Name song panel */}
           {isActivePlayer && currentCard && !isInChallengePhase && (
             <div style={{ marginTop: 24 }}>
-              <div className="panel-title">Name the Song (+1🪙)</div>
+              <div className="panel-title">
+                {round?.config.mode === 'pro' || round?.config.mode === 'expert'
+                  ? 'Name the Song (required to score)'
+                  : 'Name the Song (+1🪙)'}
+              </div>
               <div className="name-song-form">
                 <input
                   className="name-song-input"
@@ -1171,14 +1237,34 @@ export default function GameRoom({
                   value={nameSongArtist}
                   onChange={e => setNameSongArtist(e.target.value)}
                 />
+              </div>
+              {round?.config.mode === 'expert' && (
+                <div className="name-song-form" style={{ marginTop: 6 }}>
+                  <input
+                    className="name-song-input"
+                    data-testid="name-song-year"
+                    type="number"
+                    placeholder="Year"
+                    value={nameSongYear}
+                    onChange={e => setNameSongYear(e.target.value)}
+                  />
+                </div>
+              )}
+              <div className="name-song-form" style={{ marginTop: 6 }}>
                 <button
                   className="name-song-submit"
                   data-testid="name-song-submit"
-                  disabled={!nameSongTitle.trim() || !nameSongArtist.trim()}
+                  disabled={
+                    !nameSongTitle.trim() ||
+                    !nameSongArtist.trim() ||
+                    (round?.config.mode === 'expert' && !nameSongYear)
+                  }
                   onClick={() => {
-                    onNameSong(nameSongTitle.trim(), nameSongArtist.trim());
+                    const year = round?.config.mode === 'expert' ? Number(nameSongYear) : undefined;
+                    onNameSong(nameSongTitle.trim(), nameSongArtist.trim(), year);
                     setNameSongTitle('');
                     setNameSongArtist('');
+                    setNameSongYear('');
                   }}
                 >
                   Submit

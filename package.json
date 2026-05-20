@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "concurrently -n server,client -c cyan,magenta \"npm run dev -w server\" \"npm run dev -w client\"",
     "dev:server": "npm run dev -w server",
+    "test:server": "npm run test:server -w server",
     "dev:client": "npm run dev -w client",
     "dev:bots": "npm start -w bots",
     "build": "npm run build -w server && npm run build -w client",
@@ -24,6 +25,7 @@
     "@playwright/test": "^1.60.0",
     "concurrently": "^8.2.2",
     "tsx": "^4.15.6",
-    "typescript": "^5.4.5"
+    "typescript": "^5.4.5",
+    "wait-on": "^8.0.1"
   }
 }

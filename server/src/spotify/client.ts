@@ -121,6 +121,8 @@ export class SpotifyClient {
   async getPlaylistTracks(playlistUrl: string, limit = 200): Promise<Card[]> {
     const playlistId = this.extractPlaylistId(playlistUrl);
     const cards: Card[] = [];
+    let nullPreviews = 0;
+    let totalTracks = 0;
     let nextPath: string | null = `/playlists/${playlistId}/tracks?limit=50`;
 
     while (nextPath && cards.length < limit) {
@@ -128,11 +130,20 @@ export class SpotifyClient {
 
       for (const item of data.items) {
         if (!item.track) continue;
+        totalTracks++;
+        if (!item.track.preview_url) {
+          nullPreviews++;
+          continue;
+        }
         const card = this.trackToCard(item.track);
         if (card) cards.push(card);
       }
 
       nextPath = data.next ?? null;
+    }
+
+    if (nullPreviews > 0) {
+      console.warn(`[Spotify] ${nullPreviews} of ${totalTracks} tracks have no preview URL and will be excluded`);
     }
 
     return cards;
@@ -141,6 +152,8 @@ export class SpotifyClient {
   /** Search for tracks by genre keyword. Tracks without a preview_url are excluded. */
   async getGenreTracks(genre: string, limit = 100): Promise<Card[]> {
     const cards: Card[] = [];
+    let nullPreviews = 0;
+    let totalTracks = 0;
     const q = encodeURIComponent(`genre:${genre}`);
     let nextPath: string | null = `/search?q=${q}&type=track&limit=50&offset=0`;
 
@@ -149,11 +162,20 @@ export class SpotifyClient {
       const items: SpotifyTrack[] = data.tracks?.items ?? [];
 
       for (const track of items) {
+        totalTracks++;
+        if (!track.preview_url) {
+          nullPreviews++;
+          continue;
+        }
         const card = this.trackToCard(track);
         if (card) cards.push(card);
       }
 
       nextPath = items.length === 0 ? null : (data.tracks?.next ?? null);
+    }
+
+    if (nullPreviews > 0) {
+      console.warn(`[Spotify] ${nullPreviews} of ${totalTracks} tracks have no preview URL and will be excluded`);
     }
 
     return cards;
@@ -212,13 +234,13 @@ export class SpotifyClient {
   }
 }
 
-/** Build a SpotifyClient from environment variables. Throws if credentials are absent. */
+/** Build a SpotifyClient from environment variables. Throws if credentials are absent (unless TEST_MODE). */
 export function createSpotifyClient(): SpotifyClient {
-  const clientId = process.env.SPOTIFY_CLIENT_ID;
-  const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
-  if (!clientId || !clientSecret) {
+  const testMode = process.env.TEST_MODE === 'true';
+  const clientId = process.env.SPOTIFY_CLIENT_ID ?? (testMode ? 'test' : '');
+  const clientSecret = process.env.SPOTIFY_CLIENT_SECRET ?? (testMode ? 'test' : '');
+  if (!testMode && (!clientId || !clientSecret)) {
     throw new Error('SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET must be set');
   }
-  const testMode = process.env.TEST_MODE === 'true';
   return new SpotifyClient(clientId, clientSecret, testMode);
 }

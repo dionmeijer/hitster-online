@@ -20,13 +20,14 @@ export interface GameState {
   placeCard: (position: number) => void;
   challengeCard: () => void;
   skipCard: () => void;
-  nameSong: (title: string, artist: string) => void;
+  nameSong: (title: string, artist: string, year?: number) => void;
   buyCard: () => void;
   sendChatMessage: (text: string) => void;
   dismissRoundEnd: () => void;
   createTeam: (name: string) => void;
   joinTeam: (teamId: string) => void;
   leaveTeam: () => void;
+  endGame: () => void;
 }
 
 export function useGame(): GameState {
@@ -88,6 +89,18 @@ export function useGame(): GameState {
       setPlayAt(pa);
       setTimelineLength(tl);
       setLastFlip(null);
+      // Sync currentTurn phase locally so phase-gated UI (buy-btn) renders correctly
+      // without waiting for the next room:updated broadcast.
+      setRoom(prev => {
+        if (!prev?.activeRound) return prev;
+        return {
+          ...prev,
+          activeRound: {
+            ...prev.activeRound,
+            currentTurn: { activeId: pid, phase: 'place' as const, challenges: [] },
+          },
+        };
+      });
     });
 
     socket.on('turn:placed', ({ activePlayerId: pid }) => {
@@ -222,8 +235,8 @@ export function useGame(): GameState {
     socket.emit('turn:skip');
   }, []);
 
-  const nameSong = useCallback((title: string, artist: string) => {
-    socket.emit('turn:name', { title, artist });
+  const nameSong = useCallback((title: string, artist: string, year?: number) => {
+    socket.emit('turn:name', { title, artist, year });
   }, []);
 
   const buyCard = useCallback(() => {
@@ -248,6 +261,10 @@ export function useGame(): GameState {
 
   const leaveTeam = useCallback(() => {
     socket.emit('team:leave');
+  }, []);
+
+  const endGame = useCallback(() => {
+    socket.emit('room:end');
   }, []);
 
   return {
@@ -275,5 +292,6 @@ export function useGame(): GameState {
     createTeam,
     joinTeam,
     leaveTeam,
+    endGame,
   };
 }

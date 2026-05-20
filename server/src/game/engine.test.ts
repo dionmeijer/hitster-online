@@ -22,6 +22,7 @@ import {
   leaveTeam,
   isActiveParticipant,
   appendChatMessage,
+  endGame,
 } from './engine';
 import type { Room, Card, ChatMessage, RoundConfig } from '../../../shared/types';
 
@@ -660,11 +661,9 @@ describe('addPlayer', () => {
     expect(recon.players['p1'].isConnected).toBe(true);
   });
 
-  it('throws when room is not in lobby status', () => {
-    const room = createRoom('p1', 'Alice', 'Test');
-    const deck = Array.from({ length: 5 }, (_, i) => makeCard(`d${i}`, 1990 + i));
-    const { room: active } = initRound(room, defaultConfig, deck);
-    expect(() => addPlayer(active, 'p2', 'Bob')).toThrow();
+  it('throws when room is game_over', () => {
+    const room = { ...createRoom('p1', 'Alice', 'Test'), status: 'game_over' as const };
+    expect(() => addPlayer(room, 'p2', 'Bob')).toThrow('Cannot join a room that has ended');
   });
 
   it('addPlayer throws when room has 12 players', () => {
@@ -1046,6 +1045,151 @@ describe('isActiveParticipant', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Pro/Expert naming requirement
+// ---------------------------------------------------------------------------
+
+describe('resolveFlip — Pro/Expert naming requirement', () => {
+  function makeRoomWithTurnAndMode(
+    cards: Card[],
+    cardToPlace: Card,
+    position: number,
+    mode: RoundConfig['mode'],
+    named?: boolean,
+  ): Room {
+    const room = createRoom('player1', 'Alice', 'Test Room');
+    const roomWithPlayer = addPlayer(room, 'player2', 'Bob');
+    const config: RoundConfig = { mode, cardsToWin: 10, tokensEnabled: true };
+
+    const deck = [
+      ...cards,
+      cardToPlace,
+      ...Array.from({ length: 20 }, (_, i) => makeCard(`filler-${i}`, 2000 + i)),
+    ];
+
+    const { room: initedRoom, deck: remainingDeck } = initRound(roomWithPlayer, config, deck);
+
+    return {
+      ...initedRoom,
+      activeRound: {
+        ...initedRoom.activeRound!,
+        timelines: {
+          ...initedRoom.activeRound!.timelines,
+          player1: { ownerId: 'player1', cards },
+        },
+        currentTurn: {
+          activeId: 'player1',
+          phase: 'challenge',
+          placedPosition: position,
+          challengeDeadline: Date.now() + 10_000,
+          challenges: [],
+          named,
+        },
+        deckRemaining: remainingDeck.length,
+      },
+    };
+  }
+
+  it('Pro mode: correctly placed card is discarded if not named', () => {
+    const existingCards = [makeCard('c1', 1990), makeCard('c2', 2010)];
+    const newCard = makeCard('new', 2000);
+    const room = makeRoomWithTurnAndMode(existingCards, newCard, 1, 'pro', undefined);
+
+    const { room: updatedRoom, correct } = resolveFlip(room, newCard);
+    expect(correct).toBe(true); // raw placement is correct
+    const timeline = updatedRoom.activeRound!.timelines['player1'];
+    expect(timeline.cards).toHaveLength(2); // card was NOT kept
+    expect(timeline.cards.find(c => c.trackId === 'new')).toBeUndefined();
+  });
+
+  it('Pro mode: correctly placed card stays if named', () => {
+    const existingCards = [makeCard('c1', 1990), makeCard('c2', 2010)];
+    const newCard = makeCard('new', 2000);
+    const room = makeRoomWithTurnAndMode(existingCards, newCard, 1, 'pro', true);
+
+    const { room: updatedRoom, correct } = resolveFlip(room, newCard);
+    expect(correct).toBe(true);
+    const timeline = updatedRoom.activeRound!.timelines['player1'];
+    expect(timeline.cards).toHaveLength(3); // card was kept
+    expect(timeline.cards[1].trackId).toBe('new');
+  });
+
+  it('Expert mode: named but wrong year discards card', () => {
+    // named=false simulates correct title+artist but wrong year (or simply not named)
+    const existingCards = [makeCard('c1', 1990), makeCard('c2', 2010)];
+    const newCard = makeCard('new', 2000);
+    const room = makeRoomWithTurnAndMode(existingCards, newCard, 1, 'expert', false);
+
+    const { room: updatedRoom, correct } = resolveFlip(room, newCard);
+    expect(correct).toBe(true); // raw placement correct
+    const timeline = updatedRoom.activeRound!.timelines['player1'];
+    expect(timeline.cards).toHaveLength(2); // card discarded
+  });
+
+  it('Expert mode: named with correct year keeps card', () => {
+    const existingCards = [makeCard('c1', 1990), makeCard('c2', 2010)];
+    const newCard = makeCard('new', 2000);
+    const room = makeRoomWithTurnAndMode(existingCards, newCard, 1, 'expert', true);
+
+    const { room: updatedRoom, correct } = resolveFlip(room, newCard);
+    expect(correct).toBe(true);
+    const timeline = updatedRoom.activeRound!.timelines['player1'];
+    expect(timeline.cards).toHaveLength(3); // card kept
+    expect(timeline.cards[1].trackId).toBe('new');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// addPlayer — spectator mode
+// ---------------------------------------------------------------------------
+
+describe('addPlayer — spectator mode', () => {
+  it('adds player as spectator when room is round_active', () => {
+    const room = createRoom('owner', 'Owner', 'test');
+    const activeRoom = { ...room, status: 'round_active' as const };
+    const updated = addPlayer(activeRoom, 'p2', 'Player2');
+    expect(updated.players['p2'].isSpectator).toBe(true);
+  });
+
+  it('throws when joining a game_over room', () => {
+    const room = { ...createRoom('owner', 'Owner', 'test'), status: 'game_over' as const };
+    expect(() => addPlayer(room, 'p2', 'Player2')).toThrow('Cannot join a room that has ended');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// initRound — clears spectators
+// ---------------------------------------------------------------------------
+
+describe('initRound — clears spectators', () => {
+  it('converts spectators to participants at round start', () => {
+    const room = createRoom('owner', 'Owner', 'test');
+    const withSpectator: Room = {
+      ...room,
+      players: {
+        ...room.players,
+        'spec1': { id: 'spec1', displayName: 'Spec', isConnected: true, missedTurns: 0, isSpectator: true },
+      },
+    };
+    const deck = Array.from({ length: 10 }, (_, i) => makeCard(`d${i}`, 1990 + i));
+    const { room: started } = initRound(withSpectator, defaultConfig, deck);
+    expect(started.players['spec1'].isSpectator).toBe(false);
+    expect(started.players['owner'].isSpectator).toBeFalsy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// endGame
+// ---------------------------------------------------------------------------
+
+describe('endGame', () => {
+  it('sets room status to game_over', () => {
+    const room = createRoom('owner', 'Owner', 'test');
+    const ended = endGame(room);
+    expect(ended.status).toBe('game_over');
+  });
+});
+
 describe('initRound with teams', () => {
   it('uses teamIds for turnOrder and creates team timelines', () => {
     let room = createRoom('p1', 'Alice', 'Test');
@@ -1101,5 +1245,63 @@ describe('appendChatMessage', () => {
     expect(room.chatMessages).toHaveLength(100);
     expect(room.chatMessages[0].id).toBe('m1');
     expect(room.chatMessages[99].id).toBe('m100');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Helper for spectator / endGame tests
+// ---------------------------------------------------------------------------
+
+function mockDeck(n: number): Card[] {
+  return Array.from({ length: n }, (_, i) => makeCard(`mock-${i}`, 1980 + i));
+}
+
+// ---------------------------------------------------------------------------
+// addPlayer — spectator mode
+// ---------------------------------------------------------------------------
+
+describe('addPlayer — spectator mode', () => {
+  it('adds player as spectator when room is round_active', () => {
+    const room = createRoom('owner', 'Owner', 'test');
+    const activeRoom = { ...room, status: 'round_active' as const };
+    const updated = addPlayer(activeRoom, 'p2', 'Player2');
+    expect(updated.players['p2'].isSpectator).toBe(true);
+  });
+
+  it('throws when joining a game_over room', () => {
+    const room = { ...createRoom('owner', 'Owner', 'test'), status: 'game_over' as const };
+    expect(() => addPlayer(room, 'p2', 'Player2')).toThrow('Cannot join a room that has ended');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// initRound — clears spectators
+// ---------------------------------------------------------------------------
+
+describe('initRound — clears spectators', () => {
+  it('converts spectators to participants at round start', () => {
+    const room = createRoom('owner', 'Owner', 'test');
+    const withSpectator: Room = {
+      ...room,
+      players: {
+        ...room.players,
+        'spec1': { id: 'spec1', displayName: 'Spec', isConnected: true, missedTurns: 0, isSpectator: true },
+      },
+    };
+    const { room: started } = initRound(withSpectator, defaultConfig, mockDeck(10));
+    expect(started.players['spec1'].isSpectator).toBe(false);
+    expect(started.players['owner'].isSpectator).toBeFalsy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// endGame
+// ---------------------------------------------------------------------------
+
+describe('endGame', () => {
+  it('sets room status to game_over', () => {
+    const room = createRoom('owner', 'Owner', 'test');
+    const ended = endGame(room);
+    expect(ended.status).toBe('game_over');
   });
 });

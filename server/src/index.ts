@@ -258,7 +258,8 @@ function resolveAndAdvance(roomCode: string): void {
 io.on('connection', (socket) => {
   const auth = socket.handshake.auth as SocketAuth;
   const sessionId = auth.sessionId;
-  const displayName = auth.displayName ?? 'Anonymous';
+  const email = (auth.email ?? '').trim();
+  const displayName = (auth.displayName ?? '').trim() || email.split('@')[0] || 'Anonymous';
 
   console.log(`Client connected: ${socket.id} (session: ${sessionId}, name: ${displayName})`);
 
@@ -446,14 +447,35 @@ io.on('connection', (socket) => {
     if (!card) return;
 
     const norm = (s: string) => s.toLowerCase().trim();
-    const correct = norm(data.title) === norm(card.title) && norm(data.artist) === norm(card.artist);
+    const titleArtistMatch = norm(data.title) === norm(card.title) && norm(data.artist) === norm(card.artist);
+    const mode = room.activeRound.config.mode;
+
+    // Expert requires exact year too
+    const yearMatch = mode !== 'expert' || data.year === card.releaseYear;
+    const correct = titleArtistMatch && yearMatch;
 
     if (correct) {
-      const updatedRoom = engine.applyNamingBonus(room, sessionId);
-      store.set(updatedRoom);
-      const tokensUpdated = updatedRoom.activeRound?.tokens ?? {};
-      io.to(session.roomCode).emit('turn:named', { playerId: sessionId, tokensUpdated });
-      io.to(session.roomCode).emit('room:updated', updatedRoom);
+      if (mode === 'pro' || mode === 'expert') {
+        // Mark current turn as named (no token bonus in these modes)
+        if (room.activeRound.currentTurn) {
+          const updatedRoom = {
+            ...room,
+            activeRound: {
+              ...room.activeRound,
+              currentTurn: { ...room.activeRound.currentTurn, named: true },
+            },
+          };
+          store.set(updatedRoom);
+          io.to(session.roomCode).emit('room:updated', updatedRoom);
+        }
+      } else {
+        // Original/Cooperative: naming bonus (+1 token)
+        const updatedRoom = engine.applyNamingBonus(room, sessionId);
+        store.set(updatedRoom);
+        const tokensUpdated = updatedRoom.activeRound?.tokens ?? {};
+        io.to(session.roomCode).emit('turn:named', { playerId: sessionId, tokensUpdated });
+        io.to(session.roomCode).emit('room:updated', updatedRoom);
+      }
     }
   });
 
@@ -558,6 +580,21 @@ io.on('connection', (socket) => {
     const updatedRoom = engine.appendChatMessage(room, message);
     store.set(updatedRoom);
     io.to(session.roomCode).emit('room:updated', updatedRoom);
+  });
+
+  // ------------------------------------------------------------------
+  // room:end
+  // ------------------------------------------------------------------
+  socket.on('room:end', () => {
+    const session = socketSession.get(socket.id);
+    if (!session) return;
+    const room = store.get(session.roomCode);
+    if (!room) return;
+
+    if (room.ownerId !== sessionId) { socket.emit('error', 'Only the room owner can end the game'); return; }
+    const endedRoom = engine.endGame(room);
+    store.set(endedRoom);
+    io.to(session.roomCode).emit('room:updated', endedRoom);
   });
 
   // ------------------------------------------------------------------

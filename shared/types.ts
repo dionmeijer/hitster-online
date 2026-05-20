@@ -18,6 +18,7 @@ export interface Player {
   email?: string;     // never shared with other clients
   isConnected: boolean;
   missedTurns: number;
+  isSpectator?: boolean; // true when player joins a ROUND_ACTIVE room
 }
 
 export interface Team {
@@ -101,6 +102,7 @@ export interface CurrentTurn {
   placedPosition?: number;
   challengeDeadline?: number; // Unix ms
   challenges: Challenge[];
+  named?: boolean;   // Pro/Expert: placing player named song correctly this turn
 }
 
 // ----------------------------
@@ -196,7 +198,7 @@ export interface ClientToServerEvents {
   'turn:skip': () => void;
 
   /** Active player attempts to name the song for +1 token */
-  'turn:name': (data: { title: string; artist: string }) => void;
+  'turn:name': (data: { title: string; artist: string; year?: number }) => void;
 
   /** Active player spends 3 tokens to place the current card without hearing the song; their next turn is skipped */
   'turn:buy': () => void;
@@ -212,6 +214,9 @@ export interface ClientToServerEvents {
 
   /** Send a chat message to everyone in the current room */
   'chat:send': (data: { text: string }) => void;
+
+  /** Owner ends the game session, transitioning room to game_over */
+  'room:end': () => void;
 }
 
 // ----------------------------
