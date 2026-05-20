@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import type { Room, Card, CardHidden, GameMode } from '../../../shared/types';
 import TrackPreviewModal from './TrackPreviewModal';
+import { PlaylistAutocomplete } from './PlaylistAutocomplete';
 import { isSpotifyTrackPageUrl } from '../spotify';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -641,12 +642,9 @@ function LobbyScreen({ room, sessionId, onStartRound, onCreateTeam, onJoinTeam, 
       {isOwner && (
         <>
           <div className="lobby-playlist-field">
-            <input
-              className="form-input"
-              type="text"
-              placeholder="Genre or Spotify playlist URL (optional)"
+            <PlaylistAutocomplete
               value={playlistLabel}
-              onChange={e => setPlaylistLabel(e.target.value)}
+              onChange={setPlaylistLabel}
               data-testid="playlist-label-input"
             />
             <button

@@ -139,6 +139,7 @@ export class SpotifyClient {
       releaseYear,
       // For now: Spotify play page (external_urls.spotify), not preview_url MP3.
       previewUrl: this.trackPlayUrl(track),
+      streamUrl: track.preview_url,
       albumArt,
     };
     this.logRetrievedTrack(track, true);

@@ -33,7 +33,10 @@ export interface Card {
   title: string;
   artist: string;
   releaseYear: number;
+  /** Spotify play page URL used during turns. */
   previewUrl: string;
+  /** 30s MP3 preview when Spotify provides one (playlist preview modal, etc.). */
+  streamUrl?: string | null;
   albumArt: string;
 }
 
