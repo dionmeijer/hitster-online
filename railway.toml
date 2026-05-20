@@ -1,6 +1,10 @@
 [variables]
 SPOTIFY_CLIENT_ID = ""
 SPOTIFY_CLIENT_SECRET = ""
+# Railway sets PORT automatically; override only if needed (e.g. local parity).
+PORT = ""
+# Public app URL for CORS when the client is served separately; omit for same-origin deploy.
+CLIENT_URL = ""
 
 [build]
 builder = "nixpacks"

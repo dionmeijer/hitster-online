@@ -23,15 +23,18 @@ function makeTrack(
     name: string;
     artists: { name: string }[];
     preview_url: string | null;
+    external_urls: { spotify: string };
     release_date: string;
     images: { url: string; width: number; height: number }[];
   }> = {},
 ) {
+  const id = overrides.id ?? 'track1';
   return {
-    id: overrides.id ?? 'track1',
+    id,
     name: overrides.name ?? 'Song Title',
     artists: overrides.artists ?? [{ name: 'Artist' }],
     preview_url: overrides.preview_url !== undefined ? overrides.preview_url : 'https://p.scdn.co/preview.mp3',
+    external_urls: overrides.external_urls ?? { spotify: `https://open.spotify.com/track/${id}` },
     album: {
       images: overrides.images ?? [{ url: 'https://img.example.com/art.jpg', width: 640, height: 640 }],
       release_date: overrides.release_date ?? '1995-06-15',
@@ -125,18 +128,18 @@ describe('SpotifyClient', () => {
         title: 'Song Title',
         artist: 'Artist',
         releaseYear: 1995,
-        previewUrl: 'https://p.scdn.co/preview.mp3',
+        previewUrl: 'https://open.spotify.com/track/track1',
         albumArt: 'https://img.example.com/art.jpg',
       });
     });
 
-    it('filters out tracks with null preview_url', async () => {
+    it('uses Spotify play URL instead of preview_url MP3', async () => {
       mockFetch
         .mockResolvedValueOnce(tokenOk())
         .mockResolvedValueOnce(
           apiOk({
             items: [
-              { track: makeTrack({ preview_url: null }) },
+              { track: makeTrack({ id: 'no-preview', preview_url: null }) },
               { track: makeTrack({ id: 'track2', preview_url: 'https://p.scdn.co/2.mp3' }) },
             ],
             next: null,
@@ -144,8 +147,9 @@ describe('SpotifyClient', () => {
         );
 
       const cards = await client.getPlaylistTracks('abc123');
-      expect(cards).toHaveLength(1);
-      expect(cards[0].trackId).toBe('track2');
+      expect(cards).toHaveLength(2);
+      expect(cards[0].previewUrl).toBe('https://open.spotify.com/track/no-preview');
+      expect(cards[1].previewUrl).toBe('https://open.spotify.com/track/track2');
     });
 
     it('filters out null track items', async () => {
@@ -276,7 +280,7 @@ describe('SpotifyClient', () => {
       expect(url).toContain('genre%3A90s%20pop');
     });
 
-    it('filters out tracks with null preview_url', async () => {
+    it('uses Spotify play URL instead of preview_url MP3', async () => {
       mockFetch
         .mockResolvedValueOnce(tokenOk())
         .mockResolvedValueOnce(
@@ -292,8 +296,9 @@ describe('SpotifyClient', () => {
         );
 
       const cards = await client.getGenreTracks('rock');
-      expect(cards).toHaveLength(1);
-      expect(cards[0].trackId).toBe('g2');
+      expect(cards).toHaveLength(2);
+      expect(cards[0].previewUrl).toBe('https://open.spotify.com/track/g1');
+      expect(cards[1].previewUrl).toBe('https://open.spotify.com/track/g2');
     });
 
     it('paginates genre results across pages', async () => {

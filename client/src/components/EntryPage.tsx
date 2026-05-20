@@ -68,7 +68,7 @@ export default function EntryPage({ onConnect, onCreateRoom, onJoinRoom, serverU
 
   // Fetch rooms every 10s
   const fetchRooms = useCallback(async () => {
-    const base = serverUrl ?? (import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3000');
+    const base = serverUrl ?? '';
     try {
       const res = await fetch(`${base}/rooms`);
       if (res.ok) {
