@@ -8,6 +8,9 @@ import {
   resolveFlip,
   advanceTurn,
   applyNamingBonus,
+  applyBuy,
+  incrementMissedTurns,
+  removeFromTurnOrder,
   initRound,
   drawCard,
   applySkip,
@@ -328,6 +331,194 @@ describe('applyNamingBonus', () => {
 });
 
 // ---------------------------------------------------------------------------
+// applyBuy
+// ---------------------------------------------------------------------------
+
+describe('applyBuy', () => {
+  function roomWithTokens(tokens: number): Room {
+    const room = createRoom('player1', 'Alice', 'Test Room');
+    const roomWith2 = addPlayer(room, 'player2', 'Bob');
+    const deck = Array.from({ length: 15 }, (_, i) => makeCard(`c${i}`, 2000 + i));
+    const { room: initedRoom } = initRound(roomWith2, defaultConfig, deck);
+    return {
+      ...initedRoom,
+      activeRound: {
+        ...initedRoom.activeRound!,
+        tokens: { ...initedRoom.activeRound!.tokens, player1: tokens },
+        turnOrder: ['player1', 'player2'],
+        turnIndex: 0,
+        currentTurn: {
+          activeId: 'player1',
+          phase: 'place',
+          challenges: [],
+        },
+      },
+    };
+  }
+
+  it('deducts 3 tokens', () => {
+    const room = roomWithTokens(3);
+    const result = applyBuy(room, 'player1');
+    expect(result.activeRound!.tokens['player1']).toBe(0);
+  });
+
+  it('deducts 3 from a higher balance', () => {
+    const room = roomWithTokens(5);
+    const result = applyBuy(room, 'player1');
+    expect(result.activeRound!.tokens['player1']).toBe(2);
+  });
+
+  it('throws when player has fewer than 3 tokens', () => {
+    const room = roomWithTokens(2);
+    expect(() => applyBuy(room, 'player1')).toThrow('Not enough tokens');
+  });
+
+  it('throws when it is not the player\'s turn', () => {
+    const room = roomWithTokens(3);
+    expect(() => applyBuy(room, 'player2')).toThrow('Not your turn');
+  });
+
+  it('throws when not in place phase', () => {
+    const room = roomWithTokens(3);
+    const challenged: Room = {
+      ...room,
+      activeRound: {
+        ...room.activeRound!,
+        currentTurn: { ...room.activeRound!.currentTurn!, phase: 'challenge' },
+      },
+    };
+    expect(() => applyBuy(challenged, 'player1')).toThrow('place phase');
+  });
+
+  it('adds player to pendingSkips', () => {
+    const room = roomWithTokens(3);
+    const result = applyBuy(room, 'player1');
+    expect(result.activeRound!.pendingSkips).toContain('player1');
+  });
+
+  it('does not add player to pendingSkips twice', () => {
+    const room = roomWithTokens(5);
+    const once = applyBuy(room, 'player1');
+    // Simulate calling again (shouldn't happen in practice but guard it)
+    const alreadyIn: Room = {
+      ...once,
+      activeRound: {
+        ...once.activeRound!,
+        tokens: { ...once.activeRound!.tokens, player1: 3 },
+      },
+    };
+    const twice = applyBuy(alreadyIn, 'player1');
+    const skips = twice.activeRound!.pendingSkips ?? [];
+    expect(skips.filter(id => id === 'player1')).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// incrementMissedTurns
+// ---------------------------------------------------------------------------
+
+describe('incrementMissedTurns', () => {
+  it('increments from 0 to 1', () => {
+    const room = createRoom('player1', 'Alice', 'Test Room');
+    const result = incrementMissedTurns(room, 'player1');
+    expect(result.players['player1'].missedTurns).toBe(1);
+  });
+
+  it('increments from 1 to 2', () => {
+    const room = createRoom('player1', 'Alice', 'Test Room');
+    const once = incrementMissedTurns(room, 'player1');
+    const twice = incrementMissedTurns(once, 'player1');
+    expect(twice.players['player1'].missedTurns).toBe(2);
+  });
+
+  it('returns room unchanged when player does not exist', () => {
+    const room = createRoom('player1', 'Alice', 'Test Room');
+    const result = incrementMissedTurns(room, 'unknown');
+    expect(result).toBe(room);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// removeFromTurnOrder
+// ---------------------------------------------------------------------------
+
+describe('removeFromTurnOrder', () => {
+  function roomWithOrder(order: string[], index: number): Room {
+    const base = createRoom('player1', 'Alice', 'Test Room');
+    const withPlayers = order
+      .slice(1)
+      .reduce((r, id) => addPlayer(r, id, id), base);
+    const deck = Array.from({ length: 20 }, (_, i) => makeCard(`c${i}`, 2000 + i));
+    const { room: initedRoom } = initRound(withPlayers, defaultConfig, deck);
+    return {
+      ...initedRoom,
+      activeRound: {
+        ...initedRoom.activeRound!,
+        turnOrder: order,
+        turnIndex: index,
+      },
+    };
+  }
+
+  it('removes a player from the turn order', () => {
+    const room = roomWithOrder(['A', 'B', 'C'], 0);
+    const result = removeFromTurnOrder(room, 'B');
+    expect(result.activeRound!.turnOrder).toEqual(['A', 'C']);
+  });
+
+  it('keeps turnIndex when removing a player after current', () => {
+    // Current is A (index 0), removing C (index 2) → index stays 0
+    const room = roomWithOrder(['A', 'B', 'C'], 0);
+    const result = removeFromTurnOrder(room, 'C');
+    expect(result.activeRound!.turnIndex).toBe(0);
+  });
+
+  it('decrements turnIndex when removing a player before current', () => {
+    // Current is C (index 2), removing A (index 0) → index shifts to 1
+    const room = roomWithOrder(['A', 'B', 'C'], 2);
+    const result = removeFromTurnOrder(room, 'A');
+    expect(result.activeRound!.turnIndex).toBe(1);
+    expect(result.activeRound!.turnOrder[1]).toBe('C');
+  });
+
+  it('keeps turnIndex pointing to next player when removing current', () => {
+    // Current is B (index 1), removing B → new order ['A','C'], index stays 1 (C is next)
+    const room = roomWithOrder(['A', 'B', 'C'], 1);
+    const result = removeFromTurnOrder(room, 'B');
+    expect(result.activeRound!.turnOrder).toEqual(['A', 'C']);
+    expect(result.activeRound!.turnIndex).toBe(1);
+    expect(result.activeRound!.turnOrder[1]).toBe('C');
+  });
+
+  it('wraps turnIndex when the last player in the array is the current', () => {
+    // Current is C (index 2), removing C → new order ['A','B'], index wraps to 0
+    const room = roomWithOrder(['A', 'B', 'C'], 2);
+    const result = removeFromTurnOrder(room, 'C');
+    expect(result.activeRound!.turnOrder).toEqual(['A', 'B']);
+    expect(result.activeRound!.turnIndex).toBe(0);
+  });
+
+  it('returns room unchanged when player is not in the turn order', () => {
+    const room = roomWithOrder(['A', 'B', 'C'], 0);
+    const result = removeFromTurnOrder(room, 'X');
+    expect(result).toBe(room);
+  });
+
+  it('clears currentTurn when the current active player is removed', () => {
+    const room = roomWithOrder(['A', 'B', 'C'], 1);
+    const withTurn: Room = {
+      ...room,
+      activeRound: {
+        ...room.activeRound!,
+        currentTurn: { activeId: 'B', phase: 'place', challenges: [] },
+      },
+    };
+    const result = removeFromTurnOrder(withTurn, 'B');
+    expect(result.activeRound!.currentTurn).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // drawCard
 // ---------------------------------------------------------------------------
 
@@ -396,6 +587,14 @@ describe('markDisconnected / markReconnected', () => {
     const d2 = markDisconnected(d1, 'p2');
     const allGone = Object.values(d2.players).every(p => !p.isConnected);
     expect(allGone).toBe(true);
+  });
+
+  it('resets missedTurns to 0', () => {
+    const room = createRoom('player1', 'Alice', 'Test Room');
+    const disconnected = markDisconnected(room, 'player1');
+    const withMissed = incrementMissedTurns(disconnected, 'player1');
+    const reconnected = markReconnected(withMissed, 'player1');
+    expect(reconnected.players['player1'].missedTurns).toBe(0);
   });
 });
 

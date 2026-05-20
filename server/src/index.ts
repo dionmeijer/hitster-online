@@ -11,6 +11,7 @@ import type {
   SocketAuth,
   RoundConfig,
   Challenge,
+  Room,
 } from '../../shared/types';
 import { createSpotifyClient } from './spotify/client';
 import { RoomStore } from './rooms/store';
@@ -58,6 +59,12 @@ const challengeTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const pendingDeletes = new Map<string, ReturnType<typeof setTimeout>>();
 const EMPTY_ROOM_TTL_MS = process.env.TEST_MODE === 'true' ? 5_000 : 60_000;
 
+// Timeout before auto-skipping a disconnected player's turn
+const TURN_TIMEOUT_MS = process.env.TEST_MODE === 'true' ? 3_000 : 15_000;
+
+// playerId → pending disconnect-skip timer (so it can be cancelled on reconnect)
+const disconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
 // ---------------------------------------------------------------------------
 // HTTP routes — API endpoints must be registered before the SPA catch-all
 // ---------------------------------------------------------------------------
@@ -89,6 +96,39 @@ function clearChallengeTimer(roomCode: string): void {
   if (t !== undefined) { clearTimeout(t); challengeTimers.delete(roomCode); }
 }
 
+function scheduleDisconnectSkip(roomCode: string, playerId: string): void {
+  const existing = disconnectTimers.get(playerId);
+  if (existing) clearTimeout(existing);
+
+  const timer = setTimeout(() => {
+    disconnectTimers.delete(playerId);
+    const cur = store.get(roomCode);
+    if (!cur?.activeRound) return;
+    if (cur.activeRound.turnOrder[cur.activeRound.turnIndex] !== playerId) return;
+
+    clearChallengeTimer(roomCode);
+    pendingCards.delete(roomCode);
+
+    const withMissed = engine.incrementMissedTurns(cur, playerId);
+    const missed = withMissed.players[playerId]?.missedTurns ?? 0;
+
+    io.to(roomCode).emit('turn:auto-skipped', { playerId, reason: 'disconnect' });
+
+    if (missed >= 2) {
+      const removed = engine.removeFromTurnOrder(withMissed, playerId);
+      store.set(removed);
+      io.to(roomCode).emit('room:updated', removed);
+    } else {
+      const advanced = engine.advanceTurn(withMissed);
+      store.set(advanced);
+      io.to(roomCode).emit('room:updated', advanced);
+    }
+    startTurn(roomCode);
+  }, TURN_TIMEOUT_MS);
+
+  disconnectTimers.set(playerId, timer);
+}
+
 function startTurn(roomCode: string): void {
   const room = store.get(roomCode);
   if (!room?.activeRound) return;
@@ -96,12 +136,36 @@ function startTurn(roomCode: string): void {
   const deck = liveDecks.get(roomCode) ?? [];
   if (deck.length === 0) return;
 
+  const activeId = room.activeRound.turnOrder[room.activeRound.turnIndex];
+
+  // If player bought last turn, auto-skip their turn now
+  if (room.activeRound.pendingSkips?.includes(activeId)) {
+    const withoutSkip: Room = {
+      ...room,
+      activeRound: {
+        ...room.activeRound,
+        pendingSkips: room.activeRound.pendingSkips.filter(id => id !== activeId),
+      },
+    };
+    const advanced = engine.advanceTurn(withoutSkip);
+    store.set(advanced);
+    io.to(roomCode).emit('turn:auto-skipped', { playerId: activeId, reason: 'buy' });
+    io.to(roomCode).emit('room:updated', advanced);
+    startTurn(roomCode);
+    return;
+  }
+
+  // If active player is disconnected, schedule auto-skip
+  if (!room.players[activeId]?.isConnected) {
+    scheduleDisconnectSkip(roomCode, activeId);
+    return;
+  }
+
   const { card, hidden, remaining } = engine.drawCard(deck);
   liveDecks.set(roomCode, remaining);
   pendingCards.set(roomCode, card);
   pendingChallenges.set(roomCode, []);
 
-  const activeId = room.activeRound.turnOrder[room.activeRound.turnIndex];
   const timelineLen = engine.timelineLength(room, activeId);
 
   const updatedRoom = {
@@ -220,7 +284,13 @@ io.on('connection', (socket) => {
       const existing = store.get(data.roomCode.toUpperCase());
       if (!existing) { socket.emit('error', 'Room not found'); return; }
 
-      const updatedRoom = engine.addPlayer(existing, sessionId, displayName);
+      let updatedRoom: Room;
+      if (existing.players[sessionId] && existing.status === 'round_active') {
+        // Player reconnecting mid-game — just mark them connected again
+        updatedRoom = engine.markReconnected(existing, sessionId);
+      } else {
+        updatedRoom = engine.addPlayer(existing, sessionId, displayName);
+      }
       store.set(updatedRoom);
       socket.join(updatedRoom.code);
       socketSession.set(socket.id, { sessionId, roomCode: updatedRoom.code });
@@ -228,6 +298,13 @@ io.on('connection', (socket) => {
       // Cancel any pending deletion for this room
       const pendingDelete = pendingDeletes.get(updatedRoom.code);
       if (pendingDelete) { clearTimeout(pendingDelete); pendingDeletes.delete(updatedRoom.code); }
+
+      // Cancel any pending disconnect-skip timer for this player
+      const pendingDisconnect = disconnectTimers.get(sessionId);
+      if (pendingDisconnect) {
+        clearTimeout(pendingDisconnect);
+        disconnectTimers.delete(sessionId);
+      }
 
       socket.emit('room:joined', { roomCode: updatedRoom.code, room: updatedRoom });
       io.to(updatedRoom.code).emit('room:updated', updatedRoom);
@@ -378,6 +455,30 @@ io.on('connection', (socket) => {
   });
 
   // ------------------------------------------------------------------
+  // turn:buy
+  // ------------------------------------------------------------------
+  socket.on('turn:buy', () => {
+    const session = socketSession.get(socket.id);
+    if (!session) return;
+
+    const room = store.get(session.roomCode);
+    if (!room?.activeRound) return;
+
+    const activeId = room.activeRound.turnOrder[room.activeRound.turnIndex];
+    if (activeId !== sessionId) { socket.emit('error', 'Not your turn'); return; }
+
+    try {
+      const updatedRoom = engine.applyBuy(room, sessionId);
+      store.set(updatedRoom);
+      const tokensUpdated = updatedRoom.activeRound?.tokens ?? {};
+      io.to(session.roomCode).emit('turn:bought', { playerId: sessionId, tokensUpdated });
+      io.to(session.roomCode).emit('room:updated', updatedRoom);
+    } catch (err) {
+      socket.emit('error', err instanceof Error ? err.message : 'Buy failed');
+    }
+  });
+
+  // ------------------------------------------------------------------
   // disconnect
   // ------------------------------------------------------------------
   socket.on('disconnect', () => {
@@ -408,23 +509,12 @@ io.on('connection', (socket) => {
       pendingDeletes.set(session.roomCode, t);
     }
 
-    // If it was this player's turn, advance after 15s
+    // If it was this player's turn during an active round, schedule auto-skip
     if (
       updatedRoom.status === 'round_active' &&
       updatedRoom.activeRound?.turnOrder[updatedRoom.activeRound.turnIndex] === sessionId
     ) {
-      const roomCode = session.roomCode;
-      setTimeout(() => {
-        const cur = store.get(roomCode);
-        if (!cur?.activeRound) return;
-        if (cur.activeRound.turnOrder[cur.activeRound.turnIndex] !== sessionId) return;
-        clearChallengeTimer(roomCode);
-        pendingCards.delete(roomCode);
-        const advanced = engine.advanceTurn(cur);
-        store.set(advanced);
-        io.to(roomCode).emit('room:updated', advanced);
-        startTurn(roomCode);
-      }, 15_000);
+      scheduleDisconnectSkip(session.roomCode, sessionId);
     }
   });
 });

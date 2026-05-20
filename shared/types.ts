@@ -78,6 +78,7 @@ export interface ActiveRound {
   currentCard?: CardHidden;         // card in play this turn
   currentTurn?: CurrentTurn;
   deckRemaining: number;
+  pendingSkips?: string[];          // playerIds whose NEXT turn is auto-skipped (after buying)
 }
 
 export interface Challenge {
@@ -155,6 +156,12 @@ export interface ServerToClientEvents {
   /** Broadcast when the round ends */
   'round:ended': (data: { winnerId: string | null; summary: RoundSummary }) => void;
 
+  /** Broadcast when a player uses buy — spends 3 tokens, next turn will be skipped */
+  'turn:bought': (data: { playerId: string; tokensUpdated: Record<string, number> }) => void;
+
+  /** Broadcast when a player's turn is auto-skipped (due to buy or disconnect) */
+  'turn:auto-skipped': (data: { playerId: string; reason: 'buy' | 'disconnect' }) => void;
+
   /** Error — emitted only to the socket that caused it */
   'error': (message: string) => void;
 }
@@ -180,6 +187,9 @@ export interface ClientToServerEvents {
 
   /** Active player attempts to name the song for +1 token */
   'turn:name': (data: { title: string; artist: string }) => void;
+
+  /** Active player spends 3 tokens to place the current card without hearing the song; their next turn is skipped */
+  'turn:buy': () => void;
 }
 
 // ----------------------------

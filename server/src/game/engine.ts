@@ -93,7 +93,7 @@ export function markReconnected(room: Room, playerId: string): Room {
     ...room,
     players: {
       ...room.players,
-      [playerId]: { ...room.players[playerId], isConnected: true },
+      [playerId]: { ...room.players[playerId], isConnected: true, missedTurns: 0 },
     },
   };
 }
@@ -357,6 +357,78 @@ export function applySkip(room: Room, playerId: string): Room {
         ...tokens,
         [playerId]: currentTokens - 1,
       },
+    },
+  };
+}
+
+/**
+ * Spend 3 tokens to "buy" the current card placement.
+ * The player still places the card themselves; their NEXT turn is auto-skipped.
+ */
+export function applyBuy(room: Room, playerId: string): Room {
+  if (!room.activeRound) throw new Error('No active round');
+  const { tokens, currentTurn } = room.activeRound;
+  if (!currentTurn) throw new Error('No current turn');
+  if (currentTurn.activeId !== playerId) throw new Error('Not your turn');
+  if (currentTurn.phase !== 'place') throw new Error('Can only buy during place phase');
+
+  const current = tokens[playerId] ?? 0;
+  if (current < 3) throw new Error('Not enough tokens to buy (need 3)');
+
+  const pendingSkips = room.activeRound.pendingSkips ?? [];
+  return {
+    ...room,
+    activeRound: {
+      ...room.activeRound,
+      tokens: { ...tokens, [playerId]: current - 3 },
+      pendingSkips: pendingSkips.includes(playerId) ? pendingSkips : [...pendingSkips, playerId],
+    },
+  };
+}
+
+/** Increment a player's missedTurns counter */
+export function incrementMissedTurns(room: Room, playerId: string): Room {
+  if (!room.players[playerId]) return room;
+  return {
+    ...room,
+    players: {
+      ...room.players,
+      [playerId]: {
+        ...room.players[playerId],
+        missedTurns: (room.players[playerId].missedTurns ?? 0) + 1,
+      },
+    },
+  };
+}
+
+/**
+ * Remove a player from the active turn order (called after 2 consecutive missed turns).
+ * Adjusts turnIndex so the current position keeps pointing to the correct next player.
+ */
+export function removeFromTurnOrder(room: Room, playerId: string): Room {
+  if (!room.activeRound) return room;
+  const { turnOrder, turnIndex } = room.activeRound;
+  const idx = turnOrder.indexOf(playerId);
+  if (idx === -1) return room;
+
+  const newTurnOrder = turnOrder.filter(id => id !== playerId);
+  if (newTurnOrder.length === 0) return room; // last player — caller handles game-end
+
+  let newTurnIndex = turnIndex;
+  if (idx < turnIndex) {
+    newTurnIndex = turnIndex - 1;
+  } else if (idx === turnIndex) {
+    newTurnIndex = turnIndex % newTurnOrder.length;
+  }
+  // idx > turnIndex: index unchanged
+
+  return {
+    ...room,
+    activeRound: {
+      ...room.activeRound,
+      turnOrder: newTurnOrder,
+      turnIndex: newTurnIndex,
+      currentTurn: idx === turnIndex ? undefined : room.activeRound.currentTurn,
     },
   };
 }
