@@ -182,6 +182,9 @@ export function useGame() {
     const buyCard = useCallback(() => {
         socket.emit('turn:buy');
     }, []);
+    const sendChatMessage = useCallback((text) => {
+        socket.emit('chat:send', { text });
+    }, []);
     const dismissRoundEnd = useCallback(() => {
         setRoundEnded(null);
     }, []);
@@ -214,6 +217,7 @@ export function useGame() {
         skipCard,
         nameSong,
         buyCard,
+        sendChatMessage,
         dismissRoundEnd,
         createTeam,
         joinTeam,

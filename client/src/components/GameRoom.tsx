@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
-import type { Room, Card, CardHidden, GameMode } from '../../../shared/types';
+import type { Room, Card, CardHidden, ChatMessage, GameMode } from '../../../shared/types';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -520,7 +520,9 @@ const MODES: { value: GameMode; label: string; desc: string }[] = [
 interface LobbyScreenProps {
   room: Room;
   sessionId: string;
+  chatMessages: ChatMessage[];
   onStartRound: (mode: GameMode, playlistLabel?: string, cardsToWin?: number, tokensEnabled?: boolean) => void;
+  onSendChatMessage: (text: string) => void;
   onCreateTeam: (name: string) => void;
   onJoinTeam: (teamId: string) => void;
   onLeaveTeam: () => void;
@@ -528,7 +530,18 @@ interface LobbyScreenProps {
   socketError?: string | null;
 }
 
-function LobbyScreen({ room, sessionId, onStartRound, onCreateTeam, onJoinTeam, onLeaveTeam, onLeave, socketError }: LobbyScreenProps) {
+function LobbyScreen({
+  room,
+  sessionId,
+  chatMessages,
+  onStartRound,
+  onSendChatMessage,
+  onCreateTeam,
+  onJoinTeam,
+  onLeaveTeam,
+  onLeave,
+  socketError,
+}: LobbyScreenProps) {
   const isOwner = room.ownerId === sessionId;
   const players = Object.values(room.players);
   const [playlistLabel, setPlaylistLabel] = useState('');
@@ -737,6 +750,14 @@ function LobbyScreen({ room, sessionId, onStartRound, onCreateTeam, onJoinTeam, 
       <button className="lobby-leave-btn" onClick={onLeave} data-testid="leave-btn">
         ← Leave Room
       </button>
+
+      <div className="lobby-chat-wrap">
+        <ChatPanel
+          messages={chatMessages}
+          sessionId={sessionId}
+          onSend={onSendChatMessage}
+        />
+      </div>
     </div>
   );
 }
@@ -780,6 +801,57 @@ function TokenPanel({ myTokens, canSkip, onSkip }: TokenPanelProps) {
   );
 }
 
+interface ChatPanelProps {
+  messages: ChatMessage[];
+  sessionId: string;
+  onSend: (text: string) => void;
+}
+
+function ChatPanel({ messages, sessionId, onSend }: ChatPanelProps) {
+  const [chatText, setChatText] = useState('');
+
+  function handleSend() {
+    const text = chatText.trim();
+    if (!text) return;
+    onSend(text);
+    setChatText('');
+  }
+
+  return (
+    <div className="chat-panel">
+      <div className="panel-title">Chat</div>
+      <div className="chat-messages">
+        {messages.map((message) => (
+          <div key={message.id} className="chat-message">
+            <span className="chat-sender">{message.senderId === sessionId ? 'You' : message.senderName}:</span>
+            <span className="chat-text">{message.text}</span>
+          </div>
+        ))}
+        {messages.length === 0 && (
+          <div className="chat-empty">No messages yet.</div>
+        )}
+      </div>
+      <div className="chat-input-row">
+        <input
+          className="chat-input"
+          placeholder="Type a message..."
+          maxLength={280}
+          value={chatText}
+          onChange={(e) => setChatText(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+        />
+        <button
+          className="chat-send-btn"
+          disabled={!chatText.trim()}
+          onClick={handleSend}
+        >
+          Send
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Main GameRoom component ───────────────────────────────────────────────────
 
 export interface GameRoomProps {
@@ -792,6 +864,7 @@ export interface GameRoomProps {
   lastFlip: { card: Card; correct: boolean } | null;
   roundEnded: { winnerId: string | null } | null;
   myTokens: number;
+  chatMessages: ChatMessage[];
   sessionId: string;
   socketError?: string | null;
   onStartRound: (mode: GameMode, playlistLabel?: string, cardsToWin?: number, tokensEnabled?: boolean) => void;
@@ -800,6 +873,7 @@ export interface GameRoomProps {
   onSkipCard: () => void;
   onNameSong: (title: string, artist: string) => void;
   onBuyCard: () => void;
+  onSendChatMessage: (text: string) => void;
   onDismissRoundEnd: () => void;
   onCreateTeam: (name: string) => void;
   onJoinTeam: (teamId: string) => void;
@@ -816,6 +890,7 @@ export default function GameRoom({
   lastFlip,
   roundEnded,
   myTokens,
+  chatMessages,
   sessionId,
   socketError,
   onStartRound,
@@ -824,6 +899,7 @@ export default function GameRoom({
   onSkipCard,
   onNameSong,
   onBuyCard,
+  onSendChatMessage,
   onDismissRoundEnd,
   onCreateTeam,
   onJoinTeam,
@@ -915,7 +991,9 @@ export default function GameRoom({
         <LobbyScreen
           room={room}
           sessionId={sessionId}
+          chatMessages={chatMessages}
           onStartRound={onStartRound}
+          onSendChatMessage={onSendChatMessage}
           onLeave={onLeave}
           onCreateTeam={onCreateTeam}
           onJoinTeam={onJoinTeam}
@@ -1057,6 +1135,12 @@ export default function GameRoom({
               <div style={{ color: '#374151', fontSize: 12 }}>Game log will appear here.</div>
             )}
           </div>
+
+          <ChatPanel
+            messages={chatMessages}
+            sessionId={sessionId}
+            onSend={onSendChatMessage}
+          />
 
           {/* Name song panel */}
           {isActivePlayer && currentCard && !isInChallengePhase && (

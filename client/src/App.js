@@ -12,7 +12,7 @@ export default function App() {
     if (!game.room) {
         return (_jsx(EntryPage, { serverUrl: serverUrl, onConnect: game.connect, onCreateRoom: game.createRoom, onJoinRoom: game.joinRoom, serverError: game.socketError, roomJoined: game.room }));
     }
-    return (_jsx(GameRoom, { room: game.room, currentCard: game.currentCard, activePlayerId: game.activePlayerId, previewUrl: game.previewUrl, playAt: game.playAt, timelineLength: game.timelineLength, lastFlip: game.lastFlip, roundEnded: game.roundEnded, myTokens: game.myTokens, sessionId: sessionId, socketError: game.socketError, onStartRound: game.startRound, onPlaceCard: game.placeCard, onChallengeCard: game.challengeCard, onSkipCard: game.skipCard, onNameSong: game.nameSong, onBuyCard: game.buyCard, onDismissRoundEnd: game.dismissRoundEnd, onCreateTeam: game.createTeam, onJoinTeam: game.joinTeam, onLeaveTeam: game.leaveTeam, onLeave: () => {
+    return (_jsx(GameRoom, { room: game.room, currentCard: game.currentCard, activePlayerId: game.activePlayerId, previewUrl: game.previewUrl, playAt: game.playAt, timelineLength: game.timelineLength, lastFlip: game.lastFlip, roundEnded: game.roundEnded, myTokens: game.myTokens, chatMessages: game.room.chatMessages ?? [], sessionId: sessionId, socketError: game.socketError, onStartRound: game.startRound, onPlaceCard: game.placeCard, onChallengeCard: game.challengeCard, onSkipCard: game.skipCard, onNameSong: game.nameSong, onBuyCard: game.buyCard, onSendChatMessage: game.sendChatMessage, onDismissRoundEnd: game.dismissRoundEnd, onCreateTeam: game.createTeam, onJoinTeam: game.joinTeam, onLeaveTeam: game.leaveTeam, onLeave: () => {
             window.location.reload();
         } }));
 }

@@ -57,6 +57,14 @@ export interface RoundSummary {
   roundNumber: number;
 }
 
+export interface ChatMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  text: string;
+  sentAt: number; // Unix ms
+}
+
 export interface Room {
   code: string;
   ownerId: string;
@@ -66,6 +74,7 @@ export interface Room {
   teams: Record<string, Team>;
   useTeams: boolean;
   roundHistory: RoundSummary[];
+  chatMessages?: ChatMessage[];
   activeRound?: ActiveRound;
 }
 
@@ -200,6 +209,9 @@ export interface ClientToServerEvents {
 
   /** Leave your current team */
   'team:leave': () => void;
+
+  /** Send a chat message to everyone in the current room */
+  'chat:send': (data: { text: string }) => void;
 }
 
 // ----------------------------

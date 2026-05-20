@@ -22,6 +22,7 @@ export interface GameState {
   skipCard: () => void;
   nameSong: (title: string, artist: string) => void;
   buyCard: () => void;
+  sendChatMessage: (text: string) => void;
   dismissRoundEnd: () => void;
   createTeam: (name: string) => void;
   joinTeam: (teamId: string) => void;
@@ -229,6 +230,10 @@ export function useGame(): GameState {
     socket.emit('turn:buy');
   }, []);
 
+  const sendChatMessage = useCallback((text: string) => {
+    socket.emit('chat:send', { text });
+  }, []);
+
   const dismissRoundEnd = useCallback(() => {
     setRoundEnded(null);
   }, []);
@@ -265,6 +270,7 @@ export function useGame(): GameState {
     skipCard,
     nameSong,
     buyCard,
+    sendChatMessage,
     dismissRoundEnd,
     createTeam,
     joinTeam,

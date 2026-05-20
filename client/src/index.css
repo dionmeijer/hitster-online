@@ -994,6 +994,73 @@ body {
 .log-correct { color: #4ade80; }
 .log-wrong { color: #f87171; }
 
+.chat-panel {
+  margin-top: 16px;
+}
+
+.chat-messages {
+  max-height: 160px;
+  overflow-y: auto;
+  border: 1px solid #1e1e3a;
+  background: #0a0a0f;
+  padding: 10px;
+  margin-bottom: 8px;
+}
+
+.chat-message {
+  font-size: 12px;
+  color: #e0e0ff;
+  margin-bottom: 6px;
+  word-break: break-word;
+}
+
+.chat-message:last-child {
+  margin-bottom: 0;
+}
+
+.chat-sender {
+  color: #a78bfa;
+  font-weight: 700;
+  margin-right: 6px;
+}
+
+.chat-empty {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.chat-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.chat-input {
+  flex: 1;
+  min-width: 0;
+  background: #1e1e3a;
+  border: 1px solid #374151;
+  color: #e0e0ff;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 13px;
+  padding: 8px 10px;
+}
+
+.chat-send-btn {
+  background: #7c3aed;
+  border: 1px solid #6d28d9;
+  color: #fff;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.chat-send-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 /* ── Challenge timer ── */
 .challenge-timer-box {
   text-align: center;
@@ -1142,9 +1209,19 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  overflow-y: auto;
+  gap: 12px;
   padding: 40px;
   text-align: center;
+}
+
+.lobby-chat-wrap {
+  width: min(560px, 100%);
+  margin-top: 8px;
+  padding: 16px;
+  border: 2px solid #1e1e3a;
+  background: #0f0f1a;
 }
 .lobby-code {
   font-family: 'Press Start 2P', monospace;
