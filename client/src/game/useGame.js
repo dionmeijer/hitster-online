@@ -176,8 +176,8 @@ export function useGame() {
     const skipCard = useCallback(() => {
         socket.emit('turn:skip');
     }, []);
-    const nameSong = useCallback((title, artist) => {
-        socket.emit('turn:name', { title, artist });
+    const nameSong = useCallback((title, artist, year) => {
+        socket.emit('turn:name', { title, artist, year });
     }, []);
     const buyCard = useCallback(() => {
         socket.emit('turn:buy');
@@ -193,6 +193,9 @@ export function useGame() {
     }, []);
     const leaveTeam = useCallback(() => {
         socket.emit('team:leave');
+    }, []);
+    const endGame = useCallback(() => {
+        socket.emit('room:end');
     }, []);
     return {
         room,
@@ -218,5 +221,6 @@ export function useGame() {
         createTeam,
         joinTeam,
         leaveTeam,
+        endGame,
     };
 }
