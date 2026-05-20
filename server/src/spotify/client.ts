@@ -234,13 +234,13 @@ export class SpotifyClient {
   }
 }
 
-/** Build a SpotifyClient from environment variables. Throws if credentials are absent (unless TEST_MODE). */
+/** Build a SpotifyClient from environment variables. Throws if credentials are absent. */
 export function createSpotifyClient(): SpotifyClient {
-  const testMode = process.env.TEST_MODE === 'true';
-  const clientId = process.env.SPOTIFY_CLIENT_ID ?? (testMode ? 'test' : '');
-  const clientSecret = process.env.SPOTIFY_CLIENT_SECRET ?? (testMode ? 'test' : '');
-  if (!testMode && (!clientId || !clientSecret)) {
+  const clientId = process.env.SPOTIFY_CLIENT_ID;
+  const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
     throw new Error('SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET must be set');
   }
+  const testMode = process.env.TEST_MODE === 'true';
   return new SpotifyClient(clientId, clientSecret, testMode);
 }

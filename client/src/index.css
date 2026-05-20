@@ -1135,6 +1135,33 @@ body {
   letter-spacing: 1px;
 }
 .win-leave:hover { border-color: #6b7280; color: #9ca3af; }
+.win-end-game {
+  background: none;
+  border: 1px solid #374151;
+  color: #6b7280;
+  padding: 8px 20px;
+  border-radius: 6px;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 13px;
+  cursor: pointer;
+  margin-top: 4px;
+}
+.win-end-game:hover {
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+/* ── Spectator banner ── */
+.spectator-banner {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  text-align: center;
+  margin-bottom: 12px;
+}
 
 /* ── Lobby / start screen ── */
 .lobby-screen {

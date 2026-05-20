@@ -18,9 +18,6 @@ build/
 # Test coverage
 coverage/
 
-# Test results
-test-results/
-
 # Compiled JS artifacts alongside TS sources
 client/src/**/*.js
 server/src/**/*.js

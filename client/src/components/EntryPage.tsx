@@ -248,7 +248,7 @@ export default function EntryPage({ onConnect, onCreateRoom, onJoinRoom, serverU
               disabled={!emailValid || connecting}
               onClick={openJoin}
             >
-              → Join a room
+              → Join by code
             </button>
           ) : (
             <div className="join-open">

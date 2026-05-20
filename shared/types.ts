@@ -18,6 +18,7 @@ export interface Player {
   email?: string;     // never shared with other clients
   isConnected: boolean;
   missedTurns: number;
+  isSpectator?: boolean; // true when player joins a ROUND_ACTIVE room
 }
 
 export interface Team {
@@ -201,6 +202,9 @@ export interface ClientToServerEvents {
 
   /** Leave your current team */
   'team:leave': () => void;
+
+  /** Owner ends the game session, transitioning room to game_over */
+  'room:end': () => void;
 }
 
 // ----------------------------

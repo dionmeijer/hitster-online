@@ -26,6 +26,7 @@ export interface GameState {
   createTeam: (name: string) => void;
   joinTeam: (teamId: string) => void;
   leaveTeam: () => void;
+  endGame: () => void;
 }
 
 export function useGame(): GameState {
@@ -87,18 +88,6 @@ export function useGame(): GameState {
       setPlayAt(pa);
       setTimelineLength(tl);
       setLastFlip(null);
-      // Sync currentTurn phase locally so phase-gated UI (buy-btn) renders correctly
-      // without waiting for the next room:updated broadcast.
-      setRoom(prev => {
-        if (!prev?.activeRound) return prev;
-        return {
-          ...prev,
-          activeRound: {
-            ...prev.activeRound,
-            currentTurn: { activeId: pid, phase: 'place' as const, challenges: [] },
-          },
-        };
-      });
     });
 
     socket.on('turn:placed', ({ activePlayerId: pid }) => {
@@ -257,6 +246,10 @@ export function useGame(): GameState {
     socket.emit('team:leave');
   }, []);
 
+  const endGame = useCallback(() => {
+    socket.emit('room:end');
+  }, []);
+
   return {
     room,
     currentCard,
@@ -281,5 +274,6 @@ export function useGame(): GameState {
     createTeam,
     joinTeam,
     leaveTeam,
+    endGame,
   };
 }
