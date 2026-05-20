@@ -21,9 +21,10 @@ import {
   joinTeam,
   leaveTeam,
   isActiveParticipant,
+  appendChatMessage,
   endGame,
 } from './engine';
-import type { Room, Card, RoundConfig } from '../../../shared/types';
+import type { Room, Card, ChatMessage, RoundConfig } from '../../../shared/types';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1213,6 +1214,40 @@ describe('initRound with teams', () => {
   });
 });
 
+describe('appendChatMessage', () => {
+  it('adds a message to the room chat history', () => {
+    const room = createRoom('p1', 'Alice', 'Test');
+    const message: ChatMessage = {
+      id: 'm1',
+      senderId: 'p1',
+      senderName: 'Alice',
+      text: 'Hello!',
+      sentAt: 1,
+    };
+
+    const updated = appendChatMessage(room, message);
+
+    expect(updated.chatMessages).toEqual([message]);
+  });
+
+  it('keeps only the most recent 100 messages', () => {
+    let room = createRoom('p1', 'Alice', 'Test');
+    for (let i = 0; i < 101; i++) {
+      room = appendChatMessage(room, {
+        id: `m${i}`,
+        senderId: 'p1',
+        senderName: 'Alice',
+        text: `Message ${i}`,
+        sentAt: i,
+      });
+    }
+
+    expect(room.chatMessages).toHaveLength(100);
+    expect(room.chatMessages[0].id).toBe('m1');
+    expect(room.chatMessages[99].id).toBe('m100');
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Helper for spectator / endGame tests
 // ---------------------------------------------------------------------------
@@ -1245,7 +1280,6 @@ describe('addPlayer — spectator mode', () => {
 
 describe('initRound — clears spectators', () => {
   it('converts spectators to participants at round start', () => {
-    // create room with a spectator player
     const room = createRoom('owner', 'Owner', 'test');
     const withSpectator: Room = {
       ...room,

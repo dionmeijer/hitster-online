@@ -7,6 +7,7 @@ import type {
   RoundConfig,
   RoundSummary,
   CardHidden,
+  ChatMessage,
 } from '../../../shared/types';
 
 // ---------------------------------------------------------------------------
@@ -23,6 +24,7 @@ function shuffleArray<T>(arr: T[]): T[] {
 }
 
 const ROOM_CODE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+const MAX_CHAT_MESSAGES = 100;
 
 /** Generate a 4-char uppercase alphanumeric room code */
 export function generateRoomCode(): string {
@@ -51,6 +53,15 @@ export function createRoom(ownerId: string, displayName: string, topic: string):
     teams: {},
     useTeams: false,
     roundHistory: [],
+    chatMessages: [],
+  };
+}
+
+export function appendChatMessage(room: Room, message: ChatMessage): Room {
+  const chatMessages = [...room.chatMessages, message];
+  return {
+    ...room,
+    chatMessages: chatMessages.slice(-MAX_CHAT_MESSAGES),
   };
 }
 

@@ -36,6 +36,7 @@ export default function App() {
       lastFlip={game.lastFlip}
       roundEnded={game.roundEnded}
       myTokens={game.myTokens}
+      chatMessages={game.room.chatMessages}
       sessionId={sessionId}
       socketError={game.socketError}
       onStartRound={game.startRound}
@@ -44,6 +45,7 @@ export default function App() {
       onSkipCard={game.skipCard}
       onNameSong={game.nameSong}
       onBuyCard={game.buyCard}
+      onSendChatMessage={game.sendChatMessage}
       onDismissRoundEnd={game.dismissRoundEnd}
       onCreateTeam={game.createTeam}
       onJoinTeam={game.joinTeam}

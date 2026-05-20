@@ -13,6 +13,7 @@ import type {
   RoundConfig,
   Challenge,
   Room,
+  ChatMessage,
 } from '../../shared/types';
 import { createSpotifyClient } from './spotify/client';
 import { RoomStore } from './rooms/store';
@@ -554,6 +555,34 @@ io.on('connection', (socket) => {
   });
 
   // ------------------------------------------------------------------
+  // chat:send
+  // ------------------------------------------------------------------
+  socket.on('chat:send', (data) => {
+    const session = socketSession.get(socket.id);
+    if (!session) return;
+    const room = store.get(session.roomCode);
+    if (!room) return;
+
+    const text = (data.text ?? '').trim();
+    if (!text) { socket.emit('error', 'Message cannot be empty'); return; }
+    if (text.length > 280) { socket.emit('error', 'Message too long (max 280 characters)'); return; }
+
+    const sender = room.players[sessionId];
+    if (!sender) { socket.emit('error', 'Player not found in room'); return; }
+
+    const message: ChatMessage = {
+      id: randomUUID(),
+      senderId: sessionId,
+      senderName: sender.displayName,
+      text,
+      sentAt: Date.now(),
+    };
+    const updatedRoom = engine.appendChatMessage(room, message);
+    store.set(updatedRoom);
+    io.to(session.roomCode).emit('room:updated', updatedRoom);
+  });
+
+  // ------------------------------------------------------------------
   // room:end
   // ------------------------------------------------------------------
   socket.on('room:end', () => {
@@ -561,6 +590,7 @@ io.on('connection', (socket) => {
     if (!session) return;
     const room = store.get(session.roomCode);
     if (!room) return;
+
     if (room.ownerId !== sessionId) { socket.emit('error', 'Only the room owner can end the game'); return; }
     const endedRoom = engine.endGame(room);
     store.set(endedRoom);
