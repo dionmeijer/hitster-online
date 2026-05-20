@@ -19,7 +19,10 @@ for (const envPath of [
     break;
   }
 }
-import { CHALLENGE_WINDOW_MS as DEFAULT_CHALLENGE_WINDOW_MS } from '../../shared/constants';
+import {
+  CHALLENGE_WINDOW_MS as DEFAULT_CHALLENGE_WINDOW_MS,
+  TURN_PLACE_TIMEOUT_MS as DEFAULT_TURN_PLACE_TIMEOUT_MS,
+} from '../../shared/constants';
 import type {
   ServerToClientEvents,
   ClientToServerEvents,
@@ -75,8 +78,16 @@ const challengeTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const pendingDeletes = new Map<string, ReturnType<typeof setTimeout>>();
 const EMPTY_ROOM_TTL_MS = process.env.TEST_MODE === 'true' ? 5_000 : 60_000;
 
-// Timeout before auto-skipping a disconnected player's turn
+// Disconnect: auto-skip after this delay if still in place phase
 const TURN_TIMEOUT_MS = process.env.TEST_MODE === 'true' ? 3_000 : 15_000;
+
+// Connected player: max time to place before auto-skip (full turn clock)
+// Longer in TEST_MODE so Playwright can complete place flows before auto-skip
+const TURN_PLACE_TIMEOUT_MS =
+  process.env.TEST_MODE === 'true' ? 25_000 : DEFAULT_TURN_PLACE_TIMEOUT_MS;
+
+// roomCode → place-phase turn timer (listen + place)
+const placeTurnTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 // playerId → pending disconnect-skip timer (so it can be cancelled on reconnect)
 const disconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -112,34 +123,59 @@ function clearChallengeTimer(roomCode: string): void {
   if (t !== undefined) { clearTimeout(t); challengeTimers.delete(roomCode); }
 }
 
+function clearPlaceTurnTimer(roomCode: string): void {
+  const t = placeTurnTimers.get(roomCode);
+  if (t !== undefined) { clearTimeout(t); placeTurnTimers.delete(roomCode); }
+}
+
+function autoSkipActiveTurn(
+  roomCode: string,
+  playerId: string,
+  reason: 'disconnect' | 'timeout',
+): void {
+  clearPlaceTurnTimer(roomCode);
+  clearChallengeTimer(roomCode);
+  pendingCards.delete(roomCode);
+  pendingChallenges.delete(roomCode);
+
+  const cur = store.get(roomCode);
+  if (!cur?.activeRound) return;
+  if (cur.activeRound.turnOrder[cur.activeRound.turnIndex] !== playerId) return;
+  if (cur.activeRound.currentTurn?.phase !== 'place') return;
+
+  const withMissed = engine.incrementMissedTurns(cur, playerId);
+  const missed = withMissed.players[playerId]?.missedTurns ?? 0;
+
+  io.to(roomCode).emit('turn:auto-skipped', { playerId, reason });
+
+  if (missed >= 2) {
+    const removed = engine.removeFromTurnOrder(withMissed, playerId);
+    store.set(removed);
+    io.to(roomCode).emit('room:updated', removed);
+  } else {
+    const advanced = engine.advanceTurn(withMissed);
+    store.set(advanced);
+    io.to(roomCode).emit('room:updated', advanced);
+  }
+  startTurn(roomCode);
+}
+
+function schedulePlaceTurnTimeout(roomCode: string, playerId: string): void {
+  clearPlaceTurnTimer(roomCode);
+  const timer = setTimeout(() => {
+    placeTurnTimers.delete(roomCode);
+    autoSkipActiveTurn(roomCode, playerId, 'timeout');
+  }, TURN_PLACE_TIMEOUT_MS);
+  placeTurnTimers.set(roomCode, timer);
+}
+
 function scheduleDisconnectSkip(roomCode: string, playerId: string): void {
   const existing = disconnectTimers.get(playerId);
   if (existing) clearTimeout(existing);
 
   const timer = setTimeout(() => {
     disconnectTimers.delete(playerId);
-    const cur = store.get(roomCode);
-    if (!cur?.activeRound) return;
-    if (cur.activeRound.turnOrder[cur.activeRound.turnIndex] !== playerId) return;
-
-    clearChallengeTimer(roomCode);
-    pendingCards.delete(roomCode);
-
-    const withMissed = engine.incrementMissedTurns(cur, playerId);
-    const missed = withMissed.players[playerId]?.missedTurns ?? 0;
-
-    io.to(roomCode).emit('turn:auto-skipped', { playerId, reason: 'disconnect' });
-
-    if (missed >= 2) {
-      const removed = engine.removeFromTurnOrder(withMissed, playerId);
-      store.set(removed);
-      io.to(roomCode).emit('room:updated', removed);
-    } else {
-      const advanced = engine.advanceTurn(withMissed);
-      store.set(advanced);
-      io.to(roomCode).emit('room:updated', advanced);
-    }
-    startTurn(roomCode);
+    autoSkipActiveTurn(roomCode, playerId, 'disconnect');
   }, TURN_TIMEOUT_MS);
 
   disconnectTimers.set(playerId, timer);
@@ -199,16 +235,22 @@ function startTurn(roomCode: string): void {
   };
   store.set(updatedRoom);
 
+  const turnEndsAt = Date.now() + TURN_PLACE_TIMEOUT_MS;
+  schedulePlaceTurnTimeout(roomCode, activeId);
+
   io.to(roomCode).emit('turn:started', {
     activePlayerId: activeId,
     card: hidden,
+    observerCard: card,
     previewUrl: hidden.previewUrl,
     playAt: Date.now() + 600,
     timelineLength: timelineLen,
+    turnEndsAt,
   });
 }
 
 function resolveAndAdvance(roomCode: string): void {
+  clearPlaceTurnTimer(roomCode);
   clearChallengeTimer(roomCode);
 
   const room = store.get(roomCode);
@@ -216,6 +258,7 @@ function resolveAndAdvance(roomCode: string): void {
   if (!room?.activeRound?.currentTurn || !card) return;
 
   const activePlayerId = room.activeRound.currentTurn.activeId;
+  const placedPosition = room.activeRound.currentTurn.placedPosition ?? 0;
 
   // Inject challenges into currentTurn before resolving
   const roomWithChallenges = {
@@ -237,13 +280,22 @@ function resolveAndAdvance(roomCode: string): void {
   const updatedTimeline = flippedRoom.activeRound?.timelines[entityId]
     ?? { ownerId: entityId, cards: [] };
   const tokensUpdated = flippedRoom.activeRound?.tokens ?? {};
+  const timelines = flippedRoom.activeRound?.timelines ?? {};
+  const challenges = roomWithChallenges.activeRound?.currentTurn?.challenges ?? [];
+  const challengeResults = challenges.map((c) => ({
+    challengerId: c.challengerId,
+    outcome: (correct ? 'lost_token' : 'stole_card') as 'stole_card' | 'lost_token',
+  }));
 
   io.to(roomCode).emit('turn:flipped', {
     card,
     correct,
     activePlayerId,
+    placedPosition,
     updatedTimeline,
+    timelines,
     tokensUpdated,
+    challengeResults,
   });
 
   if (winnerId || flippedRoom.status === 'round_ended') {
@@ -407,6 +459,7 @@ io.on('connection', (socket) => {
     if (!engine.isActiveParticipant(room, sessionId)) { socket.emit('error', 'Not your turn'); return; }
 
     try {
+      clearPlaceTurnTimer(session.roomCode);
       const challengeEndsAt = Date.now() + CHALLENGE_WINDOW_MS;
       const placedRoom = engine.applyPlacement(room, sessionId, data.position, CHALLENGE_WINDOW_MS);
       store.set(placedRoom);
@@ -439,9 +492,17 @@ io.on('connection', (socket) => {
 
     const { currentTurn } = room.activeRound;
     if (currentTurn.phase !== 'challenge') { socket.emit('error', 'Not in challenge phase'); return; }
+    if (room.players[sessionId]?.isSpectator) {
+      socket.emit('error', 'Spectators cannot challenge');
+      return;
+    }
     if (engine.isActiveParticipant(room, sessionId)) { socket.emit('error', 'Cannot challenge your own placement'); return; }
 
     const challenges = pendingChallenges.get(session.roomCode) ?? [];
+    if (challenges.some((c) => c.challengerId === sessionId)) {
+      socket.emit('error', 'You already shouted HITSTER!');
+      return;
+    }
     challenges.push({ challengerId: sessionId });
     pendingChallenges.set(session.roomCode, challenges);
 
@@ -461,6 +522,8 @@ io.on('connection', (socket) => {
     if (!engine.isActiveParticipant(room, sessionId)) { socket.emit('error', 'Not your turn'); return; }
 
     try {
+      clearPlaceTurnTimer(session.roomCode);
+      clearChallengeTimer(session.roomCode);
       const skippedRoom = engine.applySkip(room, sessionId);
       pendingCards.delete(session.roomCode);
       store.set(skippedRoom);

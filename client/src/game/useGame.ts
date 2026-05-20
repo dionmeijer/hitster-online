@@ -5,11 +5,20 @@ import type { Room, Card, CardHidden, GameMode } from '../../../shared/types';
 export interface GameState {
   room: Room | null;
   currentCard: CardHidden | null;
+  observerCard: Card | null;
   activePlayerId: string | null;
   previewUrl: string | null;
   playAt: number | null;
+  turnEndsAt: number | null;
   timelineLength: number;
-  lastFlip: { card: Card; correct: boolean } | null;
+  lastFlip: {
+    card: Card;
+    correct: boolean;
+    activePlayerId: string;
+    placedPosition: number;
+    challengeResults: Array<{ challengerId: string; outcome: 'stole_card' | 'lost_token' }>;
+  } | null;
+  lastChallenge: { challengerId: string } | null;
   roundEnded: { winnerId: string | null } | null;
   myTokens: number;
   socketError: string | null;
@@ -38,11 +47,14 @@ export interface GameState {
 export function useGame(): GameState {
   const [room, setRoom] = useState<Room | null>(null);
   const [currentCard, setCurrentCard] = useState<CardHidden | null>(null);
+  const [observerCard, setObserverCard] = useState<Card | null>(null);
   const [activePlayerId, setActivePlayerId] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [playAt, setPlayAt] = useState<number | null>(null);
+  const [turnEndsAt, setTurnEndsAt] = useState<number | null>(null);
   const [timelineLength, setTimelineLength] = useState(0);
-  const [lastFlip, setLastFlip] = useState<{ card: Card; correct: boolean } | null>(null);
+  const [lastFlip, setLastFlip] = useState<GameState['lastFlip']>(null);
+  const [lastChallenge, setLastChallenge] = useState<{ challengerId: string } | null>(null);
   const [roundEnded, setRoundEnded] = useState<{ winnerId: string | null } | null>(null);
   const [myTokens, setMyTokens] = useState(0);
   const [socketError, setSocketError] = useState<string | null>(null);
@@ -78,9 +90,11 @@ export function useGame(): GameState {
       setRoom(r);
       setSocketError(null);
       setCurrentCard(null);
+      setObserverCard(null);
       setActivePlayerId(null);
       setPreviewUrl(null);
       setPlayAt(null);
+      setTurnEndsAt(null);
       setLastFlip(null);
       setRoundEnded(null);
       const tokenKey = r.activeRound?.config.mode === 'cooperative' ? 'cooperative' : sessionId;
@@ -89,13 +103,16 @@ export function useGame(): GameState {
       }
     });
 
-    socket.on('turn:started', ({ activePlayerId: pid, card, previewUrl: url, playAt: pa, timelineLength: tl }) => {
+    socket.on('turn:started', ({ activePlayerId: pid, card, observerCard: obs, previewUrl: url, playAt: pa, timelineLength: tl, turnEndsAt: te }) => {
       setActivePlayerId(pid);
       setCurrentCard(card);
+      setObserverCard(obs);
       setPreviewUrl(url);
       setPlayAt(pa);
+      setTurnEndsAt(te);
       setTimelineLength(tl);
       setLastFlip(null);
+      setLastChallenge(null);
       // Sync currentTurn phase locally so phase-gated UI (buy-btn) renders correctly
       // without waiting for the next room:updated broadcast.
       setRoom(prev => {
@@ -131,24 +148,57 @@ export function useGame(): GameState {
       });
     });
 
-    socket.on('turn:challenged', () => {
-      // challenge acknowledged — state updates come via turn:flipped
-    });
-
-    socket.on('turn:flipped', ({ card, correct, updatedTimeline, tokensUpdated }) => {
-      setLastFlip({ card, correct });
-      setCurrentCard(null);
+    socket.on('turn:challenged', ({ challengerId }) => {
+      setLastChallenge({ challengerId });
       setRoom((prev) => {
-        if (!prev || !prev.activeRound) return prev;
+        if (!prev?.activeRound?.currentTurn) return prev;
+        const existing = prev.activeRound.currentTurn.challenges ?? [];
+        if (existing.some((c) => c.challengerId === challengerId)) return prev;
         return {
           ...prev,
           activeRound: {
             ...prev.activeRound,
-            timelines: {
-              ...prev.activeRound.timelines,
-              [updatedTimeline.ownerId]: updatedTimeline,
+            currentTurn: {
+              ...prev.activeRound.currentTurn,
+              challenges: [...existing, { challengerId }],
             },
+          },
+        };
+      });
+    });
+
+    socket.on('turn:flipped', ({
+      card,
+      correct,
+      activePlayerId: flipActiveId,
+      placedPosition: flipPosition,
+      timelines,
+      tokensUpdated,
+      challengeResults,
+    }) => {
+      setLastFlip({
+        card,
+        correct,
+        activePlayerId: flipActiveId,
+        placedPosition: flipPosition,
+        challengeResults,
+      });
+      setLastChallenge(null);
+      setCurrentCard(null);
+      setObserverCard(null);
+      setTurnEndsAt(null);
+      setRoom((prev) => {
+        if (!prev || !prev.activeRound) return prev;
+        const turn = prev.activeRound.currentTurn;
+        return {
+          ...prev,
+          activeRound: {
+            ...prev.activeRound,
+            timelines,
             tokens: tokensUpdated,
+            currentTurn: turn
+              ? { ...turn, phase: 'flip' as const, placedPosition: undefined }
+              : turn,
           },
         };
       });
@@ -186,9 +236,11 @@ export function useGame(): GameState {
     socket.on('round:ended', ({ winnerId }) => {
       setRoundEnded({ winnerId });
       setCurrentCard(null);
+      setObserverCard(null);
       setActivePlayerId(null);
       setPreviewUrl(null);
       setPlayAt(null);
+      setTurnEndsAt(null);
     });
 
     socket.on('playlist:previewed', ({ cards }) => {
@@ -327,9 +379,12 @@ export function useGame(): GameState {
   return {
     room,
     currentCard,
+    observerCard,
+    lastChallenge,
     activePlayerId,
     previewUrl,
     playAt,
+    turnEndsAt,
     timelineLength,
     lastFlip,
     roundEnded,

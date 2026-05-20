@@ -46,8 +46,8 @@ async function waitForRooms(page: Page, timeout = 6_000): Promise<void> {
 
 async function joinRoomByClick(page: Page, roomTopic: string): Promise<void> {
   await waitForRooms(page);
-  const card = page.locator('[data-testid="room-card-joinable"]', { hasText: roomTopic });
-  await expect(card).toBeVisible();
+  const card = page.locator('[data-testid="room-card-joinable"].lobby', { hasText: roomTopic });
+  await expect(card).toBeVisible({ timeout: 15_000 });
   await card.click();
   await expect(page.locator('[data-testid="lobby-screen"]')).toBeVisible({ timeout: 8_000 });
 }
@@ -303,7 +303,56 @@ test('skip and buy buttons are visible during active turn', async ({ page }) => 
 });
 
 // ---------------------------------------------------------------------------
-// 9. Name song panel visible and submittable during active turn (item 3)
+// 9. Non-active player sees active timeline and placement (spectator view)
+// ---------------------------------------------------------------------------
+
+test('joiner sees host timeline and placement during challenge', async ({ browser }: { browser: Browser }) => {
+  test.setTimeout(120_000);
+
+  const ctx1: BrowserContext = await browser.newContext();
+  const ctx2: BrowserContext = await browser.newContext();
+  const p1: Page = await ctx1.newPage();
+  const p2: Page = await ctx2.newPage();
+
+  try {
+    await fillEmailAndName(p1, 'host-watch@example.com', 'HostWatch');
+    const roomTopic = await createRoom(p1, 'Watch Timeline Test');
+    await fillEmailAndName(p2, 'joiner-watch@example.com', 'JoinerWatch');
+    await joinRoomByClick(p2, roomTopic);
+    await startRound(p1);
+
+    await expect(p1.locator('[data-testid="round-active"]')).toBeVisible({ timeout: 8_000 });
+    await expect(p2.locator('[data-testid="round-active"]')).toBeVisible({ timeout: 8_000 });
+
+    // First player is random (oldest starting card) — if joiner goes first, finish their turn so host can act
+    await expect(p2.locator('[data-testid="timeline-gap-0"]').or(p2.locator('[data-testid="watch-timeline"]'))).toBeVisible({
+      timeout: 8_000,
+    });
+    if (await p2.locator('[data-testid="sidebar-turn-status"]').getByText('Your turn').isVisible()) {
+      await p2.click('[data-testid="timeline-gap-0"]');
+      await p2.click('button:has-text("CONFIRM PLACE")');
+    }
+
+    await expect(p1.locator('[data-testid="sidebar-turn-status"]')).toContainText('Your turn', { timeout: 20_000 });
+    await expect(p2.locator('[data-testid="watch-timeline"]')).toBeVisible({ timeout: 90_000 });
+    await expect(p2.locator('[data-testid="watch-timeline"]')).toContainText("HOSTWATCH'S TIMELINE");
+    await expect(p2.locator('[data-testid="my-timeline-disabled"]')).toBeVisible();
+
+    await expect(p1.locator('[data-testid="timeline-gap-0"]')).toBeVisible({ timeout: 8_000 });
+    await p1.click('[data-testid="timeline-gap-0"]');
+    await p1.click('button:has-text("CONFIRM PLACE")');
+
+    await expect(p2.locator('[data-testid="watch-timeline"] .timeline-card.face-down')).toBeVisible({
+      timeout: 8_000,
+    });
+  } finally {
+    await ctx1.close();
+    await ctx2.close();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 10. Name song panel visible and submittable during active turn (item 3)
 // ---------------------------------------------------------------------------
 
 test('name song panel is visible and inputs work during active turn', async ({ page }) => {
@@ -327,7 +376,7 @@ test('name song panel is visible and inputs work during active turn', async ({ p
 });
 
 // ---------------------------------------------------------------------------
-// 10. Disconnected player's turn auto-advances after TURN_TIMEOUT (item 6)
+// 11. Disconnected player's turn auto-advances after TURN_TIMEOUT (item 6)
 // ---------------------------------------------------------------------------
 
 test('disconnected player turn auto-advances after timeout', async ({ browser }: { browser: Browser }) => {
@@ -379,7 +428,7 @@ test('disconnected player turn auto-advances after timeout', async ({ browser }:
 });
 
 // ---------------------------------------------------------------------------
-// 11. Mode selector UI — all options visible and selectable (item 1)
+// 12. Mode selector UI — all options visible and selectable (item 1)
 // ---------------------------------------------------------------------------
 
 test('mode selector shows all modes and can be changed', async ({ page }) => {

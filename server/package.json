@@ -31,7 +31,7 @@
   "jest": {
     "preset": "ts-jest",
     "testEnvironment": "node",
-    "roots": ["<rootDir>/src", "<rootDir>/../shared"],
+    "roots": ["<rootDir>/src"],
     "testMatch": ["**/*.test.ts"],
     "moduleNameMapper": {
       "^@shared/(.*)$": "<rootDir>/../shared/$1"

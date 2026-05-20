@@ -1,8 +1,9 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { CHALLENGE_WINDOW_MS } from '../../../shared/constants';
-import type { Room, Card, CardHidden, GameMode } from '../../../shared/types';
+import type { Room, Card, CardHidden, GameMode, Player, Team } from '../../../shared/types';
 import TrackPreviewModal from './TrackPreviewModal';
 import { PlaylistAutocomplete } from './PlaylistAutocomplete';
+import { TimelineView } from './TimelineView';
 import { isSpotifyTrackPageUrl } from '../spotify';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -18,20 +19,83 @@ function avatarColor(name: string): string {
   return AVATAR_COLORS[sum % AVATAR_COLORS.length];
 }
 
+/** Timeline/token key for the player whose turn it is. */
+function activeEntityIdFromRoom(room: Room, activePlayerId: string): string {
+  if (room.activeRound?.config.mode === 'cooperative') return 'cooperative';
+  if (room.useTeams) {
+    const teamEntry = Object.entries(room.teams).find(([, t]) =>
+      t.playerIds.includes(activePlayerId),
+    );
+    return teamEntry?.[0] ?? activePlayerId;
+  }
+  return activePlayerId;
+}
+
+function sortPlayersMeFirst(players: Player[], sessionId: string): Player[] {
+  return [...players].sort((a, b) => {
+    if (a.id === sessionId) return -1;
+    if (b.id === sessionId) return 1;
+    return a.displayName.localeCompare(b.displayName);
+  });
+}
+
+function sortTeamsMeFirst(teams: Team[], sessionId: string): Team[] {
+  return [...teams].sort((a, b) => {
+    const aMe = a.playerIds.includes(sessionId);
+    const bMe = b.playerIds.includes(sessionId);
+    if (aMe && !bMe) return -1;
+    if (!aMe && bMe) return 1;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+function activePlayerDisplayName(room: Room, activePlayerId: string | null): string {
+  if (!activePlayerId) return '...';
+  if (room.players[activePlayerId]) return room.players[activePlayerId].displayName;
+  if (room.teams[activePlayerId]) return room.teams[activePlayerId].name;
+  return '...';
+}
+
+function playerDisplayName(room: Room, playerId: string): string {
+  if (room.players[playerId]) return room.players[playerId].displayName;
+  const team = Object.values(room.teams).find((t) => t.playerIds.includes(playerId));
+  return team?.name ?? playerId;
+}
+
+function HitsterLogo() {
+  return (
+    <div className="logo">
+      HITSTER
+      <span className="cursor-blink" aria-hidden />
+    </div>
+  );
+}
+
 // ── PlayerList ────────────────────────────────────────────────────────────────
 
 interface PlayerListProps {
   room: Room;
   activePlayerId: string | null;
+  activeTurnLabel: string;
+  isMyTurn: boolean;
+  turnIndex: number;
+  turnSecondsLeft: number | null;
   sessionId: string;
 }
 
-function PlayerList({ room, activePlayerId, sessionId }: PlayerListProps) {
-  const players = Object.values(room.players);
+function PlayerList({
+  room,
+  activePlayerId,
+  activeTurnLabel,
+  isMyTurn,
+  turnIndex,
+  turnSecondsLeft,
+  sessionId,
+}: PlayerListProps) {
+  const players = Object.values(room.players).filter((p) => !p.isSpectator);
   const round = room.activeRound;
 
   const renderPlayer = (p: typeof players[number]) => {
-    const color = avatarColor(p.displayName);
     const pTeamId = Object.entries(room.teams).find(([, t]) => t.playerIds.includes(p.id))?.[0];
     const isActive = round?.config.mode === 'cooperative'
       ? false
@@ -46,19 +110,17 @@ function PlayerList({ room, activePlayerId, sessionId }: PlayerListProps) {
     const tokens = round?.tokens[entityKey] ?? 0;
 
     return (
-      <div key={p.id} className={`player-item${isActive ? ' active-player' : ''}${!p.isConnected ? ' disconnected' : ''}`}>
-        <div
-          className="player-avatar"
-          style={{ background: color + '22', color }}
-        >
+      <div
+        key={p.id}
+        className={`player-item${isMe ? ' is-me pinned' : ''}${isActive ? ' active-player' : ''}${!p.isConnected ? ' disconnected' : ''}`}
+      >
+        <div className="player-avatar">
           {p.displayName[0]?.toUpperCase() ?? '?'}
         </div>
         <div className="player-info">
           <div className="player-name">
             {isMe ? 'You' : p.displayName}
-            {isActive && (
-              <span style={{ color: '#4ade80', fontSize: 11, marginLeft: 4 }}>▶</span>
-            )}
+            {isActive && <span className="player-turn-badge">TURN</span>}
             {!p.isConnected && (
               <span className="player-disconnected-badge">⚡ offline</span>
             )}
@@ -74,17 +136,40 @@ function PlayerList({ room, activePlayerId, sessionId }: PlayerListProps) {
     );
   };
 
-  const teams = Object.values(room.teams);
+  const teams = sortTeamsMeFirst(Object.values(room.teams), sessionId);
   const hasTeams = room.useTeams && teams.length > 0;
+  const sortedPlayers = sortPlayersMeFirst(players, sessionId);
 
   return (
     <div className="side-panel">
+      {round && activePlayerId && (
+        <div
+          className={`sidebar-turn-status${isMyTurn ? ' sidebar-turn-status--you' : ''}`}
+          data-testid="sidebar-turn-status"
+        >
+          <div className="sidebar-turn-status-main">
+            <div className="sidebar-turn-who">
+              {isMyTurn ? 'your turn' : `${activeTurnLabel}'s turn`}
+            </div>
+            <div className="sidebar-turn-index">
+              Turn <span className="sidebar-turn-num">{turnIndex + 1}</span>
+            </div>
+          </div>
+          {turnSecondsLeft !== null && turnSecondsLeft > 0 && (
+            <div className="sidebar-turn-timer">{turnSecondsLeft}s to place</div>
+          )}
+        </div>
+      )}
+
       <div className="panel-title">Players</div>
 
       {hasTeams ? (
         <>
           {teams.map(team => {
-            const teamPlayers = players.filter(p => team.playerIds.includes(p.id));
+            const teamPlayers = sortPlayersMeFirst(
+              players.filter(p => team.playerIds.includes(p.id)),
+              sessionId,
+            );
             return (
               <div key={team.id}>
                 <div className="player-team-header">{team.name}</div>
@@ -93,8 +178,9 @@ function PlayerList({ room, activePlayerId, sessionId }: PlayerListProps) {
             );
           })}
           {(() => {
-            const unteamedPlayers = players.filter(p =>
-              !teams.some(t => t.playerIds.includes(p.id))
+            const unteamedPlayers = sortPlayersMeFirst(
+              players.filter(p => !teams.some(t => t.playerIds.includes(p.id))),
+              sessionId,
             );
             return unteamedPlayers.length > 0 ? (
               <div>
@@ -105,7 +191,7 @@ function PlayerList({ room, activePlayerId, sessionId }: PlayerListProps) {
           })()}
         </>
       ) : (
-        players.map(p => renderPlayer(p))
+        sortedPlayers.map(p => renderPlayer(p))
       )}
 
       {round && (
@@ -132,9 +218,19 @@ interface AudioPlayerProps {
   currentCard: CardHidden | null;
   revealedCard: Card | null;
   isFlipped: boolean;
+  observerCard: Card | null;
+  isActivePlayer: boolean;
 }
 
-function AudioPlayer({ previewUrl, playAt, currentCard, revealedCard, isFlipped }: AudioPlayerProps) {
+function AudioPlayer({
+  previewUrl,
+  playAt,
+  currentCard,
+  revealedCard,
+  isFlipped,
+  observerCard,
+  isActivePlayer,
+}: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const waveformRef = useRef<HTMLDivElement>(null);
   const waveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -240,6 +336,7 @@ function AudioPlayer({ previewUrl, playAt, currentCard, revealedCard, isFlipped 
     : (currentCard?.albumArt ?? null);
 
   const showDetails = isFlipped && revealedCard;
+  const showObserverDetails = !isActivePlayer && observerCard && !isFlipped;
 
   return (
     <>
@@ -259,7 +356,7 @@ function AudioPlayer({ previewUrl, playAt, currentCard, revealedCard, isFlipped 
           <div className="song-label">
             {isFlipped ? 'REVEALED' : 'NOW PLAYING — PLACE THIS CARD'}
           </div>
-          {showDetails ? (
+          {showDetails && revealedCard ? (
             <>
               <div className="song-title">{revealedCard.title}</div>
               <div className="song-artist">{revealedCard.artist}</div>
@@ -267,9 +364,27 @@ function AudioPlayer({ previewUrl, playAt, currentCard, revealedCard, isFlipped 
                 <div className="song-year">{revealedCard.releaseYear}</div>
               </div>
             </>
+          ) : showObserverDetails && observerCard ? (
+            <>
+              <div className="song-title">{observerCard.title}</div>
+              <div className="song-artist">{observerCard.artist}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
+                <div className="song-year">{observerCard.releaseYear}</div>
+              </div>
+            </>
           ) : (
             <div style={{ fontSize: 13, color: '#6b7280', marginTop: 8 }}>
-              {spotifyOnly ? (showEmbed ? 'Song is playing for all...' : 'Starting preview...') : 'Song is playing for all...'}
+              {isActivePlayer
+                ? spotifyOnly
+                  ? showEmbed
+                    ? 'Song is playing…'
+                    : 'Starting preview…'
+                  : 'Song is playing…'
+                : spotifyOnly
+                  ? showEmbed
+                    ? 'Song is playing for all…'
+                    : 'Starting preview…'
+                  : 'Song is playing for all…'}
             </div>
           )}
         </div>
@@ -310,94 +425,13 @@ function AudioPlayer({ previewUrl, playAt, currentCard, revealedCard, isFlipped 
   );
 }
 
-// ── Timeline ──────────────────────────────────────────────────────────────────
-
-interface TimelineProps {
-  cards: Card[];
-  pendingCard: CardHidden | null;
-  isActivePlayer: boolean;
-  placedPosition: number | null;
-  selectedPosition: number | null;
-  onSelectPosition: (pos: number) => void;
-  isInChallengePhase: boolean;
-}
-
-function Timeline({
-  cards,
-  pendingCard,
-  isActivePlayer,
-  placedPosition,
-  selectedPosition,
-  onSelectPosition,
-  isInChallengePhase,
-}: TimelineProps) {
-  // Build an interleaved array: [dropzone, card, dropzone, card, ..., dropzone]
-  // Total slots = cards.length + 1
-  const canPlace = isActivePlayer && pendingCard !== null && placedPosition === null && !isInChallengePhase;
-
-  return (
-    <div className="timeline-section">
-      <div className="timeline-label">
-        {isActivePlayer
-          ? 'YOUR TIMELINE — Click a gap to place the new card'
-          : 'TIMELINE'}
-      </div>
-      <div className="timeline-track">
-        {Array.from({ length: cards.length + 1 }, (_, i) => {
-          const isSelected = selectedPosition === i;
-          const isPlaced = placedPosition === i;
-          return (
-            <div key={`slot-${i}`} style={{ display: 'flex', alignItems: 'center' }}>
-              {/* Drop zone */}
-              <div
-                className={`drop-zone${isSelected ? ' selected-zone' : ''}${isPlaced ? ' selected-zone' : ''}`}
-                onClick={() => canPlace && onSelectPosition(i)}
-                style={{ cursor: canPlace ? 'pointer' : 'default' }}
-              >
-                <div className="drop-zone-line" />
-              </div>
-
-              {/* Card after this drop zone (if exists) */}
-              {cards[i] && (
-                <div className={`timeline-card placed-card`}>
-                  <div className="card-year">{cards[i].releaseYear}</div>
-                  <div className="card-title">{cards[i].title}</div>
-                  <div className="card-artist">{cards[i].artist}</div>
-                </div>
-              )}
-            </div>
-          );
-        })}
-
-        {/* Pending card display slot — shown when active and no placement yet */}
-        {isActivePlayer && pendingCard && placedPosition === null && (
-          <div className="pending-card-slot" style={{ marginLeft: 16 }}>
-            <div className="pending-card-icon">🎵</div>
-            <div className="pending-card-label">New Card</div>
-          </div>
-        )}
-
-        {/* Placed-but-not-flipped card */}
-        {isActivePlayer && pendingCard && placedPosition !== null && (
-          <div className="timeline-card placed-pending" style={{ marginLeft: 16 }}>
-            <div className="card-face-down">?</div>
-            <div style={{ fontSize: 9, color: '#fbbf24', marginTop: 4 }}>Placed!</div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ── ChallengeBar ──────────────────────────────────────────────────────────────
 
 interface ChallengeBarProps {
   deadline: number | null;
-  onChallenge: () => void;
-  isActivePlayer: boolean;
 }
 
-function ChallengeBar({ deadline, onChallenge, isActivePlayer }: ChallengeBarProps) {
+function ChallengeBar({ deadline }: ChallengeBarProps) {
   const [seconds, setSeconds] = useState<number>(CHALLENGE_WINDOW_MS / 1000);
 
   useEffect(() => {
@@ -414,53 +448,9 @@ function ChallengeBar({ deadline, onChallenge, isActivePlayer }: ChallengeBarPro
   if (!deadline) return null;
 
   return (
-    <div className="challenge-timer-box">
-      <div className="challenge-timer-label">CHALLENGE WINDOW</div>
-      <div className="challenge-timer-count">{seconds}</div>
-      {!isActivePlayer && seconds > 0 && (
-        <button
-          className="action-btn btn-hitster"
-          onClick={onChallenge}
-          style={{ marginTop: 8 }}
-        >
-          HITSTER!
-        </button>
-      )}
-    </div>
-  );
-}
-
-// ── FlipResult overlay ────────────────────────────────────────────────────────
-
-interface FlipResultProps {
-  card: Card;
-  correct: boolean;
-  onDismiss: () => void;
-}
-
-function FlipResult({ card, correct, onDismiss }: FlipResultProps) {
-  useEffect(() => {
-    const timer = setTimeout(onDismiss, 3500);
-    const handler = () => onDismiss();
-    window.addEventListener('keydown', handler);
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener('keydown', handler);
-    };
-  }, [onDismiss]);
-
-  return (
-    <div className="flip-result-overlay" onClick={onDismiss}>
-      <div className={`flip-result-box ${correct ? 'correct' : 'wrong'}`}>
-        <div className="flip-result-icon">{correct ? '✓' : '✗'}</div>
-        <div className="flip-result-label">
-          {correct ? 'Correct!' : 'Wrong!'}
-        </div>
-        <div className="flip-result-card-title">{card.title}</div>
-        <div className="flip-result-card-artist">{card.artist}</div>
-        <div className="flip-result-card-year">{card.releaseYear}</div>
-        <div className="flip-result-dismiss">Press any key or click to continue</div>
-      </div>
+    <div className="challenge-timer-box challenge-timer-box--compact">
+      <div className="challenge-timer-label">Challenge</div>
+      <div className="challenge-timer-count">{seconds}s</div>
     </div>
   );
 }
@@ -847,11 +837,20 @@ function TokenPanel({ myTokens, canSkip, onSkip }: TokenPanelProps) {
 export interface GameRoomProps {
   room: Room;
   currentCard: CardHidden | null;
+  observerCard: Card | null;
   activePlayerId: string | null;
   previewUrl: string | null;
   playAt: number | null;
+  turnEndsAt: number | null;
   timelineLength: number;
-  lastFlip: { card: Card; correct: boolean } | null;
+  lastFlip: {
+    card: Card;
+    correct: boolean;
+    activePlayerId: string;
+    placedPosition: number;
+    challengeResults: Array<{ challengerId: string; outcome: 'stole_card' | 'lost_token' }>;
+  } | null;
+  lastChallenge: { challengerId: string } | null;
   roundEnded: { winnerId: string | null } | null;
   myTokens: number;
   sessionId: string;
@@ -877,10 +876,13 @@ export interface GameRoomProps {
 export default function GameRoom({
   room,
   currentCard,
+  observerCard,
   activePlayerId,
   previewUrl,
   playAt,
+  turnEndsAt,
   lastFlip,
+  lastChallenge,
   roundEnded,
   myTokens,
   sessionId,
@@ -906,6 +908,10 @@ export default function GameRoom({
   const [showFlipResult, setShowFlipResult] = useState(false);
   const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
   const logCounter = useRef(0);
+  const [turnSecondsLeft, setTurnSecondsLeft] = useState<number | null>(null);
+  const [hasChallenged, setHasChallenged] = useState(false);
+  const lastChallengeIdRef = useRef<string | null>(null);
+  const lastPlacementLogRef = useRef<number | null>(null);
   const [nameSongTitle, setNameSongTitle] = useState('');
   const [nameSongArtist, setNameSongArtist] = useState('');
   const [nameSongYear, setNameSongYear] = useState('');
@@ -923,31 +929,143 @@ export default function GameRoom({
   const myTimeline = round?.timelines[timelineKey];
   const myCards = myTimeline?.cards ?? [];
 
+  const activeEntityId =
+    activePlayerId && round ? activeEntityIdFromRoom(room, activePlayerId) : null;
+  const activeTimeline =
+    activeEntityId && round ? round.timelines[activeEntityId] : undefined;
+  const activeCards = activeTimeline?.cards ?? [];
+  const watchingOther =
+    room.status === 'round_active' && !isCooperative && !isActivePlayer;
+
   // Current turn phase
   const currentTurn = round?.currentTurn;
   const isInChallengePhase = currentTurn?.phase === 'challenge';
   const isInFlipPhase = currentTurn?.phase === 'flip';
-  const placedPosition = isActivePlayer ? (currentTurn?.placedPosition ?? null) : null;
+  const placedPosition =
+    currentTurn?.placedPosition !== undefined && currentTurn?.placedPosition !== null
+      ? currentTurn.placedPosition
+      : null;
   const challengeDeadline = isInChallengePhase ? (currentTurn?.challengeDeadline ?? null) : null;
+
+  const activeName = activePlayerDisplayName(room, activePlayerId);
+  const mainTimelineLabel = watchingOther
+    ? `${activeName.toUpperCase()}'S TIMELINE — watch where they place`
+    : isActivePlayer
+      ? 'YOUR TIMELINE — Drag the card into a gap, or click a gap'
+      : 'TIMELINE';
+  const mainCards = watchingOther ? activeCards : myCards;
+  const mainTimelineEntityId = watchingOther ? activeEntityId : timelineKey;
+  const flipEntityId =
+    lastFlip && round ? activeEntityIdFromRoom(room, lastFlip.activePlayerId) : null;
+  const flipReveal =
+    showFlipResult && lastFlip && flipEntityId === mainTimelineEntityId
+      ? {
+          position: lastFlip.placedPosition,
+          card: lastFlip.card,
+          correct: lastFlip.correct,
+        }
+      : null;
+
+  const appendLog = useCallback((who: string, action: string, consequence: string) => {
+    const html = `<span class="log-who">${who}</span> <span class="log-action">${action}</span> — <span class="log-result">${consequence}</span>`;
+    setLogEntries((prev) => [{ id: logCounter.current++, html }, ...prev].slice(0, 50));
+  }, []);
+
+  useEffect(() => {
+    if (!turnEndsAt || currentTurn?.phase !== 'place') {
+      setTurnSecondsLeft(null);
+      return;
+    }
+    const tick = () => {
+      setTurnSecondsLeft(Math.max(0, Math.ceil((turnEndsAt - Date.now()) / 1000)));
+    };
+    tick();
+    const id = setInterval(tick, 250);
+    return () => clearInterval(id);
+  }, [turnEndsAt, currentTurn?.phase]);
+
+  // Reset challenge flag when a new place phase starts
+  useEffect(() => {
+    if (currentTurn?.phase === 'place') {
+      setHasChallenged(false);
+    }
+  }, [activePlayerId, currentTurn?.phase]);
+
+  // Log when someone enters the challenge window after placing
+  useEffect(() => {
+    if (!isInChallengePhase || placedPosition === null || !round) return;
+    const key = round.turnIndex * 1000 + placedPosition;
+    if (lastPlacementLogRef.current === key) return;
+    lastPlacementLogRef.current = key;
+    const placer = activePlayerDisplayName(room, activePlayerId);
+    appendLog(
+      placer,
+      'placed a card',
+      '3s to challenge if the spot looks wrong',
+    );
+  }, [isInChallengePhase, placedPosition, round?.turnIndex, room, activePlayerId, appendLog]);
+
+  // Log HITSTER! challenges (all clients)
+  useEffect(() => {
+    if (!lastChallenge) return;
+    const key = lastChallenge.challengerId + (challengeDeadline ?? '');
+    if (lastChallengeIdRef.current === key) return;
+    lastChallengeIdRef.current = key;
+    const challenger = playerDisplayName(room, lastChallenge.challengerId);
+    const isMe = lastChallenge.challengerId === sessionId;
+    if (isMe) {
+      appendLog('You', 'Challenge', 'Registered — result after flip');
+    } else {
+      appendLog(challenger, 'Challenge', 'Challenged the placement');
+    }
+  }, [lastChallenge, challengeDeadline, room, sessionId, appendLog]);
 
   // Show flip result when lastFlip changes
   useEffect(() => {
-    if (lastFlip) {
-      setShowFlipResult(true);
-      setSelectedPosition(null);
+    if (!lastFlip) return;
+    setShowFlipResult(true);
+    setSelectedPosition(null);
 
-      const msg = lastFlip.correct
-        ? `<span class="log-highlight">${lastFlip.card.title}</span> — <span class="log-correct">✓ Correct!</span>`
-        : `<span class="log-highlight">${lastFlip.card.title}</span> — <span class="log-wrong">✗ Wrong</span>`;
+    const placer = activePlayerDisplayName(room, lastFlip.activePlayerId);
+    const placementResult = lastFlip.correct
+      ? `${placer} was correct — card stays on their timeline`
+      : `${placer} was wrong — card discarded`;
 
-      const entry: LogEntry = { id: logCounter.current++, html: msg };
-      setLogEntries(prev => [entry, ...prev].slice(0, 50));
+    appendLog(placer, 'card revealed', placementResult);
+
+    for (const cr of lastFlip.challengeResults) {
+      const challenger = playerDisplayName(room, cr.challengerId);
+      if (cr.outcome === 'stole_card') {
+        appendLog(
+          challenger,
+          'Challenge',
+          `${placer} was wrong — ${challenger} steals the card`,
+        );
+      } else {
+        appendLog(
+          challenger,
+          'Challenge',
+          `${placer} was correct — ${challenger} loses 1 token`,
+        );
+      }
     }
-  }, [lastFlip]);
 
-  const handleDismissFlip = useCallback(() => {
-    setShowFlipResult(false);
-  }, []);
+    const msg = lastFlip.correct
+      ? `<span class="log-highlight">${lastFlip.card.title}</span> — <span class="log-correct">✓ Correct!</span>`
+      : `<span class="log-highlight">${lastFlip.card.title}</span> — <span class="log-wrong">✗ Wrong</span>`;
+    setLogEntries((prev) => [{ id: logCounter.current++, html: msg }, ...prev].slice(0, 50));
+  }, [lastFlip, room, appendLog]);
+
+  useEffect(() => {
+    if (!showFlipResult) return;
+    const timer = setTimeout(() => setShowFlipResult(false), 3500);
+    const handler = () => setShowFlipResult(false);
+    window.addEventListener('keydown', handler);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('keydown', handler);
+    };
+  }, [showFlipResult]);
 
   function handleSelectPosition(pos: number) {
     setSelectedPosition(pos);
@@ -956,6 +1074,13 @@ export default function GameRoom({
   function handleConfirmPlace() {
     if (selectedPosition === null) return;
     onPlaceCard(selectedPosition);
+    setSelectedPosition(null);
+  }
+
+  function handleChallenge() {
+    if (hasChallenged) return;
+    onChallengeCard();
+    setHasChallenged(true);
   }
 
   // Game over screen — room permanently ended by owner
@@ -1012,7 +1137,7 @@ export default function GameRoom({
       <div className="game-root">
         <div className="scanlines" />
         <header className="game-header">
-          <div className="logo">HITSTER</div>
+          <HitsterLogo />
           <div className="room-code-badge">ROOM: {room.code}</div>
           <button
             style={{ background: 'none', border: '1px solid #374151', color: '#6b7280', padding: '6px 12px', cursor: 'pointer', fontFamily: 'Rajdhani, sans-serif', fontSize: 13 }}
@@ -1049,21 +1174,31 @@ export default function GameRoom({
 
       {/* Header */}
       <header className="game-header">
-        <div className="logo">HITSTER</div>
+        <HitsterLogo />
         <div className="room-code-badge">ROOM: {room.code}</div>
-        <TokenPanel
-          myTokens={myTokens}
-          canSkip={!isSpectator && isActivePlayer && !isInChallengePhase && currentCard !== null}
-          onSkip={onSkipCard}
-        />
+        {!isSpectator && (
+          <TokenPanel
+            myTokens={myTokens}
+            canSkip={isActivePlayer && !isInChallengePhase && currentCard !== null}
+            onSkip={onSkipCard}
+          />
+        )}
       </header>
 
       <div className="game-main">
         {/* LEFT: Player list */}
-        <PlayerList room={room} activePlayerId={activePlayerId} sessionId={sessionId} />
+        <PlayerList
+          room={room}
+          activePlayerId={activePlayerId}
+          activeTurnLabel={activeName}
+          isMyTurn={isActivePlayer && !isSpectator}
+          turnIndex={round?.turnIndex ?? 0}
+          turnSecondsLeft={turnSecondsLeft}
+          sessionId={sessionId}
+        />
 
         {/* CENTER: Gameplay */}
-        <div className="center-col">
+        <div className={`center-col${showFlipResult ? ' center-col--reveal-active' : ''}`}>
           {isSpectator && (
             <div className="spectator-banner">
               👁 Spectating — you'll join the next round automatically
@@ -1075,6 +1210,8 @@ export default function GameRoom({
             currentCard={currentCard}
             revealedCard={revealedCard}
             isFlipped={isFlipped}
+            observerCard={observerCard}
+            isActivePlayer={isActivePlayer}
           />
 
           {isCooperative && round && (round.tokens['cooperative'] ?? 0) <= 2 && (
@@ -1083,15 +1220,45 @@ export default function GameRoom({
             </div>
           )}
 
-          <Timeline
-            cards={myCards}
-            pendingCard={currentCard}
-            isActivePlayer={isActivePlayer}
-            placedPosition={typeof placedPosition === 'number' ? placedPosition : null}
-            selectedPosition={selectedPosition}
-            onSelectPosition={handleSelectPosition}
-            isInChallengePhase={isInChallengePhase}
-          />
+          <div className={watchingOther ? 'center-timeline-stack' : undefined}>
+            <TimelineView
+              cards={mainCards}
+              pendingCard={isActivePlayer ? currentCard : null}
+              label={mainTimelineLabel}
+              readOnly={watchingOther}
+              isActivePlayer={isActivePlayer}
+              placedPosition={placedPosition}
+              selectedPosition={selectedPosition}
+              onSelectPosition={handleSelectPosition}
+              isInChallengePhase={isInChallengePhase}
+              showPlacementToAll={watchingOther || isInChallengePhase}
+              testId={watchingOther ? 'watch-timeline' : 'main-timeline'}
+              showHitsterUnderPlacement={
+                watchingOther &&
+                isInChallengePhase &&
+                !isSpectator &&
+                !isCooperative
+              }
+              challengeDeadline={challengeDeadline}
+              onChallenge={handleChallenge}
+              hasChallenged={hasChallenged}
+              flipReveal={flipReveal}
+            />
+
+            {watchingOther && !isSpectator && (
+              <TimelineView
+                cards={myCards}
+                pendingCard={null}
+                label="YOUR TIMELINE — not your turn"
+                readOnly
+                placedPosition={null}
+                selectedPosition={null}
+                onSelectPosition={() => {}}
+                isInChallengePhase={false}
+                testId="my-timeline-disabled"
+              />
+            )}
+          </div>
 
           {/* Actions bar */}
           <div className="actions-bar">
@@ -1128,28 +1295,6 @@ export default function GameRoom({
               </button>
             )}
 
-            {!isActivePlayer && !isSpectator && isInChallengePhase && !isCooperative && (
-              <button
-                className="action-btn btn-hitster"
-                onClick={onChallengeCard}
-              >
-                HITSTER!
-              </button>
-            )}
-
-            <div className="turn-info-label">
-              {round && (
-                <>
-                  Turn <span>{round.turnIndex + 1}</span>
-                  {' / '}
-                  {isActivePlayer ? 'Your turn' : (
-                    <span>
-                      {room.players[activePlayerId ?? '']?.displayName ?? '...'}'s turn
-                    </span>
-                  )}
-                </>
-              )}
-            </div>
           </div>
         </div>
 
@@ -1157,13 +1302,11 @@ export default function GameRoom({
         <div className="right-side-panel">
           <div className="panel-title">Game Log</div>
 
-          <ChallengeBar
-            deadline={isCooperative || isSpectator ? null : challengeDeadline}
-            onChallenge={onChallengeCard}
-            isActivePlayer={isActivePlayer}
-          />
+          {isInChallengePhase && !isCooperative && !isSpectator && (
+            <ChallengeBar deadline={challengeDeadline} />
+          )}
 
-          <div className="game-log">
+          <div className="game-log game-log--prominent">
             {logEntries.map(entry => (
               <div
                 key={entry.id}
@@ -1239,14 +1382,6 @@ export default function GameRoom({
         </div>
       </div>
 
-      {/* Flip result overlay */}
-      {showFlipResult && lastFlip && (
-        <FlipResult
-          card={lastFlip.card}
-          correct={lastFlip.correct}
-          onDismiss={handleDismissFlip}
-        />
-      )}
     </div>
   );
 }

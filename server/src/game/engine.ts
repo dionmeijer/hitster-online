@@ -1,4 +1,3 @@
-import { CHALLENGE_WINDOW_MS } from '../../../shared/constants';
 import type {
   Room,
   Player,
@@ -13,6 +12,9 @@ import type {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/** Keep in sync with shared/constants.ts CHALLENGE_WINDOW_MS */
+const DEFAULT_CHALLENGE_WINDOW_MS = 3_000;
 
 function shuffleArray<T>(arr: T[]): T[] {
   const copy = [...arr];
@@ -330,7 +332,7 @@ export function applyPlacement(
   room: Room,
   playerId: string,
   position: number,
-  challengeWindowMs: number = CHALLENGE_WINDOW_MS,
+  challengeWindowMs: number = DEFAULT_CHALLENGE_WINDOW_MS,
 ): Room {
   if (!room.activeRound) throw new Error('No active round');
   const currentTurn = room.activeRound.currentTurn;

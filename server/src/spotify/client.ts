@@ -6,10 +6,16 @@ interface TokenResponse {
   expires_in: number;
 }
 
+interface SpotifyArtist {
+  id: string;
+  name: string;
+  genres: string[];
+}
+
 interface SpotifyTrack {
   id: string;
   name: string;
-  artists: Array<{ name: string }>;
+  artists: Array<{ id: string; name: string }>;
   preview_url: string | null;
   popularity?: number;
   external_urls?: { spotify?: string };
@@ -231,6 +237,64 @@ export class SpotifyClient {
     console.log(parts.join(' '));
   }
 
+  /** Batch-fetch artist genres from Spotify (up to 50 ids per request). */
+  private async fetchArtistGenresMap(artistIds: string[]): Promise<Map<string, string[]>> {
+    const map = new Map<string, string[]>();
+    const unique = [...new Set(artistIds.filter(Boolean))];
+    for (let i = 0; i < unique.length; i += 50) {
+      const batch = unique.slice(i, i + 50);
+      const data = await this.apiGet<{ artists: Array<SpotifyArtist | null> }>(
+        `/artists?ids=${batch.join(',')}`,
+      );
+      for (const artist of data.artists ?? []) {
+        if (artist?.id) map.set(artist.id, artist.genres ?? []);
+      }
+    }
+    return map;
+  }
+
+  private async attachGenresToCards(
+    entries: Array<{ card: Card; artistId: string | undefined }>,
+  ): Promise<Card[]> {
+    const ids = entries.map((e) => e.artistId).filter((id): id is string => !!id);
+    if (ids.length === 0) return entries.map((e) => e.card);
+
+    try {
+      const genreMap = await this.fetchArtistGenresMap(ids);
+      return entries.map(({ card, artistId }) => {
+        const genres = artistId ? genreMap.get(artistId) : undefined;
+        if (!genres?.length) return card;
+        return { ...card, genres: genres.slice(0, 3) };
+      });
+    } catch (err) {
+      console.warn('[Spotify] artist genre lookup failed:', err);
+      return entries.map((e) => e.card);
+    }
+  }
+
+  private withMockGenres(card: Card): Card {
+    if (card.genres?.length) return card;
+    const y = card.releaseYear;
+    let genres: string[];
+    if (y < 1965) genres = ['rock', 'blues'];
+    else if (y < 1980) genres = ['rock', 'soul'];
+    else if (y < 1995) genres = ['pop', 'rock'];
+    else if (y < 2010) genres = ['pop', 'hip-hop'];
+    else genres = ['pop'];
+    return { ...card, genres };
+  }
+
+  private tracksToCards(tracks: SpotifyTrack[]): Promise<Card[]> {
+    const entries: Array<{ card: Card; artistId: string | undefined }> = [];
+    for (const track of tracks) {
+      const card = this.trackToCard(track);
+      if (card) {
+        entries.push({ card, artistId: track.artists[0]?.id });
+      }
+    }
+    return this.attachGenresToCards(entries);
+  }
+
   private trackToCard(track: SpotifyTrack): Card | null {
     const releaseYear = this.trackReleaseYear(track);
     if (releaseYear === null) {
@@ -264,10 +328,10 @@ export class SpotifyClient {
   /** Fetch tracks from a Spotify playlist URL or bare playlist ID. */
   async getPlaylistTracks(playlistUrl: string, limit = 200): Promise<Card[]> {
     const playlistId = this.extractPlaylistId(playlistUrl);
-    const cards: Card[] = [];
+    const raw: SpotifyTrack[] = [];
     let nextPath: string | null = `/playlists/${playlistId}/tracks?limit=50`;
 
-    while (nextPath && cards.length < limit) {
+    while (nextPath && raw.length < limit) {
       const data: PlaylistTracksPage = await this.apiGet<PlaylistTracksPage>(nextPath);
 
       for (const item of data.items) {
@@ -275,13 +339,13 @@ export class SpotifyClient {
           console.log('[Spotify] skipped null playlist item');
           continue;
         }
-        const card = this.trackToCard(item.track);
-        if (card) cards.push(card);
+        raw.push(item.track);
       }
 
       nextPath = data.next ?? null;
     }
 
+    const cards = await this.tracksToCards(raw.slice(0, limit));
     console.log(`[Spotify] playlist ${playlistId}: ${cards.length} tracks included`);
     return cards;
   }
@@ -354,11 +418,7 @@ export class SpotifyClient {
       throw new Error(`Spotify API error ${result.status} for ${path}`);
     }
 
-    const cards: Card[] = [];
-    for (const track of result.data.tracks ?? []) {
-      const card = this.trackToCard(track);
-      if (card) cards.push(card);
-    }
+    const cards = await this.tracksToCards(result.data.tracks ?? []);
 
     console.log(
       `[Spotify] recommendations genre="${genre}" seeds=${seeds.join(',')} min_popularity=${params.get('min_popularity')}: ${cards.length} tracks included`,
@@ -398,11 +458,7 @@ export class SpotifyClient {
 
     ranked.sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0));
 
-    const cards: Card[] = [];
-    for (const track of ranked.slice(0, limit)) {
-      const card = this.trackToCard(track);
-      if (card) cards.push(card);
-    }
+    const cards = await this.tracksToCards(ranked.slice(0, limit));
 
     console.log(
       `[Spotify] search popular genre="${genre}" seeds=${seeds.join(',')} min_popularity=${minPop}: ${cards.length} tracks included`,
@@ -421,7 +477,7 @@ export class SpotifyClient {
    * In TEST_MODE returns shuffled mock tracks without hitting the API.
    */
   async getTracksForLabel(label: string): Promise<Card[]> {
-    if (this.testMode) return shuffleArray(MOCK_TRACKS);
+    if (this.testMode) return shuffleArray(MOCK_TRACKS.map((c) => this.withMockGenres(c)));
 
     const playlistMatch = label.match(/playlist\/([A-Za-z0-9]+)/);
     if (playlistMatch) {
@@ -454,11 +510,7 @@ export class SpotifyClient {
     const data: SearchTracksPage = await this.apiGet<SearchTracksPage>(
       `/search?q=${q}&type=track&limit=50`,
     );
-    const cards: Card[] = [];
-    for (const track of data.tracks?.items ?? []) {
-      const card = this.trackToCard(track);
-      if (card) cards.push(card);
-    }
+    const cards = await this.tracksToCards(data.tracks?.items ?? []);
     console.log(`[Spotify] keyword fallback "${genre}": ${cards.length} tracks included`);
     return cards.length > 0 ? cards : fromRecs;
   }

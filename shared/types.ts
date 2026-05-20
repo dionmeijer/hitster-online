@@ -38,6 +38,8 @@ export interface Card {
   /** 30s MP3 preview when Spotify provides one (playlist preview modal, etc.). */
   streamUrl?: string | null;
   albumArt: string;
+  /** Spotify artist genre tags (from artist profile). */
+  genres?: string[];
 }
 
 /** Hidden card — sent to clients when the turn starts. Year/title/artist hidden until flip. */
@@ -139,9 +141,13 @@ export interface ServerToClientEvents {
   'turn:started': (data: {
     activePlayerId: string;
     card: CardHidden;
+    /** Full track for non-placing players (active player UI ignores this). */
+    observerCard: Card;
     previewUrl: string;
     playAt: number;        // Unix ms — start audio at exactly this time
     timelineLength: number; // number of cards already on the active player's timeline
+    /** Unix ms — auto-skip if still in place phase */
+    turnEndsAt: number;
   }) => void;
 
   /** Broadcast after active player places their card */
@@ -159,8 +165,11 @@ export interface ServerToClientEvents {
     card: Card;
     correct: boolean;
     activePlayerId: string;
+    placedPosition: number;
     updatedTimeline: Timeline;
+    timelines: Record<string, Timeline>;
     tokensUpdated: Record<string, number>;
+    challengeResults: Array<{ challengerId: string; outcome: 'stole_card' | 'lost_token' }>;
   }) => void;
 
   /** Broadcast when a player correctly names the song (+1 token) */
@@ -173,7 +182,7 @@ export interface ServerToClientEvents {
   'turn:bought': (data: { playerId: string; tokensUpdated: Record<string, number> }) => void;
 
   /** Broadcast when a player's turn is auto-skipped (due to buy or disconnect) */
-  'turn:auto-skipped': (data: { playerId: string; reason: 'buy' | 'disconnect' }) => void;
+  'turn:auto-skipped': (data: { playerId: string; reason: 'buy' | 'disconnect' | 'timeout' }) => void;
 
   /** Error — emitted only to the socket that caused it */
   'error': (message: string) => void;

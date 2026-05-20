@@ -139,7 +139,7 @@ export class Bot {
       await this.maybeChallenge();
     });
 
-    this.socket.on('turn:auto-skipped', (data: { playerId: string; reason: 'buy' | 'disconnect' }) => {
+    this.socket.on('turn:auto-skipped', (data: { playerId: string; reason: 'buy' | 'disconnect' | 'timeout' }) => {
       log(profile.name, `turn auto-skipped: player=${data.playerId} reason=${data.reason}`);
     });
 

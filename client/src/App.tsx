@@ -29,11 +29,14 @@ export default function App() {
     <GameRoom
       room={game.room}
       currentCard={game.currentCard}
+      observerCard={game.observerCard}
       activePlayerId={game.activePlayerId}
       previewUrl={game.previewUrl}
       playAt={game.playAt}
+      turnEndsAt={game.turnEndsAt}
       timelineLength={game.timelineLength}
       lastFlip={game.lastFlip}
+      lastChallenge={game.lastChallenge}
       roundEnded={game.roundEnded}
       myTokens={game.myTokens}
       sessionId={sessionId}
