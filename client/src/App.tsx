@@ -49,6 +49,10 @@ export default function App() {
       onCreateTeam={game.createTeam}
       onJoinTeam={game.joinTeam}
       onLeaveTeam={game.leaveTeam}
+      onPreviewPlaylist={game.previewPlaylist}
+      onClearPlaylistPreview={game.clearPlaylistPreview}
+      playlistPreviewCards={game.playlistPreviewCards}
+      playlistPreviewLoading={game.playlistPreviewLoading}
       onEndGame={game.endGame}
       onLeave={() => {
         window.location.reload();

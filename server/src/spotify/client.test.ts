@@ -129,6 +129,7 @@ describe('SpotifyClient', () => {
         artist: 'Artist',
         releaseYear: 1995,
         previewUrl: 'https://open.spotify.com/track/track1',
+        streamUrl: 'https://p.scdn.co/preview.mp3',
         albumArt: 'https://img.example.com/art.jpg',
       });
     });

@@ -33,7 +33,10 @@ export interface Card {
   title: string;
   artist: string;
   releaseYear: number;
+  /** Spotify play page URL used during turns. */
   previewUrl: string;
+  /** 30s MP3 preview when Spotify provides one (playlist preview modal, etc.). */
+  streamUrl?: string | null;
   albumArt: string;
 }
 
@@ -117,6 +120,9 @@ export interface RoomSummary {
 // ----------------------------
 
 export interface ServerToClientEvents {
+  /** Emitted to requesting socket with full card list for preview */
+  'playlist:previewed': (data: { cards: Card[] }) => void;
+
   /** Emitted to creator after room:create succeeds */
   'room:created': (data: { roomCode: string; room: Room }) => void;
 
@@ -170,6 +176,9 @@ export interface ServerToClientEvents {
 }
 
 export interface ClientToServerEvents {
+  /** Fetch a track list for a playlist URL or genre label (preview/cheat mode) */
+  'playlist:preview': (data: { playlistLabel: string }) => void;
+
   /** Create a new room. Player identity comes from socket.handshake.auth */
   'room:create': (data: { topic: string }) => void;
 
