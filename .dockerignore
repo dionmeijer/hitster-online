@@ -1,0 +1,17 @@
+node_modules
+.git
+.env
+.env.*
+client/dist
+server/dist
+coverage
+test-results
+playwright-report
+.claude
+.cursor
+*.md
+!README.md
+e2e
+bots
+scripts
+assets

@@ -46,6 +46,18 @@ cd client && npm run dev
 
 No scopes or redirect URIs needed — the server uses Client Credentials Flow only.
 
+## Deploy to Fly.io
+
+Production target is **[Fly.io](https://fly.io)** (single machine, WebSockets, ~$3–8/mo shared CPU). The server serves the built client from the same URL.
+
+```bash
+fly auth login
+fly secrets set SPOTIFY_CLIENT_ID=... SPOTIFY_CLIENT_SECRET=... CLIENT_URL=https://hitster-online.fly.dev
+fly deploy
+```
+
+Full steps: [docs/DEPLOY_FLY.md](docs/DEPLOY_FLY.md). Railway config (`railway.toml`) remains optional.
+
 ## Tech stack
 
 - **Frontend**: React + TypeScript, Vite, Tailwind CSS

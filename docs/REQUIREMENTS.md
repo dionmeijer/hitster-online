@@ -248,7 +248,7 @@ LOBBY → ROUND_ACTIVE → ROUND_ENDED → LOBBY (next round)
 ## Part 5 — Deployment
 
 ### 5.1 Platform
-Railway — Node.js + WebSockets, no cold starts on free tier, deploys from GitHub in ~2 minutes.
+**Fly.io** — one always-on Machine (in-memory state), WebSockets, Docker deploy. See `docs/DEPLOY_FLY.md`. Railway (`railway.toml`) remains supported as an alternative.
 
 ### 5.2 Environment Variables
 

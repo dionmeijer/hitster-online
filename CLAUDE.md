@@ -71,7 +71,7 @@ The full functional requirements, architecture, and game rules are in `docs/REQU
 | Backend | Node.js + TypeScript, Express |
 | External API | Spotify Web API (Client Credentials Flow) |
 | State | In-memory only — no database |
-| Hosting | Railway |
+| Hosting | Fly.io (see `docs/DEPLOY_FLY.md`; `railway.toml` optional) |
 
 ---
 

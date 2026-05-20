@@ -125,8 +125,20 @@ app.get('/api/spotify/tracks/:trackId/embed-preview', async (req, res) => {
 });
 
 // Serve built React client if available, otherwise redirect to Vite dev server
-const clientDist = join(__dirname, '../../client/dist');
-if (existsSync(clientDist)) {
+function resolveClientDist(): string | null {
+  const candidates = [
+    join(__dirname, '../../client/dist'), // tsx dev (server/src)
+    join(__dirname, '../../../../client/dist'), // compiled (server/dist/server/src)
+    join(process.cwd(), 'client/dist'),
+  ];
+  for (const dir of candidates) {
+    if (existsSync(join(dir, 'index.html'))) return dir;
+  }
+  return null;
+}
+
+const clientDist = resolveClientDist();
+if (clientDist) {
   app.use(express.static(clientDist));
   app.get('*', (_req, res) => res.sendFile(join(clientDist, 'index.html')));
 } else {
@@ -757,6 +769,6 @@ io.on('connection', (socket) => {
 // ---------------------------------------------------------------------------
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`Hitster Online server running on port ${PORT}`);
 });
