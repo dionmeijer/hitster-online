@@ -26,57 +26,92 @@ function PlayerList({ room, activePlayerId, sessionId }: PlayerListProps) {
   const players = Object.values(room.players);
   const round = room.activeRound;
 
+  const renderPlayer = (p: typeof players[number]) => {
+    const color = avatarColor(p.displayName);
+    const pTeamId = Object.entries(room.teams).find(([, t]) => t.playerIds.includes(p.id))?.[0];
+    const isActive = round?.config.mode === 'cooperative'
+      ? false
+      : room.useTeams && pTeamId
+        ? activePlayerId === pTeamId
+        : p.id === activePlayerId;
+    const isMe = p.id === sessionId;
+    const entityKey = round?.config.mode === 'cooperative' ? 'cooperative'
+      : (room.useTeams && pTeamId ? pTeamId : p.id);
+    const timeline = round?.timelines[entityKey];
+    const cardCount = timeline?.cards.length ?? 0;
+    const tokens = round?.tokens[entityKey] ?? 0;
+
+    return (
+      <div key={p.id} className={`player-item${isActive ? ' active-player' : ''}${!p.isConnected ? ' disconnected' : ''}`}>
+        <div
+          className="player-avatar"
+          style={{ background: color + '22', color }}
+        >
+          {p.displayName[0]?.toUpperCase() ?? '?'}
+        </div>
+        <div className="player-info">
+          <div className="player-name">
+            {isMe ? 'You' : p.displayName}
+            {isActive && (
+              <span style={{ color: '#4ade80', fontSize: 11, marginLeft: 4 }}>▶</span>
+            )}
+            {!p.isConnected && (
+              <span className="player-disconnected-badge">⚡ offline</span>
+            )}
+          </div>
+          <div className="player-score">{cardCount} card{cardCount !== 1 ? 's' : ''}</div>
+          <div className="player-token-dots">
+            {Array.from({ length: 5 }, (_, i) => (
+              <div key={i} className={`token-dot${i >= tokens ? ' empty' : ''}`} />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const teams = Object.values(room.teams);
+  const hasTeams = room.useTeams && teams.length > 0;
+
   return (
     <div className="side-panel">
       <div className="panel-title">Players</div>
 
-      {players.map(p => {
-        const color = avatarColor(p.displayName);
-        const pTeamId = Object.entries(room.teams).find(([, t]) => t.playerIds.includes(p.id))?.[0];
-        const isActive = round?.config.mode === 'cooperative'
-          ? false
-          : room.useTeams && pTeamId
-            ? activePlayerId === pTeamId
-            : p.id === activePlayerId;
-        const isMe = p.id === sessionId;
-        const entityKey = round?.config.mode === 'cooperative' ? 'cooperative'
-          : (room.useTeams && pTeamId ? pTeamId : p.id);
-        const timeline = round?.timelines[entityKey];
-        const cardCount = timeline?.cards.length ?? 0;
-        const tokens = round?.tokens[entityKey] ?? 0;
-
-        return (
-          <div key={p.id} className={`player-item${isActive ? ' active-player' : ''}`}>
-            <div
-              className="player-avatar"
-              style={{ background: color + '22', color }}
-            >
-              {p.displayName[0]?.toUpperCase() ?? '?'}
-            </div>
-            <div className="player-info">
-              <div className="player-name">
-                {isMe ? 'You' : p.displayName}
-                {isActive && (
-                  <span style={{ color: '#4ade80', fontSize: 11, marginLeft: 4 }}>▶</span>
-                )}
+      {hasTeams ? (
+        <>
+          {teams.map(team => {
+            const teamPlayers = players.filter(p => team.playerIds.includes(p.id));
+            return (
+              <div key={team.id}>
+                <div className="player-team-header">{team.name}</div>
+                {teamPlayers.map(p => renderPlayer(p))}
               </div>
-              <div className="player-score">{cardCount} card{cardCount !== 1 ? 's' : ''}</div>
-              <div className="player-token-dots">
-                {Array.from({ length: 5 }, (_, i) => (
-                  <div key={i} className={`token-dot${i >= tokens ? ' empty' : ''}`} />
-                ))}
+            );
+          })}
+          {(() => {
+            const unteamedPlayers = players.filter(p =>
+              !teams.some(t => t.playerIds.includes(p.id))
+            );
+            return unteamedPlayers.length > 0 ? (
+              <div>
+                <div className="player-team-header">No team</div>
+                {unteamedPlayers.map(p => renderPlayer(p))}
               </div>
-            </div>
-          </div>
-        );
-      })}
+            ) : null;
+          })()}
+        </>
+      ) : (
+        players.map(p => renderPlayer(p))
+      )}
 
       {round && (
         <div className="round-info">
           <div className="panel-title">Round</div>
           <div className="round-info-row">
             Mode: <span className="round-info-val">{round.config.mode}</span><br />
-            Deck: <span className="round-info-val">{round.deckRemaining} left</span><br />
+            Deck: <span className="round-info-val" style={{
+              color: round.deckRemaining <= 3 ? '#ef4444' : round.deckRemaining <= 10 ? '#fbbf24' : undefined
+            }}>{round.deckRemaining} left</span><br />
             Target: <span className="round-info-val-green">{round.config.cardsToWin} cards</span>
           </div>
         </div>
@@ -923,6 +958,12 @@ export default function GameRoom({
             revealedCard={revealedCard}
             isFlipped={isFlipped}
           />
+
+          {isCooperative && round && (round.tokens['cooperative'] ?? 0) <= 2 && (
+            <div className="coop-token-warning">
+              ⚠ Only {round.tokens['cooperative'] ?? 0} shared token{(round.tokens['cooperative'] ?? 0) !== 1 ? 's' : ''} left!
+            </div>
+          )}
 
           <Timeline
             cards={myCards}

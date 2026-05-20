@@ -643,6 +643,42 @@ body {
   background: #1a0a2e;
   box-shadow: 0 0 12px rgba(124, 58, 237, 0.3);
 }
+.player-item.disconnected {
+  opacity: 0.45;
+}
+
+.player-disconnected-badge {
+  font-size: 9px;
+  color: #ef4444;
+  background: #1f1f1f;
+  border: 1px solid #374151;
+  border-radius: 4px;
+  padding: 1px 4px;
+  margin-left: 4px;
+}
+
+.player-team-header {
+  font-size: 10px;
+  font-weight: 700;
+  color: #a78bfa;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 8px 0 2px;
+  border-bottom: 1px solid #1f2937;
+  margin-bottom: 4px;
+}
+
+.coop-token-warning {
+  background: #78350f22;
+  border: 1px solid #d97706;
+  color: #fbbf24;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  text-align: center;
+  margin: 8px 32px 0;
+  flex-shrink: 0;
+}
 
 .player-avatar {
   width: 32px;
