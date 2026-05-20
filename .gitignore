@@ -18,6 +18,8 @@ build/
 # Compiled JS emitted next to source (e.g. from failed tsc runs)
 shared/**/*.js
 shared/**/*.d.ts
+client/src/**/*.js
+client/src/**/*.d.ts
 
 # Logs
 *.log
