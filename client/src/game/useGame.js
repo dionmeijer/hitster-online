@@ -11,6 +11,8 @@ export function useGame() {
     const [roundEnded, setRoundEnded] = useState(null);
     const [myTokens, setMyTokens] = useState(0);
     const [socketError, setSocketError] = useState(null);
+    const [playlistPreviewCards, setPlaylistPreviewCards] = useState(null);
+    const [playlistPreviewLoading, setPlaylistPreviewLoading] = useState(false);
     const sessionId = sessionStorage.getItem('hitster_session_id') ?? '';
     useEffect(() => {
         socket.on('room:created', ({ room: r }) => {
@@ -115,9 +117,14 @@ export function useGame() {
             setPreviewUrl(null);
             setPlayAt(null);
         });
+        socket.on('playlist:previewed', ({ cards }) => {
+            setPlaylistPreviewCards(cards);
+            setPlaylistPreviewLoading(false);
+        });
         socket.on('error', (msg) => {
             console.error('[hitster socket error]', msg);
             setSocketError(typeof msg === 'string' ? msg : msg?.message ?? 'An error occurred');
+            setPlaylistPreviewLoading(false);
         });
         return () => {
             socket.off('room:created');
@@ -131,6 +138,7 @@ export function useGame() {
             socket.off('turn:bought');
             socket.off('turn:named');
             socket.off('round:ended');
+            socket.off('playlist:previewed');
             socket.off('error');
         };
     }, [sessionId]);
@@ -176,8 +184,8 @@ export function useGame() {
     const skipCard = useCallback(() => {
         socket.emit('turn:skip');
     }, []);
-    const nameSong = useCallback((title, artist) => {
-        socket.emit('turn:name', { title, artist });
+    const nameSong = useCallback((title, artist, year) => {
+        socket.emit('turn:name', { title, artist, year });
     }, []);
     const buyCard = useCallback(() => {
         socket.emit('turn:buy');
@@ -194,6 +202,15 @@ export function useGame() {
     const leaveTeam = useCallback(() => {
         socket.emit('team:leave');
     }, []);
+    const previewPlaylist = useCallback((playlistLabel) => {
+        setPlaylistPreviewLoading(true);
+        setPlaylistPreviewCards(null);
+        socket.emit('playlist:preview', { playlistLabel });
+    }, []);
+    const clearPlaylistPreview = useCallback(() => {
+        setPlaylistPreviewCards(null);
+        setPlaylistPreviewLoading(false);
+    }, []);
     return {
         room,
         currentCard,
@@ -205,6 +222,8 @@ export function useGame() {
         roundEnded,
         myTokens,
         socketError,
+        playlistPreviewCards,
+        playlistPreviewLoading,
         connect,
         createRoom,
         joinRoom,
@@ -218,5 +237,7 @@ export function useGame() {
         createTeam,
         joinTeam,
         leaveTeam,
+        previewPlaylist,
+        clearPlaylistPreview,
     };
 }
