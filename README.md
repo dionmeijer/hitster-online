@@ -36,6 +36,9 @@ cd client && npm run dev
 
 # Open http://localhost:5173
 # Open multiple tabs to simulate multiplayer
+
+# Optional: simulated players (separate terminal)
+cd bots && npm start -- --count 10 --url http://localhost:8080
 ```
 
 ## Getting Spotify credentials

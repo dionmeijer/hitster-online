@@ -1,6 +1,6 @@
 # Hitster Online — Requirements
 
-> Status: v0.5 — updated to match current implementation
+> Status: v0.6 — updated to match current implementation
 > Last updated: 2026-05-20
 
 ---
@@ -31,7 +31,7 @@ _What the system does from a player's perspective. No technical detail._
   - **Progress**: for in-progress rounds, the leading player/team's card count and the target (e.g. "Mike — 4 / 6 cards")
 - Clicking a room card pre-fills the join code. The player still needs to have entered a valid email before joining.
 - Rooms in **LOBBY** state can be joined freely.
-- Rooms in **ROUND_ACTIVE** state can be observed but the player joins the next round only.
+- Rooms in **ROUND_ACTIVE** state can be joined as a **spectator**: watch the active timeline and game log, but no placement, tokens, or challenges until the next round.
 - Rooms in **GAME_OVER** state are shown greyed-out and cannot be joined.
 - The room list auto-refreshes every **2 seconds**.
 
@@ -73,16 +73,16 @@ Each turn has three phases:
 
 **REVEAL** — A new card is drawn from the deck and the song starts playing for all players simultaneously (synchronised via a server-issued `playAt` timestamp). No player sees the song's title, artist, or year until the card is flipped after placement; only the active player sees blurred album art while placing.
 
-**PLACE** — The placing player selects a position on their timeline. The card is placed face-down. A **10-second challenge window** then opens for all non-placing players.
+**PLACE** — The placing player selects a position on their timeline. The card is placed face-down. A **3-second challenge window** then opens for non-placing participants (not spectators).
 
-**FLIP** — The card is revealed. Placement is correct if the release year fits chronologically between its neighbours (same year as a neighbour also counts as correct). If correct, the card stays on the timeline. If incorrect, the card is discarded.
+**FLIP** — The card is revealed with a short animation; the correct/wrong result stays visible for **2 seconds** before the next turn starts. Placement is correct if the release year fits chronologically between its neighbours (same year as a neighbour also counts as correct). If correct, the card stays on the timeline. If incorrect, the card is discarded.
 
 #### Token Mechanics
 
 | Action | Rule |
 |---|---|
 | **Skip card** (your turn) | Spend 1 token to discard the current card and draw a new one. |
-| **Challenge** ("HITSTER!") | During the challenge window, any non-placing player can challenge. If the opponent placed incorrectly, challenger steals the card. If the opponent was correct, the challenger loses a token. |
+| **Challenge** | During the challenge window, any non-placing **participant** (not a spectator) can challenge via the **Challenge** button under the placed card. If the opponent placed incorrectly, challenger steals the card. If the opponent was correct, the challenger loses a token. |
 | **Buy a card** | Spend 3 tokens to place a card on your timeline without hearing the song. Your next turn is auto-skipped. |
 | **Earn a token** | Name the song title AND artist correctly during your turn = +1 token (max 5). Original/Cooperative only. |
 
@@ -171,13 +171,13 @@ Each turn has three phases:
 
 ### 3.2 Data Flow — Turn Lifecycle
 
-1. Server draws next card, resolves `previewUrl`
-2. Server emits `turn:started` → `{ activePlayerId, card (hidden), previewUrl, playAt, timelineLength }`
-3. Placing player: audio plays, timeline interactive, song identity hidden
-4. Other players: full song details visible; challenge button available after placement
-5. Placing player confirms position → server emits `turn:placed`
-6. Challenge window (10s) → `turn:challenged` events collected
-7. Timer expires → server resolves flip → `turn:flipped` with card, correct flag, updatedTimeline, tokensUpdated
+1. Server draws next card, resolves `previewUrl` / `streamUrl`
+2. Server emits `turn:started` → `{ activePlayerId, card: CardHidden, previewUrl, playAt, timelineLength, turnEndsAt }`
+3. Active player: audio plays, timeline interactive, song identity hidden (blurred album art only)
+4. Other participants: audio only until flip; **Challenge** under placed card during challenge window (watch timeline UI)
+5. Spectators: watch active timeline + server game log; cannot challenge
+6. Active player confirms position → `turn:placed` → challenge window (`CHALLENGE_WINDOW_MS`, 3s)
+7. Timer expires → `turn:flipped` → inline reveal (~2s) → server waits `FLIP_REVEAL_DISPLAY_MS` → next turn
 8. In Pro/Expert: card only lands on timeline if placing player named correctly (`currentTurn.named === true`)
 9. Win check → `round:ended` or advance to next turn
 
@@ -185,9 +185,9 @@ Each turn has three phases:
 
 ```
 LOBBY → ROUND_ACTIVE → ROUND_ENDED → LOBBY (next round)
+              │
+              └── room:end (owner) → GAME_OVER
 ```
-
-> `game_over` exists in the `RoomStatus` type but is not currently used — all rooms return to lobby after a round ends. See Appendix A.
 
 ### 3.4 Resolved Design Decisions
 
@@ -195,7 +195,12 @@ LOBBY → ROUND_ACTIVE → ROUND_ENDED → LOBBY (next round)
 |---|---|---|
 | 1 | Turn structure | Each player places on their own timeline on their turn. |
 | 2 | Team placement | Any team member can place; first click confirms. |
-| 3 | Challenge window | 10 seconds after placement confirmation. |
+| 3 | Challenge window | 3 seconds after placement (`CHALLENGE_WINDOW_MS`). |
+| 8 | Unrevealed track privacy | Only the active player sees blurred album art; others hear audio without title/artist/year until flip. |
+| 9 | Flip reveal pacing | Client shows result for 2s (`FLIP_REVEAL_DISPLAY_MS`); server delays next turn by the same interval. |
+| 10 | Spectators | Mid-round joiners are spectators until the next round; no challenge UI. |
+| 11 | Server game log | `activeRound.gameLog` appended on server; clients render for all (including late joiners). |
+| 12 | Empty room cleanup | Delete room when all participants offline (~60s grace; 5s in test mode). |
 | 4 | Deck exhaustion | Most cards wins; tiebreaker = highest avg release year. |
 | 5 | Player disconnection | 15s auto-skip; removed from turn order after 2 consecutive missed turns. Disconnected players show an offline badge. |
 | 6 | Room size | Max 12 players or 6 teams. |
@@ -215,7 +220,7 @@ LOBBY → ROUND_ACTIVE → ROUND_ENDED → LOBBY (next round)
 | Backend | Node.js + TypeScript, Express |
 | External API | Spotify Web API (Client Credentials Flow) |
 | State | In-memory only — no database |
-| Hosting | Railway |
+| Hosting | Fly.io (primary); Railway optional |
 
 ### 4.2 Repo Structure
 
@@ -261,7 +266,7 @@ LOBBY → ROUND_ACTIVE → ROUND_ENDED → LOBBY (next round)
 | `CLIENT_URL` | Allowed CORS origin (default: `http://localhost:5173`) |
 
 ### 5.3 TEST_MODE
-`TEST_MODE=true` shortens timeouts (challenge window 500ms, disconnect skip 3s) and enables mock Spotify tracks so tests run without real credentials.
+`TEST_MODE=true` shortens timeouts (challenge window 500ms, flip reveal 300ms, empty-room TTL 5s, disconnect skip 3s) and enables mock Spotify tracks so tests run without real credentials.
 
 ---
 
@@ -290,8 +295,6 @@ CLI flags: `--room XXXX`, `--count N`, `--mode <mode>`, `--genre <label>`.
 |---|---|---|
 | 1 | `?room=XXXX` URL param auto-fills join code on page load | §1.1 |
 | 2 | Null-preview track count shown in lobby UI (server logs it only) | §1.7 |
-| 3 | Spectator mode for ROUND_ACTIVE rooms | §1.1.1 |
-| 4 | `game_over` room status (declared in types, never set) | §3.3 |
 
 ---
 

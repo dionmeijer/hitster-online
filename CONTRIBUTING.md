@@ -49,7 +49,8 @@ npm test
 TEST_MODE=true npx playwright test
 
 # Bot players (manual multiplayer testing)
-cd bots && npm start -- --room XXXX --count 3
+cd bots && npm start -- --count 10 --url http://localhost:8080
+# Join specific room: add --room XXXX
 ```
 
 `TEST_MODE=true` shortens all timeouts and uses mock tracks. Always use it for automated tests.
@@ -66,6 +67,7 @@ Follow this order — skipping steps creates type mismatches or logic/UI splits:
 4. **Wire the Socket.io event** in `server/src/index.ts`
    - Add the event name + payload to `ClientToServerEvents` or `ServerToClientEvents` in `shared/types.ts`
    - Register the handler in `index.ts`
+   - Append to `activeRound.gameLog` via `gameLog.ts` when the event should appear in the UI log
 5. **Handle the event client-side** in `client/src/game/useGame.ts`
 6. **Build the UI** in `client/src/components/`
 

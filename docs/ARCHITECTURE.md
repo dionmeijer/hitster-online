@@ -46,8 +46,13 @@ Key functions:
 | `isActiveParticipant` | Check if a sessionId can act on the current turn |
 | `activeEntityId` | Map a playerId to its teamId if using teams |
 | `buildRoundSummary` / `checkWin` | End-of-round resolution |
+| `allParticipantsOffline` | True when every player has `isConnected === false` |
+| `endGame` | Set `room.status` to `game_over` (owner action) |
 
 **Do not add I/O, timers, or Socket.io references here.**
+
+### `server/src/game/gameLog.ts`
+Appends structured lines to `activeRound.gameLog` (placements, challenges, flips, skips). Used for the in-round log panel and late joiners.
 
 ### `server/src/rooms/store.ts`
 Thin wrapper around `Map<string, Room>`. Provides `get`, `set`, `delete`, `getAll`, `getSummaries`. No logic beyond storage and projection to `RoomSummary`.
@@ -65,6 +70,7 @@ liveDecks      — remaining deck (Card[]) for each active room
 pendingCards   — card drawn this turn, not yet resolved
 pendingChallenges — challenges collected during challenge window
 challengeTimers   — setTimeout handle for each challenge window
+flipAdvanceTimers — delay `advanceTurn` until flip reveal UI completes (`FLIP_REVEAL_DISPLAY_MS`)
 pendingDeletes    — delete room after EMPTY_ROOM_TTL when every player is offline (any room status)
 disconnectTimers  — per-player auto-skip timers
 ```
@@ -87,27 +93,31 @@ Presentational components. Receive state and callbacks as props. No game logic.
    ├─ engine.drawCard(deck)  →  { card: Card, hidden: CardHidden, remaining }
    ├─ liveDecks.set(roomCode, remaining)
    ├─ pendingCards.set(roomCode, card)
-   └─ io.emit('turn:started', { card: hidden, previewUrl, playAt })
+   └─ io.emit('turn:started', { card: CardHidden, previewUrl, playAt, activePlayerId, ... })
 
 2. client receives 'turn:started'
-   ├─ Placing player: sees only albumArt, hears audio at playAt
-   └─ Other players: see full card details (title, artist, year)
+   ├─ Active player: blurred album art only; title/artist/year hidden until flip
+   └─ Other players (and spectators): hear audio; no unrevealed track metadata
 
 3. Placing player emits 'turn:place' { position }
    ├─ server engine.applyPlacement() → sets currentTurn.phase = 'challenge'
-   ├─ io.emit('turn:placed', { position, activePlayerId })
-   └─ challengeTimers.set(roomCode, setTimeout(resolveAndAdvance, 10_000))
+   ├─ gameLog.logPlacement()
+   ├─ io.emit('turn:placed', { position, activePlayerId, challengeEndsAt })
+   └─ challengeTimers.set(roomCode, setTimeout(resolveAndAdvance, CHALLENGE_WINDOW_MS))
 
-4. Any non-placing player may emit 'turn:challenge'
-   └─ pendingChallenges.push({ challengerId })
+4. Non-placing participants (not spectators) may emit 'turn:challenge'
+   └─ pendingChallenges.push({ challengerId }); gameLog.logChallenge()
       io.emit('turn:challenged', { challengerId })
 
 5. Challenge window expires → resolveAndAdvance()
    ├─ inject pendingChallenges into room.activeRound.currentTurn
    ├─ engine.resolveFlip()  →  { room, correct, winnerId }
-   ├─ io.emit('turn:flipped', { card, correct, updatedTimeline, tokensUpdated })
+   ├─ gameLog.logFlipResolution()
+   ├─ io.emit('turn:flipped', { card, correct, timelines, tokensUpdated, ... })
    ├─ if winnerId → io.emit('round:ended', ...) and stop
-   └─ else → engine.advanceTurn() → startTurn()
+   └─ else → after FLIP_REVEAL_DISPLAY_MS → engine.advanceTurn() → startTurn()
+
+Mid-round join / reconnect: emitTurnSnapshot() sends a private turn:started to catch up UI.
 ```
 
 ---
@@ -116,9 +126,11 @@ Presentational components. Receive state and callbacks as props. No game logic.
 
 ```
 LOBBY ──round:start──► ROUND_ACTIVE ──win / deck empty──► ROUND_ENDED ──owner restart──► LOBBY
+                              │
+                              └── room:end (owner) ──► GAME_OVER
 ```
 
-`game_over` is declared in `RoomStatus` but never set (see Appendix A in REQUIREMENTS.md).
+When every participant disconnects, the room is deleted after `EMPTY_ROOM_TTL_MS` (any status).
 
 ---
 
@@ -155,7 +167,7 @@ Players are identified by `sessionId` — a UUID generated client-side on first 
 | `SPOTIFY_CLIENT_SECRET` | — | Required for real track fetching |
 | `PORT` | `3000` | HTTP + WebSocket port |
 | `CLIENT_URL` | `http://localhost:5173` | CORS allowed origin, redirect target in dev |
-| `TEST_MODE` | `false` | Shortens all timeouts, uses mock tracks |
+| `TEST_MODE` | `false` | Shortens timeouts (challenge 500ms, flip reveal 300ms, empty-room TTL 5s), uses mock tracks |
 
 ---
 
@@ -208,7 +220,8 @@ npx playwright test
 Simulated Socket.io clients in `/bots/`. Useful for manual multiplayer testing:
 
 ```bash
-cd bots && npm start -- --room XXXX --count 3
+cd bots && npm start -- --count 10 --url http://localhost:8080
+# Or join a specific room: --room XXXX
 ```
 
 Profiles in `bots/profiles.yaml` control decision timing and strategy.

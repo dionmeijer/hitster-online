@@ -31,7 +31,8 @@ The full functional requirements, architecture, and game rules are in `docs/REQU
 ├── LICENSE                ← Apache 2.0
 ├── docs/
 │   ├── ARCHITECTURE.md    ← module contracts, data flow, invariants
-│   └── REQUIREMENTS.md    ← full spec, read before building features
+│   ├── REQUIREMENTS.md    ← full spec, read before building features
+│   └── DEPLOY_FLY.md      ← production deployment
 ├── shared/
 │   └── types.ts           ← ALL shared TypeScript types. Define types here first.
 ├── server/
@@ -151,7 +152,12 @@ Each client uses `setTimeout` to start `<audio>.play()` at exactly `playAt`. Do 
 | Correct | Card stays on timeline |
 | Incorrect | Card discarded |
 | Same year | Placing before or after a card with the same year counts as correct |
-| HITSTER! challenge | Any non-placing player can challenge during 10s window after placement. If opponent was wrong → challenger steals the card. If opponent was right → challenger loses a token. |
+| Challenge | Non-placing participants (not spectators) can challenge during 3s window after placement. Wrong placement → challenger steals card. Correct → challenger loses a token. |
+| Unrevealed song | Only active player sees blurred album art; others hear audio without title/artist/year until flip. |
+| Flip reveal | Result shown ~2s (`FLIP_REVEAL_DISPLAY_MS`); server delays next turn accordingly. |
+| Spectator | Joining mid-round: watch only; plays next round; cannot challenge. |
+| Game log | Server-maintained `activeRound.gameLog`; client renders; survives late join. |
+| Leave room | Header **Leave** in lobby and during rounds (reloads to entry page). |
 | Token: skip | Spend 1 to discard current card, draw new one |
 | Token: buy | Spend 3 to place a card directly (before hearing song). Skip next turn. |
 | Token: earn | Name song title + artist correctly = +1 token (max 5) |
